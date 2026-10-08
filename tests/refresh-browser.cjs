@@ -33,7 +33,7 @@ const endpoint = process.env.NEWS_REFRESH_ENDPOINT || "https://zacai.fun/api/new
     await page.goto(base + "/#sports", { waitUntil: "networkidle" });
     await page.locator(".article").first().waitFor();
     await page.selectOption("#source-filter", "cna-sports");
-    await page.route("**/data/news.json", (route) =>
+    await page.route("**/data/news.json*", (route) =>
       route.fulfill({ json: updated }),
     );
     await page.click("#refresh-news");

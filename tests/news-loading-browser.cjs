@@ -22,7 +22,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const newsGate = new Promise((resolve) => {
       resolveNews = resolve;
     });
-    await page.route("**/data/news.json", async (route) => {
+    await page.route("**/data/news.json*", async (route) => {
       await newsGate;
       await route.fulfill({ json: original });
     });
@@ -42,7 +42,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator(".article").first().waitFor();
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
-    await page.unroute("**/data/news.json");
+    await page.unroute("**/data/news.json*");
     let fullDownloads = 0;
     page.on("request", (r) => {
       if (new URL(r.url()).pathname === "/data/news.json") fullDownloads++;
@@ -80,7 +80,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const updateGate = new Promise((resolve) => {
       releaseUpdate = resolve;
     });
-    await page.route("**/data/news.json", async (route) => {
+    await page.route("**/data/news.json*", async (route) => {
       await updateGate;
       await route.fulfill({ json: updated });
     });
@@ -98,7 +98,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       ),
       updated.updatedAt,
     );
-    await page.unroute("**/data/news.json");
+    await page.unroute("**/data/news.json*");
     await page.unroute("**/data/status.json");
     await context.setOffline(true);
     await page.reload({ waitUntil: "domcontentloaded" });

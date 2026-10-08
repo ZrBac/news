@@ -23,7 +23,7 @@ python -m http.server 8080 --directory _site
 - 来源缺少明确带时区的日期、日期过旧/过于超前、无安全 HTTP(S) 链接的条目不发布。
 - 收藏将文章快照保存到当前浏览器的 localStorage，不会跨设备同步；浏览器拒绝持久化时会提示。
 - 支持分类、来源筛选、关键词搜索、日期筛选、分页加载、深色模式、键盘搜索与 RSS。
-- 打开页面先显示本浏览器上次成功保存的资讯，后台检查更新。已有数据时先读很小的 `status.json`，时间戳一致则不再下载完整归档或重绘列表；有变化才下载新闻，并保留当前分类、搜索和分页。状态文件不可用时回退直接读取新闻。首次无缓存的新闻请求最多等 30 秒并自动重试一次，已有内容时后台请求最多等 15 秒，失败保留当前列表并提供重试。兼容不支持 `AbortSignal.timeout` 的浏览器，存储不可用也不影响在线读取。
+- 打开页面先显示本浏览器上次成功保存的资讯，后台检查更新。已有数据时先读很小的 `status.json`，时间戳一致则不再下载完整归档或重绘列表；有变化才下载新闻，并保留当前分类、搜索和分页。状态文件不可用时回退直接读取新闻。新闻请求统一最多等 30 秒，有旧缓存时也自动重试一次，重试使用独立 URL 并绕过 HTTP 缓存；手动“重新连接”同样绕过失败缓存。失败保留当前列表，并区分超时、HTTP 状态、数据异常和离线提示。兼容不支持 `AbortSignal.timeout` 的浏览器，存储不可用也不影响在线读取。
 - “刷新资讯”通过 Cloudflare Worker 请求抓取和发布，完成后重新读取数据并保留当前筛选。全站共享至少 15 分钟触发间隔，已运行的任务会被复用；接口不可用时仍尝试读取 GitHub Pages 上已发布的数据。
 
 ## 安装与离线阅读（PWA）
@@ -92,6 +92,7 @@ Safari 15.3 缺少原生 `<dialog>` 的 `showModal()` / `close()` 和 `Object.ha
 
 ```sh
 PLAYWRIGHT_MODULE=/path/to/playwright NEWS_BASE_URL=http://127.0.0.1:8765 node tests/news-loading-browser.cjs
+PLAYWRIGHT_MODULE=/path/to/playwright NEWS_BASE_URL=http://127.0.0.1:8765 node tests/news-recovery-browser.cjs
 PLAYWRIGHT_MODULE=/path/to/playwright NEWS_BASE_URL=http://127.0.0.1:8765 node tests/games-browser.cjs
 PLAYWRIGHT_MODULE=/path/to/playwright NEWS_BASE_URL=http://127.0.0.1:8765 node tests/table-games-browser.cjs
 NEWS_LEGACY_SAFARI=1 PLAYWRIGHT_MODULE=/path/to/playwright NEWS_BASE_URL=http://127.0.0.1:8765 node tests/extra-games-browser.cjs

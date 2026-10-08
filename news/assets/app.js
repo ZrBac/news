@@ -506,7 +506,7 @@
       location.hash = "all";
       route();
     }
-    if (e.target.closest("[data-retry]")) load();
+    if (e.target.closest("[data-retry]")) load(true, false, true);
   });
   window.addEventListener("hashchange", () => route(true));
   window.addEventListener("storage", (e) => {
@@ -543,7 +543,7 @@
       !Array.isArray(data.sources) ||
       !Number.isFinite(Date.parse(data.updatedAt))
     )
-      throw new Error("Invalid data");
+      throw Object.assign(new Error("Invalid data"), { name: "DataError" });
     data.articles = data.articles.filter(validArticle);
     return data;
   }
@@ -557,8 +557,17 @@
           ...options,
           ...(controller ? { signal: controller.signal } : {}),
         }).then(async (response) => {
-          if (!response.ok) throw new Error("News data unavailable");
-          return response.json();
+          if (!response.ok)
+            throw Object.assign(new Error("News data unavailable"), {
+              name: "HTTPError",
+              status: response.status,
+            });
+          try {
+            return await response.json();
+          } catch (error) {
+            if (error.name === "SyntaxError") error.name = "DataError";
+            throw error;
+          }
         }),
         new Promise((resolve, reject) => {
           timer = setTimeout(() => {
@@ -573,8 +582,9 @@
       clearTimeout(timer);
     }
   }
-  async function fetchData(checkVersion = false) {
-    if (!navigator.onLine) throw new Error("Offline");
+  async function fetchData(checkVersion = false, fresh = false) {
+    if (!navigator.onLine)
+      throw Object.assign(new Error("Offline"), { name: "OfflineError" });
     if (checkVersion && state.data) {
       try {
         const version = await requestJSON(
@@ -589,9 +599,9 @@
     }
     return validateData(
       await requestJSON(
-        "/data/news.json",
-        { cache: "no-cache" },
-        state.data ? 15000 : 30000,
+        fresh ? "/data/news.json?retry=" + Date.now() : "/data/news.json",
+        { cache: fresh ? "no-store" : "no-cache" },
+        30000,
       ),
     );
   }
@@ -614,7 +624,11 @@
       render();
     } else route();
   }
-  async function load(preserveFilters = false, checkVersion = false) {
+  async function load(
+    preserveFilters = false,
+    checkVersion = false,
+    fresh = false,
+  ) {
     if (loading) return;
     loading = true;
     $("#refresh-news").disabled = true;
@@ -636,11 +650,17 @@
       let data;
       for (let attempt = 0; attempt < 2; attempt++) {
         try {
-          data = await fetchData(checkVersion && attempt === 0);
+          data = await fetchData(
+            checkVersion && attempt === 0 && !fresh,
+            fresh || attempt > 0,
+          );
           break;
         } catch (error) {
-          if (attempt === 1 || !navigator.onLine || state.data) throw error;
-          $("#update-status").textContent = "连接暂时不畅，正在重试…";
+          if (attempt === 1 || !navigator.onLine) throw error;
+          if (state.data) {
+            $("#load-notice").textContent =
+              "连接暂时不畅，正在重试；可继续阅读上次成功获取的资讯。";
+          } else $("#update-status").textContent = "连接暂时不畅，正在重试…";
           await new Promise((resolve) => setTimeout(resolve, 1000));
         }
       }
@@ -649,15 +669,25 @@
       $("#load-notice").hidden = true;
       return true;
     } catch (error) {
+      const reason =
+        error.name === "TimeoutError"
+          ? "资讯下载超时"
+          : error.name === "HTTPError"
+            ? `资讯请求失败（HTTP ${error.status}）`
+            : error.name === "DataError"
+              ? "收到的资讯数据异常"
+              : error.name === "OfflineError" || !navigator.onLine
+                ? "当前离线"
+                : "网络连接失败";
       if (state.data) {
         $("#load-notice").innerHTML =
-          `连接暂时失败，当前显示上次成功获取的资讯（${escape(formatTime(state.data.updatedAt))}）。<button class="text-button" data-retry>重新连接</button>`;
+          `${escape(reason)}，当前显示上次成功获取的资讯（${escape(formatTime(state.data.updatedAt))}）。<button class="text-button" data-retry>重新连接</button>`;
         $("#load-notice").hidden = false;
         return false;
       }
       $("#articles").setAttribute("aria-busy", "false");
       $("#articles").innerHTML =
-        `<div class="empty-state">${icon("radio")}<h3>资讯加载失败</h3><p>${error.name === "TimeoutError" ? "连接超时，请重试或换个网络。" : "暂时无法连接资讯，请稍后重试或换个网络。"}</p><button data-retry>重新加载</button></div>`;
+        `<div class="empty-state">${icon("radio")}<h3>资讯加载失败</h3><p>${escape(reason)}，请重试或换个网络。</p><button data-retry>重新加载</button></div>`;
       $("#update-status").textContent = "数据加载失败，请稍后重试";
       $("#latest-list").innerHTML = "<li><div>等待资讯恢复连接</div></li>";
       return false;

@@ -12,7 +12,7 @@ const endpoint = process.env.NEWS_REFRESH_ENDPOINT || "https://zacai.fun/api/new
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     const original = await (
-      await page.request.get(base + "/data/news.json")
+      await page.request.get(base + "/data/latest.json")
     ).json();
     const updated = structuredClone(original);
     updated.updatedAt = new Date(Date.now()).toISOString();
@@ -33,7 +33,7 @@ const endpoint = process.env.NEWS_REFRESH_ENDPOINT || "https://zacai.fun/api/new
     await page.goto(base + "/#sports", { waitUntil: "networkidle" });
     await page.locator(".article").first().waitFor();
     await page.selectOption("#source-filter", "cna-sports");
-    await page.route("**/data/news.json*", (route) =>
+    await page.route("**/data/latest.json*", (route) =>
       route.fulfill({ json: updated }),
     );
     await page.click("#refresh-news");

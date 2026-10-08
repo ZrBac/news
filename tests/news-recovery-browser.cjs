@@ -8,7 +8,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const context = await browser.newContext({ serviceWorkers: "block" });
     const page = await context.newPage();
     const data = await (
-      await page.request.get(base + "/data/news.json")
+      await page.request.get(base + "/data/latest.json")
     ).json();
     const old = { ...data, updatedAt: "2026-09-24T08:58:00Z" };
     await page.addInitScript(
@@ -22,7 +22,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     page.on("pageerror", (error) => errors.push(error.message));
     let mode = "slow",
       requests = [];
-    await page.route("**/data/news.json*", async (route) => {
+    await page.route("**/data/latest.json*", async (route) => {
       requests.push(route.request().url());
       if (mode === "slow")
         await new Promise((resolve) => setTimeout(resolve, 16500));

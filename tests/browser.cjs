@@ -237,7 +237,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.route("**/data/status.json", (route) =>
       route.fulfill({ json: { updatedAt: "fixture-new-version" } }),
     );
-    await page.route("**/data/news.json*", (route) =>
+    await page.route("**/data/latest.json*", (route) =>
       route.fulfill({ json: fixture }),
     );
     await page.reload({ waitUntil: "networkidle" });
@@ -250,8 +250,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.equal(await page.evaluate(() => window.injected), undefined);
 
     await page.unroute("**/data/status.json");
-    await page.unroute("**/data/news.json*");
-    await page.route("**/data/news.json*", (route) =>
+    await page.unroute("**/data/latest.json*");
+    await page.route("**/data/latest.json*", (route) =>
       route.fulfill({ status: 503, body: "unavailable" }),
     );
     await page.reload({ waitUntil: "networkidle" });
@@ -261,7 +261,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       await page.locator("#load-notice").innerText(),
       /上次成功获取/,
     );
-    await page.unroute("**/data/news.json*");
+    await page.unroute("**/data/latest.json*");
     await page.click("[data-retry]");
     await page.locator("#load-notice").waitFor({ state: "hidden" });
     await page.locator(".article").first().waitFor();
@@ -276,7 +276,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       });
     });
     let requests = 0;
-    await compatibility.route("**/data/news.json*", (route) => {
+    await compatibility.route("**/data/latest.json*", (route) => {
       requests++;
       return requests === 1 ? route.abort("failed") : route.continue();
     });
@@ -287,8 +287,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await compatibility.evaluate(() =>
       localStorage.removeItem("zrbac-news-cache-v1"),
     );
-    await compatibility.unroute("**/data/news.json*");
-    await compatibility.route("**/data/news.json*", (route) =>
+    await compatibility.unroute("**/data/latest.json*");
+    await compatibility.route("**/data/latest.json*", (route) =>
       route.fulfill({ status: 503, body: "unavailable" }),
     );
     await compatibility.reload({ waitUntil: "networkidle" });
@@ -298,7 +298,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       await compatibility.locator(".empty-state h3").innerText(),
       /资讯加载失败/,
     );
-    await compatibility.unroute("**/data/news.json*");
+    await compatibility.unroute("**/data/latest.json*");
     await compatibility.click("[data-retry]");
     await compatibility.locator(".article").first().waitFor();
     await compatibility.close();

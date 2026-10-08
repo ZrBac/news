@@ -233,7 +233,11 @@
       saved: "我的收藏",
     };
     $("#section-title").textContent = titles[state.view] || titles.all;
-    $("#result-count").textContent = `${articles.length} 条资讯`;
+    const partial = hasArchive() && state.view !== "saved";
+    $("#result-count").textContent =
+      partial && state.view !== "brief"
+        ? `已加载 ${articles.length} 条资讯`
+        : `${articles.length} 条资讯`;
     $$("[data-view]").forEach((el) => {
       const active =
         el.dataset.view === state.view ||
@@ -272,10 +276,14 @@
     } else {
       const emptySaved = state.view === "saved" && !state.saved.size;
       $("#articles").innerHTML =
-        `<div class="empty-state">${icon(emptySaved ? "bookmark" : "search")}<h3>${emptySaved ? "还没有收藏" : "暂时没有匹配的资讯"}</h3><p>${emptySaved ? "点击新闻右侧的书签即可收藏。" : "试试其他关键词、来源或日期。"}</p><button data-reset>浏览全部资讯</button></div>`;
+        `<div class="empty-state">${icon(emptySaved ? "bookmark" : "search")}<h3>${emptySaved ? "还没有收藏" : partial ? "已加载的资讯中暂无匹配" : "暂时没有匹配的资讯"}</h3><p>${emptySaved ? "点击新闻右侧的书签即可收藏。" : partial ? "正在查找较早资讯；也可调整关键词、来源或日期。" : "试试其他关键词、来源或日期。"}</p><button data-reset>浏览全部资讯</button></div>`;
     }
-    $("#load-more").hidden = articles.length <= state.limit;
-    $("#list-end").hidden = !articles.length || articles.length > state.limit;
+    $("#load-more").hidden =
+      articles.length <= state.limit &&
+      (!partial || (state.view === "brief" && articles.length >= 10));
+    $("#load-more").disabled = archiveJob?.data === state.data;
+    $("#list-end").hidden =
+      partial || !articles.length || articles.length > state.limit;
   }
   function route(scroll = false) {
     const hash = location.hash.slice(1);
@@ -315,6 +323,7 @@
     $("#date-panel").hidden = state.view !== "brief";
     $("#date-trigger").setAttribute("aria-expanded", state.view === "brief");
     render();
+    ensureArticles();
     if (scroll)
       $("#news-content").scrollIntoView({ behavior: "smooth", block: "start" });
   }
@@ -367,7 +376,10 @@
     $("#update-status").title =
       "最近检查为资讯源抓取时间，最新文章为已收录文章的发布时间。计划每小时检查，可能延迟；时间均为北京时间。";
     const dates = state.data.articles.map((a) => dayOf(a.publishedAt)).sort();
-    if (dates.length) $("#date-filter").min = dates[0];
+    if (dates.length)
+      $("#date-filter").min = state.data.archive?.oldest
+        ? dayOf(state.data.archive.oldest)
+        : dates[0];
     $("#date-filter").max = dayOf(Date.now());
   }
   function showSources() {
@@ -442,11 +454,13 @@
     state.query = e.target.value.trim();
     state.limit = 12;
     render();
+    ensureArticles();
   });
   $("#source-filter").addEventListener("change", (e) => {
     state.source = e.target.value;
     state.limit = 12;
     render();
+    ensureArticles();
   });
   $("#date-trigger").addEventListener("click", () => {
     const open = $("#date-panel").hidden;
@@ -458,15 +472,18 @@
     state.date = e.target.value;
     state.limit = 12;
     render();
+    ensureArticles();
   });
   $("#clear-date").addEventListener("click", () => {
     state.date = "";
     $("#date-filter").value = "";
     render();
+    ensureArticles();
   });
   $("#load-more").addEventListener("click", () => {
     state.limit += 12;
     render();
+    ensureArticles();
   });
   document.addEventListener("click", (e) => {
     const viewLink = e.target.closest("a[data-view]");
@@ -499,6 +516,7 @@
         history.replaceState(null, "", "#" + state.view);
       }
       render();
+      ensureArticles();
     }
     const save = e.target.closest("[data-save]");
     if (save) saveArticle(save.dataset.save);
@@ -506,6 +524,7 @@
       location.hash = "all";
       route();
     }
+    if (e.target.closest("[data-retry-archive]")) ensureArticles(true);
     if (e.target.closest("[data-retry]")) load(true, false, true);
   });
   window.addEventListener("hashchange", () => route(true));
@@ -534,6 +553,7 @@
   });
   loadSaved();
   const cacheKey = "zrbac-news-cache-v1";
+  let archiveJob = null;
   let loading = false;
   let refreshing = false;
   function validateData(data) {
@@ -544,6 +564,26 @@
       !Number.isFinite(Date.parse(data.updatedAt))
     )
       throw Object.assign(new Error("Invalid data"), { name: "DataError" });
+    if (
+      data.archive &&
+      (!Array.isArray(data.archive.pages) ||
+        data.archive.pages.length > 1000 ||
+        !data.archive.pages.every(
+          (path) =>
+            typeof path === "string" &&
+            /^\/data\/archive\/[a-f0-9]{16}\.json$/.test(path),
+        ) ||
+        !Number.isInteger(data.archive.loaded) ||
+        data.archive.loaded < 0 ||
+        data.archive.loaded > data.archive.pages.length ||
+        !Number.isInteger(data.archive.total) ||
+        data.archive.total < data.articles.length ||
+        (data.archive.oldest != null &&
+          !Number.isFinite(Date.parse(data.archive.oldest))))
+    )
+      throw Object.assign(new Error("Invalid archive index"), {
+        name: "DataError",
+      });
     data.articles = data.articles.filter(validArticle);
     return data;
   }
@@ -582,6 +622,95 @@
       clearTimeout(timer);
     }
   }
+  function hasArchive(data = state.data) {
+    return !!data?.archive && data.archive.loaded < data.archive.pages.length;
+  }
+  function persistData(data) {
+    try {
+      localStorage.setItem(cacheKey, JSON.stringify(data));
+    } catch {
+      // A large archive can exceed localStorage; keep the small current-news page.
+      if (data.archive)
+        try {
+          localStorage.setItem(
+            cacheKey,
+            JSON.stringify({
+              ...data,
+              articles: data.articles.slice(0, 150),
+              archive: { ...data.archive, loaded: 0 },
+            }),
+          );
+        } catch {}
+    }
+  }
+  function ensureArticles(fresh = false) {
+    if (loading || state.view === "saved" || !hasArchive()) return;
+    if (archiveJob?.data === state.data) return archiveJob.promise;
+    const data = state.data;
+    const needed = () => (state.view === "brief" ? 10 : state.limit + 1);
+    if (matchingArticles().length >= needed()) return;
+    const notice = $("#archive-notice");
+    const job = { data };
+    archiveJob = job;
+    job.promise = (async () => {
+      let failed = false;
+      try {
+        while (
+          state.data === data &&
+          state.view !== "saved" &&
+          hasArchive(data) &&
+          matchingArticles().length < needed()
+        ) {
+          if (!navigator.onLine) throw new Error("Offline");
+          notice.hidden = false;
+          notice.textContent = "正在查找较早资讯…";
+          $("#load-more").disabled = true;
+          // Commit complete batches in order, so the loaded list stays a continuous
+          // newest-first prefix even when a request fails or filters change.
+          const paths = data.archive.pages.slice(
+            data.archive.loaded,
+            data.archive.loaded + 3,
+          );
+          const pages = await Promise.all(
+            paths.map(async (path) => {
+              const page = await requestJSON(
+                fresh ? path + "?retry=" + Date.now() : path,
+                { cache: fresh ? "no-store" : "default" },
+                20000,
+              );
+              if (
+                !page ||
+                !Array.isArray(page.articles) ||
+                !page.articles.every(validArticle)
+              )
+                throw new Error("Invalid archive page");
+              return page.articles;
+            }),
+          );
+          if (state.data !== data) return;
+          data.articles.push(...pages.flat());
+          data.archive.loaded += paths.length;
+          persistData(data);
+          render();
+        }
+      } catch {
+        failed = true;
+        if (state.data === data) {
+          notice.hidden = false;
+          notice.innerHTML = navigator.onLine
+            ? '历史资讯暂时未能加载，当前内容仍可阅读。<button class="text-button" data-retry-archive>继续加载</button> <button class="text-button" data-retry>更新资讯后重试</button>'
+            : "当前离线，只能检索已经保存在本机的资讯。";
+        }
+      } finally {
+        if (archiveJob === job) {
+          archiveJob = null;
+          if (!failed) notice.hidden = true;
+          render();
+        }
+      }
+    })();
+    return job.promise;
+  }
   async function fetchData(checkVersion = false, fresh = false) {
     if (!navigator.onLine)
       throw Object.assign(new Error("Offline"), { name: "OfflineError" });
@@ -599,7 +728,7 @@
     }
     return validateData(
       await requestJSON(
-        fresh ? "/data/news.json?retry=" + Date.now() : "/data/news.json",
+        fresh ? "/data/latest.json?retry=" + Date.now() : "/data/latest.json",
         { cache: fresh ? "no-store" : "no-cache" },
         30000,
       ),
@@ -608,11 +737,8 @@
   function showData(data, preserveFilters = false, persist = true) {
     const hadData = !!state.data;
     state.data = data;
-    if (persist) {
-      try {
-        localStorage.setItem(cacheKey, JSON.stringify(data));
-      } catch {}
-    }
+    if (persist) persistData(data);
+    $("#archive-notice").hidden = true;
     renderSidebar();
     if (preserveFilters && hadData) {
       if (
@@ -623,6 +749,7 @@
       $("#source-filter").value = state.source;
       render();
     } else route();
+    ensureArticles();
   }
   async function load(
     preserveFilters = false,
@@ -695,6 +822,7 @@
       loading = false;
       $("#refresh-news").disabled = refreshing;
       $("#articles").setAttribute("aria-busy", "false");
+      ensureArticles();
     }
   }
   $("#refresh-news").addEventListener("click", async () => {

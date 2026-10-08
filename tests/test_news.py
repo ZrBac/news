@@ -87,6 +87,33 @@ class FeedTests(unittest.TestCase):
 
 
 class BuildTests(unittest.TestCase):
+    def test_small_news_pages_preserve_all_articles_and_stable_chunks(self):
+        spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        articles = [{'id': str(i), 'publishedAt': '2026-10-08T04:00:00Z',
+                     'title': '测试资讯' + str(i)} for i in range(701)]
+        data = {'updatedAt': '2026-10-08T05:00:00Z', 'articles': articles, 'sources': []}
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            builder.build_news_pages(data, output)
+            latest = json.loads((output / 'data/latest.json').read_text())
+            self.assertEqual(latest['articles'], articles[:150])
+            self.assertEqual(latest['archive']['total'], len(articles))
+            combined = list(latest['articles'])
+            for url in latest['archive']['pages']:
+                self.assertRegex(url, r'^/data/archive/[a-f0-9]{16}\.json$')
+                page = json.loads((output / url.lstrip('/')).read_text())
+                self.assertLessEqual(len(page['articles']), 150)
+                combined.extend(page['articles'])
+            self.assertEqual(combined, articles)
+            data['updatedAt'] = '2026-10-08T06:00:00Z'
+            builder.build_news_pages(data, output)
+            self.assertEqual(json.loads((output / 'data/latest.json').read_text())['archive'],
+                             latest['archive'])
+            builder.build_news_pages({**data, 'articles': []}, output)
+            self.assertEqual(json.loads((output / 'data/latest.json').read_text())['archive']['pages'], [])
+
     def test_build_news_only_removes_stale_blog_files(self):
         data = ROOT / 'news/data/news.json'
         existed = data.exists()

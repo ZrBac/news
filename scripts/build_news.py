@@ -15,6 +15,27 @@ from xml.sax.saxutils import escape
 ROOT = Path(__file__).resolve().parents[1]
 
 
+
+def build_news_pages(data, output):
+    """Keep the full export for collectors; readers fetch a small initial page."""
+    size = 150
+    articles = data['articles']
+    folder = output / 'data/archive'
+    folder.mkdir(parents=True, exist_ok=True)
+    pages = []
+    for offset in range(size, len(articles), size):
+        body = json.dumps({'articles': articles[offset:offset + size]}, ensure_ascii=False,
+                          separators=(',', ':')).encode()
+        name = hashlib.sha256(body).hexdigest()[:16] + '.json'
+        (folder / name).write_bytes(body)
+        pages.append('/data/archive/' + name)
+    latest = {**data, 'articles': articles[:size],
+              'archive': {'pages': pages, 'loaded': 0, 'total': len(articles),
+                          'oldest': articles[-1]['publishedAt'] if articles else None}}
+    (output / 'data/latest.json').write_text(
+        json.dumps(latest, ensure_ascii=False, separators=(',', ':')) + '\n')
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('--output', type=Path, default=ROOT / '_site')
@@ -62,6 +83,7 @@ def main():
     shutil.copytree(ROOT / 'news/data', output / 'data', dirs_exist_ok=True)
     (output / '.nojekyll').touch()
     data = json.loads((output / 'data/news.json').read_text())
+    build_news_pages(data, output)
     # A tiny health file avoids downloading and parsing the entire archive in Workers.
     updated_at = data['updatedAt']
     if datetime.fromisoformat(updated_at.replace('Z', '+00:00')).tzinfo is None:

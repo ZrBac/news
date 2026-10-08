@@ -23,7 +23,9 @@ python -m http.server 8080 --directory _site
 - 来源缺少明确带时区的日期、日期过旧/过于超前、无安全 HTTP(S) 链接的条目不发布。
 - 收藏将文章快照保存到当前浏览器的 localStorage，不会跨设备同步；浏览器拒绝持久化时会提示。
 - 支持分类、来源筛选、关键词搜索、日期筛选、分页加载、深色模式、键盘搜索与 RSS。
-- 打开页面先显示本浏览器上次成功保存的资讯，后台检查更新。已有数据时先读很小的 `status.json`，时间戳一致则不再下载完整归档或重绘列表；有变化才下载新闻，并保留当前分类、搜索和分页。状态文件不可用时回退直接读取新闻。新闻请求统一最多等 30 秒，有旧缓存时也自动重试一次，重试使用独立 URL 并绕过 HTTP 缓存；手动“重新连接”同样绕过失败缓存。失败保留当前列表，并区分超时、HTTP 状态、数据异常和离线提示。兼容不支持 `AbortSignal.timeout` 的浏览器，存储不可用也不影响在线读取。
+- 打开页面先显示本浏览器上次成功保存的资讯，后台检查更新。已有数据时先读很小的 `status.json`，时间戳一致则不再下载新闻或重绘列表；有变化才下载最新 150 条，并保留当前分类、搜索和分页。状态文件不可用时回退直接读取新闻。新闻请求统一最多等 30 秒，有旧缓存时也自动重试一次，重试使用独立 URL 并绕过 HTTP 缓存；手动“重新连接”同样绕过失败缓存。失败保留当前列表，并区分超时、HTTP 状态、数据异常和离线提示。兼容不支持 `AbortSignal.timeout` 的浏览器，存储不可用也不影响在线读取。
+- 构建生成 `data/latest.json`（最新 150 条及归档索引），剩余资讯按每 150 条拆成内容哈希命名的小文件。首页不请求完整 `news.json`，它继续供采集器合并历史及旧客户端使用。点击加载更多、切换分类、来源、日期或搜索时，如果当前结果不足一页，就按顺序读取下一批，最多并发三份；仍有未读取内容时标记“已加载”，不会把部分结果称为全部结果。历史文件失败单独提示，最新新闻仍可阅读。整批成功后才合并，刷新期间旧请求的结果不会写入新版本。
+- 已加载的历史与最新资讯一起保存在本机；存储容量不足时退回保存最新 150 条。离线时只能检索已经加载的部分，并明确提示。收藏仍独立保存。
 - “刷新资讯”通过 Cloudflare Worker 请求抓取和发布，完成后重新读取数据并保留当前筛选。全站共享至少 15 分钟触发间隔，已运行的任务会被复用；接口不可用时仍尝试读取 GitHub Pages 上已发布的数据。
 
 ## 安装与离线阅读（PWA）
@@ -32,7 +34,7 @@ python -m http.server 8080 --directory _site
 
 - `/manifest.webmanifest` 提供名称、图标、启动路径和每日速览/收藏快捷入口。PNG 图标直接由现有 SVG 站点图标导出。
 - `/sw.js` 缓存新闻首页、小游戏页及其静态资源，首次联网加载并完成缓存后才能离线重新打开。文章、搜索和收藏使用本浏览器已保存的数据；不缓存或代理原文网站。小游戏页 `/games/` 与首页分别回退到各自匹配版本的缓存页面。
-- 新闻 JSON、版本检查与刷新 API 不进入 Service Worker 缓存。联网时检查当前发布版本，检查期间先显示明确标记的本地数据；离线时直接阅读上次数据，恢复联网会重新检查资讯。手动刷新直接读取完整数据。首页完成首轮新闻请求后再注册离线资源，避免初次准备与新闻下载竞争网络；小游戏页仍立即准备。
+- 新闻 JSON、版本检查与刷新 API 不进入 Service Worker 缓存。联网时检查当前发布版本，检查期间先显示明确标记的本地数据；离线时直接阅读上次数据，恢复联网会重新检查资讯。手动刷新直接读取最新 150 条；历史在需要时继续补齐。首页完成首轮新闻请求后再注册离线资源，避免初次准备与新闻下载竞争网络；小游戏页仍立即准备。
 - 首页与游戏导航优先返回已安装版本的缓存页面，避免离线启动等待网络、或在线 HTML 与旧脚本版本混用。安装阶段验证资源与 HTML 属于同一版本；不会将不存在的页面替换成新闻首页。
 - 程序版本由 HTML、静态资源和 Service Worker 内容计算。只更新新闻不会更换程序缓存；程序改动安装完成后显示“更新页面”，用户点击后切换并清理本站旧缓存，保留收藏和其他应用缓存。
 - 离线数据保存在本机，清除浏览器存储或浏览器回收空间后可能丢失；新闻更新和原文链接需要联网。PWA 本身不需要常驻服务器，也没有额外的后台抓取任务。
@@ -93,6 +95,7 @@ Safari 15.3 缺少原生 `<dialog>` 的 `showModal()` / `close()` 和 `Object.ha
 ```sh
 PLAYWRIGHT_MODULE=/path/to/playwright NEWS_BASE_URL=http://127.0.0.1:8765 node tests/news-loading-browser.cjs
 PLAYWRIGHT_MODULE=/path/to/playwright NEWS_BASE_URL=http://127.0.0.1:8765 node tests/news-recovery-browser.cjs
+PLAYWRIGHT_MODULE=/path/to/playwright NEWS_BASE_URL=http://127.0.0.1:8765 node tests/news-pages-browser.cjs
 PLAYWRIGHT_MODULE=/path/to/playwright NEWS_BASE_URL=http://127.0.0.1:8765 node tests/games-browser.cjs
 PLAYWRIGHT_MODULE=/path/to/playwright NEWS_BASE_URL=http://127.0.0.1:8765 node tests/table-games-browser.cjs
 NEWS_LEGACY_SAFARI=1 PLAYWRIGHT_MODULE=/path/to/playwright NEWS_BASE_URL=http://127.0.0.1:8765 node tests/extra-games-browser.cjs

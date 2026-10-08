@@ -32,7 +32,7 @@ const endpoint = process.env.NEWS_REFRESH_ENDPOINT || "https://zacai.fun/api/new
     });
     await page.goto(base + "/#sports", { waitUntil: "networkidle" });
     await page.locator(".article").first().waitFor();
-    await page.selectOption("#source-filter", "cna-sports");
+    await page.selectOption("#source-filter", "chinanews-sports");
     await page.route("**/data/latest.json*", (route) =>
       route.fulfill({ json: updated }),
     );
@@ -45,7 +45,7 @@ const endpoint = process.env.NEWS_REFRESH_ENDPOINT || "https://zacai.fun/api/new
     );
     assert.equal(posts, 1);
     assert.equal(await page.locator("#section-title").innerText(), "体育");
-    assert.equal(await page.inputValue("#source-filter"), "cna-sports");
+    assert.equal(await page.inputValue("#source-filter"), "chinanews-sports");
     assert(!(await page.locator("#refresh-news").isDisabled()));
     mode = "cooldown";
     await page.click("#refresh-news");

@@ -56,10 +56,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.equal(await page.locator(".article").count(), 0);
     await page.click("[data-reset]");
     await page.locator(".article").first().waitFor();
-    await page.selectOption("#source-filter", "bbc");
+    await page.selectOption("#source-filter", "chinanews-world");
     assert(
       (await page.locator(".article-meta").allTextContents()).every((t) =>
-        t.includes("BBC 中文"),
+        t.includes("中新网国际"),
       ),
     );
     await page.selectOption("#source-filter", "all");
@@ -125,11 +125,11 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         .getAttribute("aria-pressed"),
       "true",
     );
-    await page.selectOption("#source-filter", "yahoo-ent");
+    await page.selectOption("#source-filter", "chinanews-culture");
     assert((await page.locator(".article").count()) > 0);
     assert(
       (await page.locator(".article-meta").allTextContents()).every((t) =>
-        t.includes("Yahoo 娱乐"),
+        t.includes("中新网文娱"),
       ),
     );
     await page.fill("#search", "no_entertainment_results_732985");
@@ -150,11 +150,11 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       await page.locator('[data-filter="sports"]').getAttribute("aria-pressed"),
       "true",
     );
-    await page.selectOption("#source-filter", "cna-sports");
+    await page.selectOption("#source-filter", "chinanews-sports");
     assert((await page.locator(".article").count()) > 0);
     assert(
       (await page.locator(".article-meta").allTextContents()).every((t) =>
-        t.includes("中央通訊社·運動"),
+        t.includes("中新网体育"),
       ),
     );
     await page.fill("#search", "no_sports_results_849217");

@@ -15,7 +15,8 @@ python -m http.server 8080 --directory _site
 
 ## 内容和界面
 
-- 34 个公开 RSS，详见 `sources.json`。综合来源为中新网、BBC 中文、德国之声中文、法国国际广播电台、香港电台、中央社；科技与 AI 来源为 IT之家、爱范儿、Solidot、GitHub Blog、少数派、极客公园、雷峰网、量子位、Hugging Face、NVIDIA Blog、Google AI、Google DeepMind。文娱频道来源为中新网文娱、中央通訊社·娛樂、Yahoo 娱乐、Variety、Deadline、Google 新闻·中文娱乐、明周娱乐、镜周刊·娱乐、KSD 韩星网、The Hollywood Reporter、Billboard。体育频道来源为中新网体育、中央通訊社·運動、香港电台体育、Yahoo 体育、BBC Sport。
+- 34 个 RSS 订阅，详见 `sources.json`。综合为中国新闻网、中新网国际、中新网社会、中新网财经、德国之声中文、法国国际广播电台；科技与 AI 为 IT之家、爱范儿、Solidot、GitHub Blog、少数派、极客公园、雷峰网、量子位、Hugging Face、NVIDIA Blog、Google AI、Google DeepMind；文娱为中新网文娱、1905电影网、中华网娱乐、澎湃文娱、国际在线文娱、新京报文娱、Variety、Deadline、Google 新闻·中文娱乐、The Hollywood Reporter、Billboard；体育为中新网体育、直播吧、虎扑体育、懂球帝、BBC Sport。
+- 标注“聚合”的 8 个订阅通过 Google 新闻 RSS 获取指定网站最近 7 天的简体报道，并非这些网站提供的官方 RSS；Google 新闻·中文娱乐为原有综合聚合源。其余使用发布方 RSS。移除了实际返回繁体标题的 BBC 中文、香港电台、中央社、Yahoo 台湾、明周、镜周刊与 KSD 各相关订阅，共 11 个，并按原分类补入 11 个。合并历史时仅保留当前配置的来源，移除源不会继续残留在公开归档中。
 - 支持 RSS 2.0 和 RSS 1.0/RDF。保留来源的原始语言，英文资讯不自动翻译。
 - 默认按发布时间倒序，科技和 AI 页签分别展示各自分类，同一条资讯不会同时出现在这两个分类列表中；AI 通过标题关键词和专门来源分类，可能误分类；专门的文娱和体育来源优先归入各自分类。
 - 每日速览默认显示北京时间当天的消息，轮流抽取综合/AI/科技/文娱/体育，尽量分散来源，最多 10 条。不是 AI 生成、编辑推荐或热度榜。

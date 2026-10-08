@@ -8,10 +8,10 @@
     "color": "#b95039"
   },
   {
-    "id": "bbc",
-    "name": "BBC 中文",
-    "url": "https://feeds.bbci.co.uk/zhongwen/simp/rss.xml",
-    "home": "https://www.bbc.com/zhongwen",
+    "id": "chinanews-world",
+    "name": "中新网国际",
+    "url": "https://www.chinanews.com.cn/rss/world.xml",
+    "home": "https://www.chinanews.com.cn/world/",
     "category": "general",
     "color": "#8d443d"
   },
@@ -64,18 +64,18 @@
     "color": "#8d443d"
   },
   {
-    "id": "rthk",
-    "name": "香港电台",
-    "url": "https://rthk.hk/rthk/news/rss/c_expressnews_cinternational.xml",
-    "home": "https://news.rthk.hk/rthk/ch/",
+    "id": "chinanews-society",
+    "name": "中新网社会",
+    "url": "https://www.chinanews.com.cn/rss/society.xml",
+    "home": "https://www.chinanews.com.cn/society/",
     "category": "general",
     "color": "#8d443d"
   },
   {
-    "id": "cna",
-    "name": "中央通訊社",
-    "url": "https://feeds.feedburner.com/rsscna/intworld",
-    "home": "https://www.cna.com.tw/",
+    "id": "chinanews-finance",
+    "name": "中新网财经",
+    "url": "https://www.chinanews.com.cn/rss/finance.xml",
+    "home": "https://www.chinanews.com.cn/finance/",
     "category": "general",
     "color": "#8d443d"
   },
@@ -152,18 +152,18 @@
     "color": "#8d443d"
   },
   {
-    "id": "cna-stars",
-    "name": "中央通訊社·娛樂",
-    "url": "https://feeds.feedburner.com/rsscna/stars",
-    "home": "https://www.cna.com.tw/list/amov.aspx",
+    "id": "gnews-1905",
+    "name": "1905电影网·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3A1905.com%2Fnews%2F+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://www.1905.com/news/",
     "category": "entertainment",
     "color": "#8d443d"
   },
   {
-    "id": "yahoo-ent",
-    "name": "Yahoo 娱乐",
-    "url": "https://tw.news.yahoo.com/rss/entertainment",
-    "home": "https://tw.news.yahoo.com/entertainment/",
+    "id": "gnews-china-ent",
+    "name": "中华网娱乐·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3Aent.china.com+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://ent.china.com/",
     "category": "entertainment",
     "color": "#8d443d"
   },
@@ -192,26 +192,26 @@
     "color": "#8d443d"
   },
   {
-    "id": "mpweekly-ent",
-    "name": "明周娱乐",
-    "url": "https://www.mpweekly.com/entertainment/feed",
-    "home": "https://www.mpweekly.com/entertainment/",
+    "id": "gnews-paper-ent",
+    "name": "澎湃文娱·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3Athepaper.cn+%28%E7%94%B5%E5%BD%B1+OR+%E7%94%B5%E8%A7%86%E5%89%A7+OR+%E7%BB%BC%E8%89%BA%29+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://www.thepaper.cn/",
     "category": "entertainment",
     "color": "#8d443d"
   },
   {
-    "id": "mirrormedia-ent",
-    "name": "镜周刊·娱乐",
-    "url": "https://www.mirrormedia.mg/rss/entertainment.xml",
-    "home": "https://www.mirrormedia.mg/section/entertainment",
+    "id": "gnews-cri-ent",
+    "name": "国际在线文娱·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3Aent.cri.cn+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://ent.cri.cn/",
     "category": "entertainment",
     "color": "#8d443d"
   },
   {
-    "id": "ksd",
-    "name": "KSD 韩星网",
-    "url": "http://feed.koreastardaily.com/tc",
-    "home": "https://www.koreastardaily.com/tc",
+    "id": "gnews-bjnews-ent",
+    "name": "新京报文娱·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3Abjnews.com.cn+%28%E7%94%B5%E5%BD%B1+OR+%E7%94%B5%E8%A7%86%E5%89%A7+OR+%E7%BB%BC%E8%89%BA%29+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://www.bjnews.com.cn/",
     "category": "entertainment",
     "color": "#8d443d"
   },
@@ -240,26 +240,26 @@
     "color": "#52745b"
   },
   {
-    "id": "cna-sports",
-    "name": "中央通訊社·運動",
-    "url": "https://feeds.feedburner.com/rsscna/sport",
-    "home": "https://www.cna.com.tw/list/aspt.aspx",
+    "id": "gnews-zhibo8",
+    "name": "直播吧·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3Anews.zhibo8.com+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://news.zhibo8.com/",
     "category": "sports",
     "color": "#52745b"
   },
   {
-    "id": "rthk-sports",
-    "name": "香港电台体育",
-    "url": "https://rthk.hk/rthk/news/rss/c_expressnews_csport.xml",
-    "home": "https://news.rthk.hk/rthk/ch/latest-news/sport.htm",
+    "id": "gnews-hupu",
+    "name": "虎扑体育·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3Ahupu.com+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://www.hupu.com/",
     "category": "sports",
     "color": "#52745b"
   },
   {
-    "id": "yahoo-sports",
-    "name": "Yahoo 体育",
-    "url": "https://tw.news.yahoo.com/rss/sports",
-    "home": "https://tw.sports.yahoo.com/",
+    "id": "gnews-dongqiudi",
+    "name": "懂球帝·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3Adongqiudi.com+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://www.dongqiudi.com/",
     "category": "sports",
     "color": "#52745b"
   },

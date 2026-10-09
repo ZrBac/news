@@ -233,13 +233,6 @@
       ${group.status === "unavailable" && stories.length ? '<p class="price-status">本轮检索暂不可用，保留已收录报道。</p>' : ""}
       ${group.checkedAt ? `<p class="price-published">最近检查 ${escape(formatTime(group.checkedAt))}</p>` : ""}`;
   }
-  function housingWatchlist(data) {
-    const projects = Array.isArray(data.watchlist) ? data.watchlist : [];
-    if (!projects.length) return "";
-    return `<section class="housing-watchlist" aria-label="重点关注小区"><h2>重点小区动态</h2>
-      <p class="watch-intro">随资讯刷新自动检索相关报道，按楼盘名称匹配最近90天的媒体标题。</p>
-      <div class="watch-grid">${projects.map((p) => `<section class="watch-project"><h3>${escape(p.name)}</h3><p class="watch-market">${escape(p.area)}</p>${housingStories(p)}</section>`).join("")}</div></section>`;
-  }
   function xihuHotspots(data) {
     const group = data.xihuHotspots || {};
     if (!group.id) return "";
@@ -293,7 +286,7 @@
     panel.innerHTML = `<h2 class="city-price-heading">杭州整体成交</h2><p class="price-intro">自动检查来源发布的成交均价。新房与二手房分别标注统计周期，没有新数据时保留上次结果。</p>
       <div class="price-grid">${cards}</div>
       <p class="price-explanation">这里展示已公开的成交、网签统计；暂未接入全市实时逐套成交库。不同周期和成交房源构成的均价不能直接比较。</p>
-      ${housingWatchlist(data)}${xihuHotspots(data)}`;
+      ${xihuHotspots(data)}`;
   }
 
   function render() {

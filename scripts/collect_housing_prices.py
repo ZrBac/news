@@ -221,13 +221,11 @@ def main():
     args = p.parse_args()
     seed = json.loads((ROOT / 'news/housing-prices.json').read_text())
     previous = seed['records'][:]
-    previous_watch = {}
     previous_hotspots = {}
     if args.previous_url:
         try:
             old = json.loads(fetch(args.previous_url)).get('housingPrices', {})
             previous += old.get('records', [])
-            previous_watch = {p['id']: p for p in old.get('watchlist', [])}
             previous_hotspots = old.get('xihuHotspots', {})
         except Exception as exc:
             # Prevent replacing a newer live record with the seed during an outage.
@@ -238,13 +236,10 @@ def main():
         results = list(pool.map(lambda k: collect_kind(k, records, now.date()), ('new', 'resale')))
     for incoming, _ in results:
         records += incoming
-    projects = json.loads((ROOT / 'news/housing-watchlist.json').read_text())
     hotspots = json.loads((ROOT / 'news/xihu-hotspots.json').read_text())
-    previous_watch[hotspots['id']] = previous_hotspots
-    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-        watched = list(pool.map(lambda p: collect_watch(p, previous_watch.get(p['id'], {}), now), projects + [hotspots]))
+    watched = collect_watch(hotspots, previous_hotspots, now)
     payload = dict(checkedAt=now.isoformat(), records=merge_records(records, now.date()),
-                   sources=[s for _, s in results], watchlist=watched[:-1], xihuHotspots=watched[-1])
+                   sources=[s for _, s in results], xihuHotspots=watched)
     output = ROOT / 'news/data/housing.json'
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')) + '\n')

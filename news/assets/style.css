@@ -889,43 +889,18 @@ dialog::backdrop {
   }
 }
 
-.housing-watchlist {
-  margin: 24px 0 32px;
-}
-.housing-watchlist > h2,
 .city-price-heading {
   font-size: 19px;
   margin: 0 0 12px;
 }
-.watch-intro,
-.watch-market {
+.watch-intro {
   color: var(--secondary);
-}
-.watch-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 18px;
-}
-.watch-project {
-  border: 1px solid var(--line);
-  padding: 20px;
-  min-width: 0;
-}
-.watch-project h3 {
-  font-size: 18px;
-  margin: 0;
-}
-.watch-market {
-  margin: 6px 0 18px;
-  font-size: 12px;
 }
 .watch-stories small {
   display: block;
   font-size: 11px;
   color: var(--muted);
 }
-.watch-project a,
 .xihu-hotspots a {
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -941,15 +916,6 @@ dialog::backdrop {
   border-bottom: 1px solid var(--line);
   font-size: 13px;
 }
-@media (max-width: 800px) {
-  .watch-grid {
-    grid-template-columns: 1fr;
-  }
-  .watch-project {
-    padding: 16px;
-  }
-}
-
 .xihu-hotspots {
   border-top: 1px solid var(--line);
   margin: 32px 0;

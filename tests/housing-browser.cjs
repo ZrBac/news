@@ -26,11 +26,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       "杭州成交价",
     );
     assert.equal(await page.locator(".price-card").count(), 2);
-    assert.deepEqual(
-      await page.locator(".watch-project h3").allTextContents(),
-      ["建发云启之江", "润启未来之城"],
+    assert.equal(
+      await page.locator(".housing-watchlist, .watch-project").count(),
+      0,
     );
-    const watched = await page.locator(".watch-project").allTextContents();
     assert.equal(
       await page.locator("#xihu-heading").innerText(),
       "西湖区房源动态",
@@ -45,12 +44,9 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     assert.doesNotMatch(
       await page.locator("#housing-prices").innerText(),
-      /约340万元|36,047|25,085|资料核实于|小区成交样本/,
+      /建发云启之江|润启未来之城|约340万元|36,047|25,085|资料核实于|小区成交样本/,
     );
-    assert.match(
-      await page.locator(".housing-watchlist").innerText(),
-      /自动检索/,
-    );
+    assert.match(await page.locator(".xihu-hotspots").innerText(), /自动跟踪/);
     assert.match(
       await page.locator("#housing-prices").innerText(),
       /统计期.*2026-/,
@@ -90,10 +86,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       await page.locator(".price-value").allTextContents(),
       prices,
     );
-    assert.deepEqual(
-      await page.locator(".watch-project").allTextContents(),
-      watched,
-    );
+    assert.equal(await page.locator(".watch-project").count(), 0);
     assert.equal(
       await page.locator("#xihu-heading").innerText(),
       "西湖区房源动态",

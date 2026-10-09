@@ -19,11 +19,11 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator(".price-card").first().waitFor();
     assert.equal(
       await page.locator("#section-title").innerText(),
-      "杭州成交价",
+      "杭州房价",
     );
     assert.equal(
       await page.locator(".filter-tabs > :last-child").innerText(),
-      "杭州成交价",
+      "杭州房价",
     );
     assert.equal(await page.locator(".price-card").count(), 2);
     assert.equal(await page.locator(".official-grid > div").count(), 2);

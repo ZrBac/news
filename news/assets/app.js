@@ -435,7 +435,7 @@
       ai: "人工智能",
       entertainment: "文娱",
       sports: "体育",
-      housing: "杭州成交价",
+      housing: "杭州房价",
       exchange: "汇率",
       brief: "每日速览",
       saved: "我的收藏",

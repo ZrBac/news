@@ -817,6 +817,13 @@ dialog::backdrop {
   margin-top: 5px;
 }
 
+.exchange-view .filter-row,
+.exchange-view #date-panel,
+.exchange-view #view-note,
+.exchange-view #articles,
+.exchange-view #load-more,
+.exchange-view #list-end,
+.exchange-view #archive-notice,
 .housing-view .filter-row,
 .housing-view #date-panel,
 .housing-view #view-note,
@@ -976,5 +983,132 @@ dialog::backdrop {
   }
   .housing-table {
     font-size: 13px;
+  }
+}
+
+.fx-summary {
+  border: 1px solid var(--line);
+  padding: 20px;
+  margin: 24px 0;
+}
+.fx-summary.is-low {
+  border: 2px solid #9c701c;
+  background: rgba(181, 132, 44, 0.09);
+}
+.fx-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.fx-heading h2,
+.fx-history h2 {
+  font-size: 19px;
+  margin: 0;
+}
+.fx-heading h2 span {
+  font-size: 12px;
+  color: var(--muted);
+  font-weight: 400;
+  margin-left: 8px;
+}
+.fx-unit,
+.fx-status {
+  font-size: 13px;
+  color: var(--secondary);
+}
+.fx-value {
+  font-size: 38px;
+  font-weight: 650;
+  margin: 10px 0;
+  font-variant-numeric: tabular-nums;
+}
+.fx-value small {
+  font-size: 14px;
+  font-weight: 400;
+}
+.fx-alert {
+  background: #825c13;
+  color: #fff;
+  font-size: 12px;
+  padding: 5px 9px;
+  margin: 0;
+  border-radius: 3px;
+}
+.fx-chart {
+  width: 100%;
+  height: auto;
+  display: block;
+  margin-top: 18px;
+  overflow: visible;
+}
+.fx-chart text {
+  fill: var(--muted);
+  font-size: 12px;
+}
+.fx-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+.fx-line {
+  fill: none;
+  stroke: var(--accent);
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+.fx-point {
+  fill: var(--accent);
+  opacity: 0;
+}
+.fx-point.selected {
+  opacity: 1;
+}
+.fx-readout {
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+.fx-slider-label {
+  display: block;
+  color: var(--muted);
+  font-size: 12px;
+}
+#fx-day {
+  width: 100%;
+  min-height: 44px;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
+.fx-records {
+  margin: 24px 0;
+  border-top: 1px solid var(--line);
+  padding-top: 18px;
+}
+.fx-records summary {
+  cursor: pointer;
+  font-size: 14px;
+  color: var(--secondary);
+  padding: 6px 0;
+}
+.fx-notes {
+  font-size: 12px;
+  color: var(--muted);
+  line-height: 1.8;
+  border-top: 1px solid var(--line);
+  margin-top: 24px;
+  padding-top: 12px;
+}
+.fx-notes a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+@media (max-width: 400px) {
+  .fx-summary {
+    padding: 16px;
+  }
+  .fx-value {
+    font-size: 34px;
   }
 }

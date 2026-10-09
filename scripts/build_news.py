@@ -61,7 +61,7 @@ def main():
     pages = {'/': homepage, '/games/': (output / 'games/index.html').read_text()}
     shell_files = ['/', '/games/', '/manifest.webmanifest', '/assets/news/icon-180.png',
                    '/assets/news/icon-192.png', '/assets/news/icon-512.png']
-    for filename in ('compat.js', 'compat.css', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js'):
+    for filename in ('compat.js', 'compat.css', 'exchange-core.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js'):
         asset = output / 'assets/news' / filename
         digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:12]
         versioned = asset.with_name(f'{asset.stem}.{digest}{asset.suffix}')
@@ -91,6 +91,8 @@ def main():
     prices.pop('watchlist', None)
     prices.pop('xihuHotspots', None)
     (output / 'data/housing.json').write_text(json.dumps(prices, ensure_ascii=False, separators=(',', ':')) + '\n')
+    exchange_file = ROOT / 'news/data/exchange.json'
+    data['exchangeRates'] = json.loads((exchange_file if exchange_file.exists() else ROOT / 'news/exchange-rates.json').read_text())
     (output / 'data/news.json').write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n')
     build_news_pages(data, output)
     # A tiny health file avoids downloading and parsing the entire archive in Workers.

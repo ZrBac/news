@@ -30,6 +30,8 @@ jobs:
         run: |
           node --check news/assets/compat.js
           node --check news/assets/app.js
+          node --check news/assets/exchange-core.js
+          node --test tests/exchange-core.cjs
           node --check news/assets/pwa.js
           node --check news/sw.js
           node --check news/assets/games.js
@@ -45,6 +47,8 @@ jobs:
         run: python scripts/collect_news.py --previous-url https://news.zacai.fun/data/news.json
       - name: Update Hangzhou transaction price reports
         run: python scripts/collect_housing_prices.py --previous-url https://news.zacai.fun/data/latest.json
+      - name: Update USD to CNY reference rates
+        run: python scripts/collect_exchange_rates.py --previous-url https://news.zacai.fun/data/latest.json
       - name: Build news portal
         env:
           NEWS_REFRESH_ENDPOINT: ${{ vars.NEWS_REFRESH_ENDPOINT }}

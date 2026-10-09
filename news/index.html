@@ -46,6 +46,7 @@
     <title>资讯 · 综合热点与 AI 科技资讯</title>
     <link rel="stylesheet" href="/assets/news/compat.css" />
     <script src="/assets/news/compat.js" defer></script>
+    <script src="/assets/news/exchange-core.js" defer></script>
     <script src="/assets/news/app.js" defer></script>
     <script src="/assets/news/pwa.js" defer></script>
   </head>
@@ -108,6 +109,7 @@
               文娱
             </button>
             <button data-filter="sports" aria-pressed="false">体育</button>
+            <button data-filter="exchange" aria-pressed="false">汇率</button>
             <button data-filter="housing" aria-pressed="false">
               杭州成交价
             </button>
@@ -154,6 +156,11 @@
               更新页面
             </button>
           </p>
+          <section
+            id="exchange-rates"
+            aria-label="外币兑人民币汇率"
+            hidden
+          ></section>
           <section
             id="housing-prices"
             aria-label="杭州成交价格"

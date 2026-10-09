@@ -29,6 +29,10 @@
       "url": "/#brief"
     },
     {
+      "name": "汇率",
+      "url": "/#exchange"
+    },
+    {
       "name": "杭州成交价",
       "url": "/#housing"
     },

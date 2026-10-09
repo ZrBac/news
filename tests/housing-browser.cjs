@@ -30,32 +30,26 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       await page.locator(".watch-project h3").allTextContents(),
       ["建发云启之江", "润启未来之城"],
     );
-    assert.match(
-      await page.locator(".watch-project").first().innerText(),
-      /约340万元/,
+    const watched = await page.locator(".watch-project").allTextContents();
+    assert.equal(
+      await page.locator("#xihu-heading").innerText(),
+      "西湖区房源动态",
     );
-    const watched = await page.locator(".watch-fact strong").allTextContents();
-    assert.equal(await page.locator(".xihu-property:visible").count(), 5);
-    await page.locator('[data-housing-type="new"]').click();
-    assert.equal(await page.locator(".xihu-property:visible").count(), 2);
     assert.equal(
       await page
-        .locator('.xihu-property[data-property-type="resale"]:visible')
+        .locator(
+          ".watch-fact, .xihu-property, .price-samples, .price-links, [data-housing-type]",
+        )
         .count(),
       0,
     );
-    await page.locator(".xihu-property:visible summary").first().click();
-    assert.match(
-      await page.locator(".xihu-property:visible").first().innerText(),
-      /非实际成交价/,
+    assert.doesNotMatch(
+      await page.locator("#housing-prices").innerText(),
+      /约340万元|36,047|25,085|资料核实于|小区成交样本/,
     );
-    await page.locator('[data-housing-type="resale"]').click();
-    assert.equal(await page.locator(".xihu-property:visible").count(), 3);
-    await page.locator('[data-housing-type="all"]').click();
-    await page.locator(".watch-project summary").last().click();
     assert.match(
-      await page.locator(".watch-project").last().innerText(),
-      /不是实际成交价/,
+      await page.locator(".housing-watchlist").innerText(),
+      /自动检索/,
     );
     assert.match(
       await page.locator("#housing-prices").innerText(),
@@ -97,11 +91,13 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       prices,
     );
     assert.deepEqual(
-      await page.locator(".watch-fact strong").allTextContents(),
+      await page.locator(".watch-project").allTextContents(),
       watched,
     );
-    await page.locator('[data-housing-type="new"]').click();
-    assert.equal(await page.locator(".xihu-property:visible").count(), 2);
+    assert.equal(
+      await page.locator("#xihu-heading").innerText(),
+      "西湖区房源动态",
+    );
     await page.locator('[data-filter="all"]').click();
     await page.locator(".article").first().waitFor();
     assert(await page.locator("#search").isVisible());

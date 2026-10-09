@@ -85,10 +85,17 @@ def main():
     data = json.loads((output / 'data/news.json').read_text())
     price_file = ROOT / 'news/data/housing.json'
     data['housingPrices'] = json.loads((price_file if price_file.exists() else ROOT / 'news/housing-prices.json').read_text())
-    if 'watchlist' not in data['housingPrices']:
-        data['housingPrices']['watchlist'] = json.loads((ROOT / 'news/housing-watchlist.json').read_text())
-    if 'xihuHotspots' not in data['housingPrices']:
-        data['housingPrices']['xihuHotspots'] = json.loads((ROOT / 'news/xihu-hotspots.json').read_text())
+    # Rebuild tracked topics from current config so old cached/manual facts cannot return.
+    prices = data['housingPrices']
+    prices.pop('samples', None)
+    old_watch = {p['id']: p for p in prices.get('watchlist', [])}
+    projects = json.loads((ROOT / 'news/housing-watchlist.json').read_text())
+    hotspots = json.loads((ROOT / 'news/xihu-hotspots.json').read_text())
+    def current_topic(config, previous):
+        return dict(config, **{k: previous[k] for k in ('stories', 'checkedAt', 'status') if k in previous})
+    prices['watchlist'] = [current_topic(p, old_watch.get(p['id'], {})) for p in projects]
+    prices['xihuHotspots'] = current_topic(hotspots, prices.get('xihuHotspots', {}))
+    (output / 'data/housing.json').write_text(json.dumps(prices, ensure_ascii=False, separators=(',', ':')) + '\n')
     (output / 'data/news.json').write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n')
     build_news_pages(data, output)
     # A tiny health file avoids downloading and parsing the entire archive in Workers.

@@ -244,7 +244,7 @@ def main():
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         watched = list(pool.map(lambda p: collect_watch(p, previous_watch.get(p['id'], {}), now), projects + [hotspots]))
     payload = dict(checkedAt=now.isoformat(), records=merge_records(records, now.date()),
-                   samples=seed['samples'], sources=[s for _, s in results], watchlist=watched[:-1], xihuHotspots=watched[-1])
+                   sources=[s for _, s in results], watchlist=watched[:-1], xihuHotspots=watched[-1])
     output = ROOT / 'news/data/housing.json'
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')) + '\n')

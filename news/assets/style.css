@@ -827,9 +827,7 @@ dialog::backdrop {
   display: none;
 }
 .price-intro,
-.price-explanation,
-.price-samples > p,
-.price-links p {
+.price-explanation {
   color: var(--secondary);
   line-height: 1.8;
 }
@@ -844,14 +842,11 @@ dialog::backdrop {
   padding: 20px;
   min-width: 0;
 }
-.price-card h2,
-.price-samples h2,
-.price-links h2 {
+.price-card h2 {
   font-size: 17px;
   margin: 0 0 12px;
 }
-.price-card h2 span,
-.price-samples h2 span {
+.price-card h2 span {
   font-size: 12px;
   font-weight: 400;
   color: var(--muted);
@@ -876,49 +871,13 @@ dialog::backdrop {
   font-size: 12px;
   color: var(--muted);
 }
-.price-card a,
-.price-table-wrap a,
-.price-links a {
+.price-card a {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
 .price-status {
   font-size: 12px;
   color: var(--secondary);
-}
-.price-samples,
-.price-links {
-  border-top: 1px solid var(--line);
-  margin-top: 28px;
-  padding-top: 24px;
-}
-.price-table-wrap table {
-  border-collapse: collapse;
-  width: 100%;
-  font-size: 13px;
-}
-.price-table-wrap th,
-.price-table-wrap td {
-  text-align: left;
-  border-bottom: 1px solid var(--line);
-  padding: 12px 4px;
-}
-.price-table-wrap th {
-  font-weight: 400;
-  color: var(--muted);
-}
-.price-table-wrap td small {
-  display: block;
-  color: var(--muted);
-  font-size: 11px;
-}
-.price-table-wrap td:nth-child(2) {
-  white-space: nowrap;
-  font-variant-numeric: tabular-nums;
-}
-.price-links a {
-  display: inline-block;
-  margin: 6px 20px 6px 0;
 }
 @media (max-width: 600px) {
   .price-grid {
@@ -939,8 +898,7 @@ dialog::backdrop {
   margin: 0 0 12px;
 }
 .watch-intro,
-.watch-market,
-.watch-focus {
+.watch-market {
   color: var(--secondary);
 }
 .watch-grid {
@@ -962,47 +920,16 @@ dialog::backdrop {
   margin: 6px 0 18px;
   font-size: 12px;
 }
-.watch-project dl,
-.watch-project dd {
-  margin: 0;
-}
-.watch-fact {
-  padding: 14px 0;
-  border-top: 1px solid var(--line);
-}
-.watch-fact dt {
-  font-size: 12px;
-  color: var(--secondary);
-}
-.watch-fact strong {
-  display: block;
-  font-size: 23px;
-  margin-top: 5px;
-  font-variant-numeric: tabular-nums;
-}
-.watch-fact p {
-  font-size: 13px;
-  margin: 8px 0;
-  color: var(--secondary);
-}
-.watch-fact small,
 .watch-stories small {
   display: block;
   font-size: 11px;
   color: var(--muted);
 }
-.watch-project a {
+.watch-project a,
+.xihu-hotspots a {
   text-decoration: underline;
   text-underline-offset: 3px;
   overflow-wrap: anywhere;
-}
-.watch-project summary {
-  cursor: pointer;
-  padding: 12px 0 0;
-  color: var(--accent);
-}
-.watch-project h4 {
-  margin: 24px 0 6px;
 }
 .watch-stories {
   list-style: none;
@@ -1031,89 +958,4 @@ dialog::backdrop {
 .xihu-hotspots h2 {
   font-size: 19px;
   margin: 0 0 12px;
-}
-.xihu-toolbar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 20px 0;
-}
-.xihu-toolbar button {
-  padding: 6px 12px;
-  border: 1px solid var(--line);
-  margin-right: 6px;
-}
-.xihu-toolbar button[aria-pressed="true"] {
-  color: var(--accent);
-  border-color: var(--accent);
-}
-.xihu-toolbar > span {
-  color: var(--muted);
-  font-size: 12px;
-}
-.xihu-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-}
-.xihu-property {
-  border: 1px solid var(--line);
-  padding: 18px;
-  min-width: 0;
-}
-.xihu-property-heading {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  justify-content: space-between;
-}
-.xihu-property h3 {
-  font-size: 17px;
-  margin: 0;
-}
-.xihu-property-heading > span {
-  color: var(--muted);
-  white-space: nowrap;
-  font-size: 12px;
-}
-.xihu-price {
-  font-size: 22px;
-  font-weight: 600;
-  margin: 8px 0;
-}
-.xihu-basis {
-  font-size: 13px;
-  color: var(--secondary);
-}
-.xihu-property summary,
-.xihu-updates summary {
-  cursor: pointer;
-  color: var(--accent);
-  font-size: 13px;
-}
-.xihu-property details p {
-  font-size: 13px;
-  color: var(--secondary);
-}
-.xihu-property a,
-.xihu-updates a {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-.xihu-listing {
-  display: inline-block;
-  margin-top: 16px;
-  font-size: 13px;
-}
-.xihu-updates {
-  margin-top: 20px;
-}
-@media (max-width: 600px) {
-  .xihu-grid {
-    grid-template-columns: 1fr;
-  }
-  .xihu-toolbar {
-    flex-wrap: wrap;
-  }
 }

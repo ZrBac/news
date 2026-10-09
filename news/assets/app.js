@@ -63,7 +63,6 @@
     data: null,
     view: "all",
     filter: "all",
-    housingType: "all",
     query: "",
     source: "all",
     date: "",
@@ -226,82 +225,27 @@
     }
     return state.view === "brief" ? selectBrief(articles) : articles;
   }
-  function housingWatchlist(data) {
-    const projects = Array.isArray(data.watchlist) ? data.watchlist : [];
-    if (!projects.length) return "";
-    const factHTML = (f) =>
-      `<div class="watch-fact"><dt>${escape(f.label)}</dt><dd><strong>${escape(f.value)}</strong><p>${escape(f.note)}</p><small>${escape(f.dateLabel || "报道日期")} ${escape(f.date)} · <a href="${escape(safeUrl(f.url))}" target="_blank" rel="noopener noreferrer">${escape(f.source)} ↗</a></small></dd></div>`;
-    return `<section class="housing-watchlist" aria-label="重点关注小区"><h2>重点关注</h2>
-      <p class="watch-intro">两盘的成交与进展分别记录。相关报道自动检索，价格保留核实日期与原始口径。</p>
-      <div class="watch-grid">${projects
-        .map((p) => {
-          const facts = (Array.isArray(p.facts) ? p.facts : []).filter(
-            (f) => f && safeUrl(f.url),
-          );
-          const stories = (Array.isArray(p.stories) ? p.stories : []).filter(
-            (a) => a && safeUrl(a.url),
-          );
-          const links = (Array.isArray(p.links) ? p.links : []).filter(
-            (a) => a && safeUrl(a.url),
-          );
-          return `<section class="watch-project"><h3>${escape(p.name)}</h3><p class="watch-market">${escape(p.area)} · ${escape(p.market)}</p>
-          <dl>${facts.slice(0, 2).map(factHTML).join("")}</dl>
-          <details><summary>项目进展与相关报道</summary><dl>${facts.slice(2).map(factHTML).join("")}</dl>
-          <p class="watch-focus">${escape(p.focus)}</p>
-          ${links.map((a) => `<p><a href="${escape(safeUrl(a.url))}" target="_blank" rel="noopener noreferrer">${escape(a.label)} ↗</a></p>`).join("")}
-          <h4>近期报道</h4><p class="price-published">按楼盘名称匹配标题，通过 Google 新闻检索指定媒体。</p>
-          ${stories.length ? `<ul class="watch-stories">${stories.map((a) => `<li><a href="${escape(safeUrl(a.url))}" target="_blank" rel="noopener noreferrer">${escape(a.title)}</a><small>${escape(String(a.publishedAt).slice(0, 10))} · ${escape(a.source)}</small></li>`).join("")}</ul>` : '<p class="price-published">最近90天暂未检索到标题匹配的报道；上方资料可直接查看原文。</p>'}
-          ${p.status === "unavailable" ? '<p class="price-status">本轮报道检索暂不可用，保留已收录内容。</p>' : ""}
-          <p class="price-published">资料核实于 ${escape(p.reviewedAt)}${p.checkedAt ? ` · 报道检查 ${escape(formatTime(p.checkedAt))}` : ""}</p></details></section>`;
-        })
-        .join("")}</div></section>`;
-  }
-  function xihuHotspots(data) {
-    const group = data.xihuHotspots || {};
-    const items = (Array.isArray(group.items) ? group.items : []).filter(
-      (p) =>
-        p &&
-        ["new", "resale"].includes(p.type) &&
-        safeUrl(p.priceUrl) &&
-        safeUrl(p.basisUrl) &&
-        safeUrl(p.listingUrl),
-    );
-    if (!items.length) return "";
+  function housingStories(group) {
     const stories = (Array.isArray(group.stories) ? group.stories : []).filter(
       (a) => a && safeUrl(a.url),
     );
-    return `<section class="xihu-hotspots" aria-labelledby="xihu-heading"><h2 id="xihu-heading">西湖区热点房源</h2>
-      <p class="watch-intro">按成交活跃、近期加推和销售进展收录，不是全区热度排名。具体在售房源与价格请查看原站。</p>
-      <div class="xihu-toolbar"><div role="group" aria-label="西湖区房源类型">${[
-        ["all", "全部"],
-        ["resale", "二手房"],
-        ["new", "新房"],
-      ]
-        .map(
-          ([value, label]) =>
-            `<button data-housing-type="${value}" aria-pressed="${state.housingType === value}">${label}</button>`,
-        )
-        .join(
-          "",
-        )}</div><span id="xihu-count" role="status">${items.filter((p) => state.housingType === "all" || p.type === state.housingType).length} 个楼盘 / 小区</span></div>
-      <div class="xihu-grid">${items
-        .map(
-          (
-            p,
-          ) => `<article class="xihu-property" data-property-type="${p.type}"${state.housingType !== "all" && state.housingType !== p.type ? " hidden" : ""}>
-        <div class="xihu-property-heading"><h3>${escape(p.name)}</h3><span>${p.type === "new" ? "新房" : "二手房"}</span></div>
-        <p class="watch-market">${escape(p.area)}</p>
-        <p class="xihu-price">${escape(p.value)}</p><p class="price-published">${escape(p.priceLabel)}</p>
-        <p class="xihu-basis">关注依据：${escape(p.basis)}</p>
-        <details><summary>价格口径与来源</summary><p>${escape(p.priceNote)}</p>
-        <p><a href="${escape(safeUrl(p.priceUrl))}" target="_blank" rel="noopener noreferrer">${escape(p.priceSource)} ↗</a> · <a href="${escape(safeUrl(p.basisUrl))}" target="_blank" rel="noopener noreferrer">关注依据原文 ↗</a></p></details>
-        <a class="xihu-listing" href="${escape(safeUrl(p.listingUrl))}" target="_blank" rel="noopener noreferrer">${escape(p.listingLabel)} ↗</a></article>`,
-        )
-        .join("")}</div>
-      <details class="xihu-updates"><summary>相关报道与资料日期</summary>
-      <p class="price-published">资料核实于 ${escape(group.reviewedAt)}。价格记录需核实后更新；相关报道按小区名称自动检索。</p>
-      ${stories.length ? `<ul class="watch-stories">${stories.map((a) => `<li><a href="${escape(safeUrl(a.url))}" target="_blank" rel="noopener noreferrer">${escape(a.title)}</a><small>${escape(String(a.publishedAt).slice(0, 10))} · ${escape(a.source)}</small></li>`).join("")}</ul>` : '<p class="price-published">最近90天暂未检索到新的标题匹配报道，可查看各卡片原文。</p>'}
-      ${group.status === "unavailable" ? '<p class="price-status">本轮检索暂不可用，保留已有内容。</p>' : ""}</details></section>`;
+    return `${stories.length ? `<ul class="watch-stories">${stories.map((a) => `<li><a href="${escape(safeUrl(a.url))}" target="_blank" rel="noopener noreferrer">${escape(a.title)}</a><small>${escape(String(a.publishedAt).slice(0, 10))} · ${escape(a.source)}</small></li>`).join("")}</ul>` : `<p class="price-published">${group.status === "unavailable" ? "报道暂未加载成功，稍后自动重试。" : group.checkedAt ? "最近90天暂未检索到标题匹配的报道。" : "等待首次自动检索。"}</p>`}
+      ${group.status === "unavailable" && stories.length ? '<p class="price-status">本轮检索暂不可用，保留已收录报道。</p>' : ""}
+      ${group.checkedAt ? `<p class="price-published">最近检查 ${escape(formatTime(group.checkedAt))}</p>` : ""}`;
+  }
+  function housingWatchlist(data) {
+    const projects = Array.isArray(data.watchlist) ? data.watchlist : [];
+    if (!projects.length) return "";
+    return `<section class="housing-watchlist" aria-label="重点关注小区"><h2>重点小区动态</h2>
+      <p class="watch-intro">随资讯刷新自动检索相关报道，按楼盘名称匹配最近90天的媒体标题。</p>
+      <div class="watch-grid">${projects.map((p) => `<section class="watch-project"><h3>${escape(p.name)}</h3><p class="watch-market">${escape(p.area)}</p>${housingStories(p)}</section>`).join("")}</div></section>`;
+  }
+  function xihuHotspots(data) {
+    const group = data.xihuHotspots || {};
+    if (!group.id) return "";
+    return `<section class="xihu-hotspots" aria-labelledby="xihu-heading"><h2 id="xihu-heading">西湖区房源动态</h2>
+      <p class="watch-intro">自动跟踪紫璋台、文鼎苑、西城年华、知海棠、观紫金宸庐的相关报道。</p>
+      ${housingStories(group)}</section>`;
   }
   function renderHousingPrices() {
     const panel = $("#housing-prices");
@@ -346,24 +290,12 @@
         ${status && status.status !== "ok" ? '<p class="price-status">本轮部分数据未能核实，保留已收录价格。</p>' : ""}</section>`;
       })
       .join("");
-    const samples = (Array.isArray(data.samples) ? data.samples : []).filter(
-      (r) => r && Number.isFinite(r.price) && r.price > 0 && safeUrl(r.url),
-    );
-    panel.innerHTML = `${housingWatchlist(data)}${xihuHotspots(data)}<h2 class="city-price-heading">杭州整体成交</h2><p class="price-intro">最新已收录的成交均价。新房与二手房分别标注统计周期，价格随来源发布更新。</p>
+    panel.innerHTML = `<h2 class="city-price-heading">杭州整体成交</h2><p class="price-intro">自动检查来源发布的成交均价。新房与二手房分别标注统计周期，没有新数据时保留上次结果。</p>
       <div class="price-grid">${cards}</div>
       <p class="price-explanation">这里展示已公开的成交、网签统计；暂未接入全市实时逐套成交库。不同周期和成交房源构成的均价不能直接比较。</p>
-      ${
-        samples.length
-          ? `<section class="price-samples"><h2>小区成交样本 <span>二手房</span></h2>
-      <p>来源已公开的月度网签均价，非单套成交价。每条保留统计月份。</p>
-      <div class="price-table-wrap"><table><thead><tr><th scope="col">小区 / 统计期</th><th scope="col">网签均价</th><th scope="col">套数</th></tr></thead><tbody>${samples.map((r) => `<tr><td><a href="${escape(safeUrl(r.url))}" target="_blank" rel="noopener noreferrer">${escape(r.name)} ↗</a><small>${escape(r.area)} · ${escape(r.period)}</small></td><td>${escape(r.price.toLocaleString("zh-CN"))}<small>元/㎡</small></td><td>${escape(r.count)}</td></tr>`).join("")}</tbody></table></div>
-      <p class="price-published">来源：杭州贝壳研究院数据，潮新闻报道。点击小区名查看原文。</p></section>`
-          : ""
-      }
-      <section class="price-links"><h2>查具体房源</h2><p>具体房源的面积、楼层和成交时间会影响价格。以下平台部分单套价格需在 App 内查看。</p>
-      <a href="https://hz.5i5j.com/solds/" target="_blank" rel="noopener noreferrer">我爱我家·杭州成交记录 ↗</a>
-      <a href="https://m.fang.com/chengjiao/hz/" target="_blank" rel="noopener noreferrer">房天下·杭州成交记录 ↗</a></section>`;
+      ${housingWatchlist(data)}${xihuHotspots(data)}`;
   }
+
   function render() {
     if (!state.data) return;
     renderHousingPrices();
@@ -642,22 +574,6 @@
     ensureArticles();
   });
   document.addEventListener("click", (e) => {
-    const housingType = e.target.closest("[data-housing-type]");
-    if (housingType) {
-      const value = housingType.dataset.housingType;
-      if (!["all", "new", "resale"].includes(value)) return;
-      state.housingType = value;
-      $$("[data-housing-type]").forEach((el) =>
-        el.setAttribute("aria-pressed", el.dataset.housingType === value),
-      );
-      const cards = $$("[data-property-type]");
-      cards.forEach((el) => {
-        el.hidden = value !== "all" && el.dataset.propertyType !== value;
-      });
-      $("#xihu-count").textContent =
-        `${cards.filter((el) => !el.hidden).length} 个楼盘 / 小区`;
-      return;
-    }
     const viewLink = e.target.closest("a[data-view]");
     if (
       viewLink &&

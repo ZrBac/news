@@ -2,7 +2,7 @@
   "id": "/",
   "name": "资讯",
   "short_name": "资讯",
-  "description": "综合、科技、AI、文娱与体育资讯。",
+  "description": "综合、杭州房市、科技、AI、文娱与体育资讯。",
   "lang": "zh-CN",
   "start_url": "/",
   "scope": "/",
@@ -24,8 +24,21 @@
     }
   ],
   "shortcuts": [
-    { "name": "每日速览", "url": "/#brief" },
-    { "name": "我的收藏", "url": "/#saved" },
-    { "name": "小游戏", "url": "/games/" }
+    {
+      "name": "每日速览",
+      "url": "/#brief"
+    },
+    {
+      "name": "杭州房市",
+      "url": "/#housing"
+    },
+    {
+      "name": "我的收藏",
+      "url": "/#saved"
+    },
+    {
+      "name": "小游戏",
+      "url": "/games/"
+    }
   ]
 }

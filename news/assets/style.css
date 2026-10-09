@@ -227,7 +227,8 @@ span[data-icon] {
 }
 .filter-tabs {
   display: flex;
-  gap: 26px;
+  flex-wrap: wrap;
+  gap: 10px 26px;
   border-bottom: 1px solid var(--line);
 }
 .filter-tabs button,

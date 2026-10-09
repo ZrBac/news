@@ -69,6 +69,22 @@ class FeedTests(unittest.TestCase):
                 self.assertEqual(items[0]['category'], category)
                 self.assertEqual(collector.merge_articles(items, [], self.now, {'example'}), items)
 
+    def test_hangzhou_housing_requires_location_and_housing_topic(self):
+        source = dict(self.source, category='housing')
+        for title in ('杭州二手房成交327套', '杭州新房成交99套', '临平推出购房补贴', '杭州AI选房服务与购房政策解读'):
+            with self.subTest(title=title):
+                feed = self.feed().replace(b'AI &amp; \xe7\xa7\x91\xe6\x8a\x80 <script>alert(1)</script>', title.encode())
+                articles = collector.parse_feed(feed, source, self.now)
+                self.assertEqual(len(articles), 1)
+                self.assertEqual(articles[0]['category'], 'housing')
+                self.assertEqual(len(collector.merge_articles(articles, [], self.now, {'example'})), 1)
+        for title in ('杭州银行利润增长', '杭州国庆旅游客流', '上海新房成交99套', '全国楼市政策调整', '王石不卖房了？ - 杭州网', '上海新房成交99套 - 住在杭州网'):
+            with self.subTest(title=title):
+                self.assertFalse(collector.is_hangzhou_housing(title))
+        article = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        unrelated = dict(article, title='杭州天气降温', category='housing')
+        self.assertFalse(collector.merge_articles([unrelated], [], self.now, {'example'}))
+
     def test_rdf_feed_retains_publisher_date_link_and_excerpt(self):
         feed = b'''<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
             xmlns="http://purl.org/rss/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/">

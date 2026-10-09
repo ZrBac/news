@@ -21,6 +21,15 @@ ROOT = Path(__file__).resolve().parents[1]
 UTC = timezone.utc
 AI_PATTERN = re.compile(r"\b(?:AI|AGI|LLM|GPT[\w.-]*|ChatGPT|OpenAI|Anthropic|Claude|Gemini|Copilot|DeepSeek|Qwen|Llama|Codex|RAG|MCP|agents?)\b|人工智能|大模型|语言模型|生成式|机器学习|智能体|通义|智谱|豆包|具身智能|算力", re.I)
 
+HOUSING_LOCATION = re.compile(r'杭州|余杭|萧山|临平|钱塘|拱墅|临安|富阳')
+HOUSING_TOPIC = re.compile(r'楼市|房地产|房产|住房|住宅|二手房|新房|购房|买房|卖房|房价|房贷|公积金|土拍|宅地|涉宅|预售|网签|土地出让|地块成交')
+
+
+def is_hangzhou_housing(title):
+    # Google News appends the publisher name; “杭州网” is not story location evidence.
+    title = title.rsplit(' - ', 1)[0]
+    return bool(HOUSING_LOCATION.search(title) and HOUSING_TOPIC.search(title))
+
 
 class PlainText(HTMLParser):
     def __init__(self):
@@ -102,12 +111,14 @@ def parse_feed(data, source, now):
         date = parse_date(item.findtext('pubDate') or item.findtext('{http://purl.org/dc/elements/1.1/}date'))
         if not title or not url or not date or date > now + timedelta(minutes=10) or date < now - timedelta(days=30):
             continue
+        if source['category'] == 'housing' and not is_hangzhou_housing(title):
+            continue
         # Keep only a short publisher-provided excerpt; do not republish feed bodies.
         excerpt = plain(field('description'))
         excerpt = re.sub(r'^(?:IT之家|爱范儿)\s*\d+\s*月\s*\d+\s*日(?:消息|讯)[，,：:\s]*', '', excerpt)
         excerpt = excerpt[:89].rstrip() + '…' if len(excerpt) > 90 else excerpt
         # Dedicated sections stay separate even when a story mentions AI.
-        category = source['category'] if source['category'] in ('entertainment', 'sports') else ('ai' if AI_PATTERN.search(title) else source['category'])
+        category = source['category'] if source['category'] in ('entertainment', 'sports', 'housing') else ('ai' if AI_PATTERN.search(title) else source['category'])
         articles.append({
             'id': hashlib.sha256(url.encode()).hexdigest()[:16], 'title': title,
             'url': url, 'sourceId': source['id'], 'category': category,
@@ -142,7 +153,9 @@ def merge_articles(previous, incoming, now, allowed_sources):
         date = parse_date(article.get('publishedAt'))
         if not url or not date or not now - timedelta(days=30) <= date <= now + timedelta(minutes=10):
             continue
-        if article.get('sourceId') not in allowed_sources or article.get('category') not in ('general', 'tech', 'ai', 'entertainment', 'sports'):
+        if article.get('sourceId') not in allowed_sources or article.get('category') not in ('general', 'tech', 'ai', 'entertainment', 'sports', 'housing'):
+            continue
+        if article.get('category') == 'housing' and not is_hangzhou_housing(str(article.get('title', ''))):
             continue
         clean = {key: str(article.get(key, '')) for key in ('title', 'sourceId', 'category', 'publishedAt', 'excerpt')}
         clean.update(url=url, id=hashlib.sha256(url.encode()).hexdigest()[:16], title=plain(clean['title'])[:240], excerpt=plain(clean['excerpt'])[:90])

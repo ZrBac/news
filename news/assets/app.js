@@ -57,6 +57,7 @@
     ai: "人工智能",
     entertainment: "文娱",
     sports: "体育",
+    housing: "杭州房市",
   };
   const state = {
     data: null,
@@ -174,9 +175,14 @@
       </div><button class="save-button${saved ? " saved" : ""}" data-save="${escape(article.id)}" aria-label="${saved ? "取消收藏" : "收藏"}：${escape(article.title)}" aria-pressed="${saved}" title="${saved ? "取消收藏" : "收藏文章"}">${icon("bookmark")}</button></article>`;
   }
   function selectBrief(articles) {
-    const queues = ["general", "ai", "tech", "entertainment", "sports"].map(
-      (category) => articles.filter((a) => a.category === category),
-    );
+    const queues = [
+      "general",
+      "housing",
+      "ai",
+      "tech",
+      "entertainment",
+      "sports",
+    ].map((category) => articles.filter((a) => a.category === category));
     const selected = [];
     const counts = {};
     // Rotate categories and sources. This is a transparent reading selection, not a popularity score.
@@ -229,6 +235,7 @@
       ai: "人工智能",
       entertainment: "文娱",
       sports: "体育",
+      housing: "杭州房市",
       brief: "每日速览",
       saved: "我的收藏",
     };
@@ -253,7 +260,12 @@
       el.setAttribute("aria-pressed", active);
     });
     const note = $("#view-note");
-    note.hidden = !["saved", "brief", "entertainment"].includes(state.view);
+    note.hidden = !["saved", "brief", "entertainment", "housing"].includes(
+      state.view,
+    );
+    if (state.view === "housing")
+      note.textContent =
+        "关注杭州新房、二手房成交、价格变化、购房政策与土拍。按报道发布时间排序，点击标题查看原报道及数据口径。";
     if (state.view === "entertainment")
       note.textContent =
         "娱乐圈、影视和综艺消息，按发布时间更新。点击标题查看原报道。";
@@ -262,7 +274,7 @@
         "收藏保存在当前浏览器，可保留已超出资讯归档期限的条目。清除浏览器数据会移除收藏，不会自动跨设备同步。";
     if (state.view === "brief")
       note.textContent =
-        "从所选日期的资讯中，按综合、AI、科技、文娱、体育轮流选取最多 10 条，兼顾不同来源。摘要来自资讯源，并非 AI 撰写或人工排名。";
+        "从所选日期的资讯中，按综合、杭州房市、AI、科技、文娱、体育轮流选取最多 10 条，兼顾不同来源。摘要来自资讯源，并非 AI 撰写或人工排名。";
     $("#date-trigger").classList.toggle("active", !!state.date);
     $("#date-trigger span:last-child").textContent = state.date
       ? state.date.slice(5).replace("-", "/")
@@ -299,6 +311,7 @@
       "ai",
       "entertainment",
       "sports",
+      "housing",
       "brief",
       "saved",
     ].includes(hash)
@@ -310,6 +323,7 @@
       "ai",
       "entertainment",
       "sports",
+      "housing",
     ].includes(state.view)
       ? state.view
       : "all";
@@ -401,7 +415,7 @@
   function showAbout() {
     $("#dialog-title").textContent = "关于本站";
     $("#dialog-content").innerHTML =
-      '<p>个人新闻订阅页，汇总综合新闻、科技、AI、文娱和体育资讯，计划每小时检查更新。</p><h3>排序与分类</h3><p>新闻按来源标注的发布时间排列，AI 分类依据标题关键词及来源。每日速览从不同分类与来源中选取最多 10 条，不代表热度排名。</p><h3>内容与收藏</h3><p>标题及短摘要来自对应资讯源，点击标题阅读原文。收藏仅保存在当前浏览器，不会跨设备同步。</p><p><a href="https://github.com/ZrBac/news/issues" target="_blank" rel="noopener noreferrer">问题反馈</a></p>';
+      '<p>个人新闻订阅页，汇总综合新闻、杭州房市、科技、AI、文娱和体育资讯，计划每小时检查更新。</p><h3>排序与分类</h3><p>新闻按来源标注的发布时间排列，AI 分类依据标题关键词及来源。每日速览从不同分类与来源中选取最多 10 条，不代表热度排名。</p><h3>内容与收藏</h3><p>标题及短摘要来自对应资讯源，点击标题阅读原文。收藏仅保存在当前浏览器，不会跨设备同步。</p><p><a href="https://github.com/ZrBac/news/issues" target="_blank" rel="noopener noreferrer">问题反馈</a></p>';
     $("#info-dialog").showModal();
   }
   function theme(value) {

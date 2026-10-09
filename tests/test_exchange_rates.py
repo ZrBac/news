@@ -43,4 +43,22 @@ class ExchangeTests(unittest.TestCase):
         self.assertEqual(result['points'],old['points'])
         self.assertEqual(result['status'],'unavailable')
 
+    def test_three_pairs_share_one_fetch_and_isolate_missing_currency(self):
+        xml = self.xml.replace('<Cube currency="USD"', '<Cube currency="JPY" rate="150"/><Cube currency="THB" rate="35"/><Cube currency="USD"')
+        calls = []
+        def get(url):
+            calls.append(url)
+            return xml
+        result = fx.collect_all({}, self.now, get)
+        self.assertEqual(len(calls), 1)
+        self.assertEqual(result['points'][-1]['rate'], 7)
+        self.assertEqual(result['currencies']['JPY']['points'][-1]['rate'], 0.051333)
+        self.assertEqual(result['currencies']['THB']['points'][-1]['rate'], 0.22)
+        broken = xml.replace('currency="JPY"', 'currency="GBP"', 1)
+        updated = fx.collect_all(result, self.now, lambda url: broken)
+        self.assertEqual(updated['status'], 'ok')
+        self.assertEqual(updated['currencies']['THB']['status'], 'ok')
+        self.assertEqual(updated['currencies']['JPY']['status'], 'unavailable')
+        self.assertEqual(updated['currencies']['JPY']['points'], result['currencies']['JPY']['points'])
+
 if __name__=='__main__':unittest.main()

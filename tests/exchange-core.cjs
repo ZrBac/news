@@ -56,3 +56,20 @@ test("insufficient, gapped, duplicate, invalid or future history cannot trigger 
   assert.equal(analyze({ ...data, base: "CNY" }, TODAY), null);
   assert.equal(analyze({ ...data, points: [] }, TODAY), null);
 });
+
+test("JPY and THB use their own low-price series, including rates below 0.1", () => {
+  for (const code of ["JPY", "THB"]) {
+    const data = fixture();
+    data.base = code;
+    data.series = `ecb-${code.toLowerCase()}-cny-reference-v1`;
+    data.points = data.points.map((p) => ({
+      ...p,
+      rate: Number((p.rate / (code === "JPY" ? 140 : 35)).toFixed(6)),
+    }));
+    assert.equal(analyze(data, TODAY).low, true);
+    data.points[data.points.length - 1].rate += 0.01;
+    assert.equal(analyze(data, TODAY).low, false);
+    data.series = "ecb-usd-cny-reference-v1";
+    assert.equal(analyze(data, TODAY), null);
+  }
+});

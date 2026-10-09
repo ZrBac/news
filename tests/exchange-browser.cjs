@@ -28,6 +28,28 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.equal(await page.locator("#articles").isVisible(), false);
     assert.equal(await page.locator("#housing-prices").isVisible(), false);
     assert.match(await page.locator(".fx-notes").innerText(), /20个自然日/);
+    for (const [code, name] of [
+      ["JPY", "日元"],
+      ["THB", "泰铢"],
+    ]) {
+      await page.locator(`[data-fx-currency="${code}"]`).click();
+      assert.match(
+        await page.locator(".fx-unit").innerText(),
+        new RegExp(`1 ${name}`),
+      );
+      assert.match(
+        await page.locator("#fx-readout").innerText(),
+        new RegExp(name),
+      );
+      assert.match(
+        await page.locator(".fx-chart title").textContent(),
+        new RegExp(name),
+      );
+      assert(
+        Number((await page.locator(".fx-value").innerText()).split(" ")[0]) > 0,
+      );
+    }
+    await page.locator('[data-fx-currency="USD"]').click();
     const before = await page.locator("#fx-readout").innerText();
     await page.locator("#fx-day").fill("0");
     const first = await page.locator("#fx-readout").innerText();
@@ -57,6 +79,11 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.equal(await page.locator(".fx-value").innerText(), prices);
     await page.locator("#fx-day").fill("0");
     assert.equal(await page.locator("#fx-readout").innerText(), first);
+    for (const code of ["JPY", "THB"]) {
+      await page.locator(`[data-fx-currency="${code}"]`).click();
+      assert(await page.locator(".fx-chart").isVisible());
+      await page.locator("#fx-day").fill("0");
+    }
     await page.locator('[data-filter="housing"]').click();
     await page.locator(".price-card").first().waitFor();
     assert.equal(await page.locator("#exchange-rates").isVisible(), false);

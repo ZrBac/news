@@ -19,8 +19,8 @@
     const now = dayNumber(today);
     if (
       !data ||
-      data.series !== "ecb-usd-cny-reference-v1" ||
-      data.base !== "USD" ||
+      !["USD", "JPY", "THB"].includes(data.base) ||
+      data.series !== `ecb-${data.base.toLowerCase()}-cny-reference-v1` ||
       data.quote !== "CNY" ||
       !Number.isFinite(now)
     )
@@ -34,7 +34,7 @@
           !Number.isFinite(dayNumber(p.date)) ||
           dayNumber(p.date) > now ||
           !Number.isFinite(p.rate) ||
-          p.rate <= 0.1 ||
+          p.rate <= 0.000001 ||
           p.rate >= 100 ||
           seen.has(p.date)
         ) {

@@ -287,17 +287,31 @@
     return html;
   }
   let exchangePoints = [];
+  let exchangeCurrency = "USD";
+  const exchangeNames = { USD: "美元", JPY: "日元", THB: "泰铢" };
   function renderExchangeRates() {
     const panel = $("#exchange-rates");
     const active = state.view === "exchange";
     panel.hidden = !active;
     $("#news-content").classList.toggle("exchange-view", active);
     if (!active) return;
-    const data = state.data.exchangeRates;
+    const name = exchangeNames[exchangeCurrency];
+    const allRates = state.data.exchangeRates || {};
+    const data =
+      exchangeCurrency === "USD"
+        ? allRates
+        : allRates.currencies?.[exchangeCurrency];
+    const tabs = `<div class="fx-currencies" role="group" aria-label="选择汇率币种">${Object.entries(
+      exchangeNames,
+    )
+      .map(
+        ([code, label]) =>
+          `<button data-fx-currency="${code}" aria-pressed="${code === exchangeCurrency}">${label} <span>${code}</span></button>`,
+      )
+      .join("")}</div>`;
     const info = window.NewsExchange.analyze(data, dayOf(Date.now()));
     if (!info) {
-      panel.innerHTML =
-        '<p class="view-note">美元兑人民币数据暂未获取成功，后续更新会自动重试。</p>';
+      panel.innerHTML = `${tabs}<p class="view-note">${name}兑人民币数据暂未获取成功，后续更新会自动重试。</p>`;
       exchangePoints = [];
       return;
     }
@@ -308,7 +322,7 @@
       const rates = info.points.map((p) => p.rate);
       const min = Math.min(...rates),
         max = Math.max(...rates);
-      const pad = Math.max((max - min) * 0.12, 0.001);
+      const pad = Math.max((max - min) * 0.12, min * 0.0001, 0.000001);
       const bottom = min - pad,
         top = max + pad;
       const start = Date.parse(info.periodStart),
@@ -317,7 +331,7 @@
         58 + ((Date.parse(p.date) - start) / Math.max(1, end - start)) * 560,
         18 + ((top - p.rate) / (top - bottom)) * 150,
       ]);
-      graph = `<svg class="fx-chart" viewBox="0 0 640 210" role="img" aria-labelledby="fx-chart-title fx-chart-desc"><title id="fx-chart-title">美元兑人民币近30天参考汇率走势</title><desc id="fx-chart-desc">1美元折合人民币。最低${rateText(min)}，最高${rateText(max)}。可使用下方滑块或每日记录查看具体日期。</desc>
+      graph = `<svg class="fx-chart" viewBox="0 0 640 210" role="img" aria-labelledby="fx-chart-title fx-chart-desc"><title id="fx-chart-title">${name}兑人民币近30天参考汇率走势</title><desc id="fx-chart-desc">1${name}折合人民币。最低${rateText(min)}，最高${rateText(max)}。可使用下方滑块或每日记录查看具体日期。</desc>
         ${[0, 1, 2]
           .map((i) => {
             const y = 18 + i * 75;
@@ -327,7 +341,7 @@
         <polyline points="${coords.map((p) => p.map((v) => v.toFixed(2)).join(",")).join(" ")}" class="fx-line"/>
         ${coords.map(([x, y], i) => `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="4" data-fx-point="${i}" class="fx-point${i === coords.length - 1 ? " selected" : ""}"/>`).join("")}
         <text x="58" y="196">${escape(info.periodStart.slice(5))}</text><text x="618" y="196" text-anchor="end">${escape(info.periodEnd.slice(5))}</text></svg>
-        <p id="fx-readout" class="fx-readout" aria-live="polite">${escape(info.points[info.points.length - 1].date)} · 1 美元 = ${rateText(info.points[info.points.length - 1].rate)} 人民币</p>
+        <p id="fx-readout" class="fx-readout" aria-live="polite">${escape(info.points[info.points.length - 1].date)} · 1 ${name} = ${rateText(info.points[info.points.length - 1].rate)} 人民币</p>
         ${info.points.length > 1 ? `<label class="fx-slider-label" for="fx-day">滑动查看日期</label><input id="fx-day" type="range" min="0" max="${info.points.length - 1}" value="${info.points.length - 1}" step="1" aria-describedby="fx-readout"/>` : ""}`;
     }
     const alert = info.low
@@ -342,12 +356,12 @@
           : info.low
             ? "按最新已公布的参考汇率比较。"
             : "最新参考汇率尚未达到近20天最低。";
-    panel.innerHTML = `<section class="fx-summary${info.low ? " is-low" : ""}"><div class="fx-heading"><h2>美元 <span>USD / CNY</span></h2>${alert}</div>
-      <p class="fx-unit">1 美元兑人民币</p><p class="fx-value">${rateText(info.latest.rate)} <small>元</small></p>
+    panel.innerHTML = `${tabs}<section class="fx-summary${info.low ? " is-low" : ""}"><div class="fx-heading"><h2>${name} <span>${exchangeCurrency} / CNY</span></h2>${alert}</div>
+      <p class="fx-unit">1 ${name}兑人民币</p><p class="fx-value">${rateText(info.latest.rate)} <small>元</small></p>
       <p class="price-published">报价日期 ${escape(info.latest.date)} · 每日参考汇率</p><p class="fx-status">${status}</p>
       ${info.complete ? `<p class="price-published">20天区间最低 ${rateText(info.min)} · ${escape(info.windowStart)} 至 ${escape(info.windowEnd)} · ${info.samples} 个报价日</p>` : ""}</section>
       <section class="fx-history"><h2>近一个月走势</h2><p class="price-published">${escape(info.periodStart)} 至 ${escape(info.periodEnd)} · 最近30个自然日</p>${graph}</section>
-      <details class="fx-records"><summary>每日记录（${info.points.length} 个报价日）</summary><table class="housing-table"><thead><tr><th scope="col">日期</th><th scope="col">1美元兑人民币</th></tr></thead><tbody>${[
+      <details class="fx-records"><summary>每日记录（${info.points.length} 个报价日）</summary><table class="housing-table"><thead><tr><th scope="col">日期</th><th scope="col">1${name}兑人民币</th></tr></thead><tbody>${[
         ...info.points,
       ]
         .reverse()
@@ -356,7 +370,7 @@
             `<tr><th scope="row">${escape(p.date)}</th><td>${rateText(p.rate)}</td></tr>`,
         )
         .join("")}</tbody></table></details>
-      <div class="fx-notes"><p>来源：<a href="${escape(safeUrl(data.sourceUrl))}" target="_blank" rel="noopener noreferrer">欧洲央行（ECB）参考汇率 ↗</a>。由同日人民币兑欧元报价除以美元兑欧元报价换算；不是银行现汇买入价或卖出价。</p>
+      <div class="fx-notes"><p>来源：<a href="${escape(safeUrl(data.sourceUrl))}" target="_blank" rel="noopener noreferrer">欧洲央行（ECB）参考汇率 ↗</a>。由同日人民币兑欧元报价除以${name}兑欧元报价换算；不是银行现汇买入价或卖出价。</p>
       <p>随网站自动检查更新，来源通常在欧洲工作日每日发布一次。周末及休市日不新增报价，图表只连接已公布的数据点。</p>
       <p>提醒比较截至最新报价日期的20个自然日（含当天），达到或并列最低均高亮；按六位小数比较，历史不足、获取失败或报价超过4天时暂停提醒。</p>
       ${data.checkedAt ? `<p>最近检查 ${escape(formatTime(data.checkedAt))}（北京时间）；检查时间不代表新报价。</p>` : ""}</div>`;
@@ -435,7 +449,7 @@
     if (state.view === "housing")
       $("#result-count").textContent = "公开成交数据";
     if (state.view === "exchange")
-      $("#result-count").textContent = "美元兑人民币";
+      $("#result-count").textContent = "美元 · 日元 · 泰铢";
     $$("[data-view]").forEach((el) => {
       const active =
         el.dataset.view === state.view ||
@@ -698,12 +712,24 @@
       point = exchangePoints[index];
     if (!point) return;
     $("#fx-readout").textContent =
-      `${point.date} · 1 美元 = ${point.rate.toFixed(6)} 人民币`;
+      `${point.date} · 1 ${exchangeNames[exchangeCurrency]} = ${point.rate.toFixed(6)} 人民币`;
     $$("[data-fx-point]").forEach((el) =>
       el.classList.toggle("selected", Number(el.dataset.fxPoint) === index),
     );
   });
   document.addEventListener("click", (e) => {
+    const currency = e.target.closest("[data-fx-currency]");
+    if (
+      currency &&
+      Object.prototype.hasOwnProperty.call(
+        exchangeNames,
+        currency.dataset.fxCurrency,
+      )
+    ) {
+      exchangeCurrency = currency.dataset.fxCurrency;
+      renderExchangeRates();
+      return;
+    }
     const viewLink = e.target.closest("a[data-view]");
     if (
       viewLink &&

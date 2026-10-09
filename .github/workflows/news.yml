@@ -47,7 +47,7 @@ jobs:
         run: python scripts/collect_news.py --previous-url https://news.zacai.fun/data/news.json
       - name: Update Hangzhou transaction price reports
         run: python scripts/collect_housing_prices.py --previous-url https://news.zacai.fun/data/latest.json
-      - name: Update USD to CNY reference rates
+      - name: Update foreign currency to CNY reference rates
         run: python scripts/collect_exchange_rates.py --previous-url https://news.zacai.fun/data/latest.json
       - name: Build news portal
         env:

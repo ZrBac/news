@@ -1112,3 +1112,26 @@ dialog::backdrop {
     font-size: 34px;
   }
 }
+
+.fx-currencies {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 20px;
+}
+.fx-currencies button {
+  border: 1px solid var(--line);
+  padding: 10px 14px;
+  min-height: 44px;
+  font-size: 14px;
+}
+.fx-currencies button span {
+  font-size: 11px;
+  margin-left: 4px;
+  color: var(--muted);
+}
+.fx-currencies button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--surface);
+}

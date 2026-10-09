@@ -22,5 +22,105 @@
       "source": "杭州贝壳研究院数据·潮新闻报道",
       "url": "https://tidenews.com.cn/news.html?id=3576502"
     }
-  ]
+  ],
+  "market": {
+    "official": {
+      "periodStart": "2026-08-01",
+      "periodEnd": "2026-08-31",
+      "publishedAt": "2026-09-15",
+      "source": "国家统计局·70城住宅销售价格指数",
+      "scope": "杭州·国家统计局调查口径",
+      "url": "https://www.stats.gov.cn/sj/zxfb/202609/t20260915_1965304.html",
+      "values": [
+        {
+          "kind": "new",
+          "momIndex": 100.2,
+          "yoyIndex": 102.2
+        },
+        {
+          "kind": "resale",
+          "momIndex": 99.8,
+          "yoyIndex": 96.5
+        }
+      ]
+    },
+    "districts": {
+      "periodStart": "2026-09-01",
+      "periodEnd": "2026-09-30",
+      "source": "中指云·杭州区县成交排行",
+      "scope": "杭州商品住宅（不含保障性住房）·来源所列十区",
+      "url": "https://www.cih-index.com/data/house/hangzhou.html",
+      "rows": [
+        {
+          "name": "萧山区",
+          "count": 665,
+          "area": 10.0,
+          "amount": 41.49
+        },
+        {
+          "name": "余杭区",
+          "count": 324,
+          "area": 5.06,
+          "amount": 20.52
+        },
+        {
+          "name": "拱墅区",
+          "count": 245,
+          "area": 3.46,
+          "amount": 15.33
+        },
+        {
+          "name": "钱塘区",
+          "count": 245,
+          "area": 3.29,
+          "amount": 10.69
+        },
+        {
+          "name": "临平区",
+          "count": 206,
+          "area": 2.41,
+          "amount": 5.42
+        },
+        {
+          "name": "西湖区",
+          "count": 171,
+          "area": 2.32,
+          "amount": 8.91
+        },
+        {
+          "name": "滨江区",
+          "count": 143,
+          "area": 2.64,
+          "amount": 17.76
+        },
+        {
+          "name": "富阳区",
+          "count": 139,
+          "area": 1.68,
+          "amount": 3.06
+        },
+        {
+          "name": "临安区",
+          "count": 115,
+          "area": 1.34,
+          "amount": 1.74
+        },
+        {
+          "name": "上城区",
+          "count": 52,
+          "area": 1.14,
+          "amount": 7.16
+        }
+      ]
+    },
+    "cric": {
+      "periodStart": "2026-08-01",
+      "periodEnd": "2026-08-31",
+      "publishedAt": "2026-09-06",
+      "price": 40924.0,
+      "source": "克而瑞浙江区域·杭州市场月报",
+      "scope": "杭州新房（普通住宅、别墅）",
+      "url": "https://www.haofangdp.com/fjdphz/newslist/reviewconsultation?itemId=7502178807479727402"
+    }
+  }
 }

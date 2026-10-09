@@ -225,6 +225,67 @@
     }
     return state.view === "brief" ? selectBrief(articles) : articles;
   }
+  function housingMarket(data) {
+    const market = data.market || {};
+    const note = (kind, r) => {
+      const status = (data.marketSources || []).find((s) => s.kind === kind);
+      const stale =
+        Date.now() - Date.parse(r.periodEnd + "T00:00:00+08:00") >
+        75 * 86400000;
+      return `<p class="price-period">统计期 ${escape(r.periodStart)} 至 ${escape(r.periodEnd)}</p>
+        <p class="price-published">${escape(r.scope)}${r.publishedAt ? ` · 发布于 ${escape(r.publishedAt)}` : ""}</p>
+        <a href="${escape(safeUrl(r.url))}" target="_blank" rel="noopener noreferrer">${escape(r.source)} ↗</a>
+        ${stale ? '<p class="price-status">统计期较早，等待来源发布可核实的新数据。</p>' : ""}
+        ${status && status.status !== "ok" ? '<p class="price-status">本轮部分来源未能核实，保留上次数据和原统计期。</p>' : ""}`;
+    };
+    const valid = (r) =>
+      r && safeUrl(r.url) && /^\d{4}-\d{2}-\d{2}$/.test(r.periodEnd);
+    const change = (index) => {
+      const value = Math.round((index - 100) * 10) / 10;
+      return value === 0
+        ? "持平"
+        : `${value > 0 ? "上涨" : "下降"} ${Math.abs(value).toFixed(1)}%`;
+    };
+    let html = "";
+    const official = market.official;
+    if (
+      valid(official) &&
+      Array.isArray(official.values) &&
+      official.values.length === 2
+    ) {
+      const values = official.values.filter(
+        (v) =>
+          ["new", "resale"].includes(v.kind) &&
+          Number.isFinite(v.momIndex) &&
+          Number.isFinite(v.yoyIndex),
+      );
+      if (values.length === 2)
+        html += `<section class="housing-market official-prices"><h2>官方房价走势</h2>
+        <p class="price-intro">国家统计局的价格指数变化，用于观察涨跌，不是每平方米成交价格。</p>
+        <div class="official-grid">${values.map((v) => `<div><h3>${v.kind === "new" ? "新房" : "二手房"}</h3><p>环比 <strong>${change(v.momIndex)}</strong></p><p>同比 <strong>${change(v.yoyIndex)}</strong></p></div>`).join("")}</div>
+        ${note("official", official)}</section>`;
+    }
+    const districts = market.districts;
+    if (
+      valid(districts) &&
+      Array.isArray(districts.rows) &&
+      districts.rows.length
+    ) {
+      const rows = districts.rows.filter((r) =>
+        [r.count, r.area, r.amount].every(Number.isFinite),
+      );
+      html += `<section class="housing-market district-prices"><h2>各区新房成交</h2>
+        <p class="price-intro">按来源公布的成交套数、面积和金额展示，统计范围为所列十区。</p>
+        <table class="housing-table"><thead><tr><th scope="col">区域</th><th scope="col">套数</th><th scope="col">面积<small>万㎡</small></th><th scope="col">金额<small>亿元</small></th></tr></thead><tbody>${rows.map((r) => `<tr><th scope="row">${escape(r.name)}</th><td>${escape(r.count.toLocaleString("zh-CN"))}</td><td>${r.area.toFixed(2)}</td><td>${r.amount.toFixed(2)}</td></tr>`).join("")}</tbody></table>
+        ${note("districts", districts)}</section>`;
+    }
+    const cric = market.cric;
+    if (valid(cric) && Number.isFinite(cric.price) && cric.price > 0)
+      html += `<section class="housing-market cric-prices"><h2>克而瑞新房成交均价</h2>
+      <p class="market-price">${escape(cric.price.toLocaleString("zh-CN"))}<small>元/㎡</small></p>
+      <p class="price-intro">独立来源的月度统计。与上方周报的统计周期、范围不同，请分别查看。</p>${note("cric", cric)}</section>`;
+    return html;
+  }
   function renderHousingPrices() {
     const panel = $("#housing-prices");
     const active = state.view === "housing";
@@ -270,7 +331,7 @@
       .join("");
     panel.innerHTML = `<h2 class="city-price-heading">杭州整体成交</h2><p class="price-intro">自动检查来源发布的成交均价。新房与二手房分别标注统计周期，没有新数据时保留上次结果。</p>
       <div class="price-grid">${cards}</div>
-      <p class="price-explanation">这里展示已公开的成交、网签统计；暂未接入全市实时逐套成交库。不同周期和成交房源构成的均价不能直接比较。</p>`;
+      <p class="price-explanation">这里展示已公开的成交、网签统计；暂未接入全市实时逐套成交库。不同周期和成交房源构成的均价不能直接比较。</p>${housingMarket(data)}`;
   }
 
   function render() {

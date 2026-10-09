@@ -165,16 +165,185 @@ def merge_records(records, today):
     return sorted(by_period.values(), key=lambda r: (r['periodEnd'], r['publishedAt']), reverse=True)[:24]
 
 
+NBS = 'https://www.stats.gov.cn/sj/zxfb/'
+DISTRICTS = 'https://www.cih-index.com/data/house/hangzhou.html'
+CRIC = 'https://www.haofangdp.com/fjdphz/newslist/interpretation?tags_column_id=193&page='
+CRIC_REPORT = 'https://www.haofangdp.com/fjdphz/newslist/reviewconsultation?itemId=7502178807479727402'
+DISTRICT_NAMES = {'萧山区', '余杭区', '拱墅区', '钱塘区', '临平区', '西湖区', '滨江区', '富阳区', '临安区', '上城区'}
+
+
+def month_period(year, month):
+    year, month = int(year), int(month)
+    return dict(periodStart=date(year, month, 1).isoformat(),
+                periodEnd=date(year, month, calendar.monthrange(year, month)[1]).isoformat())
+
+
+def cells(html, row_tag='tr', cell_tag='td'):
+    return [[Document(c).text for c in re.findall(fr'<{cell_tag}\b[^>]*>(.*?)</{cell_tag}>', row, re.S | re.I)]
+            for row in re.findall(fr'<{row_tag}\b[^>]*>(.*?)</{row_tag}>', html, re.S | re.I)]
+
+
+def valid_market(kind, value, today):
+    try:
+        start, end = date.fromisoformat(value['periodStart']), date.fromisoformat(value['periodEnd'])
+        url = urlsplit(value['url'])
+        hosts = {'official': 'www.stats.gov.cn', 'districts': 'www.cih-index.com', 'cric': 'www.haofangdp.com'}
+        if not (start <= end <= today and (end-start).days <= 31 and url.scheme == 'https'
+                and url.hostname == hosts[kind] and not url.username and not url.password):
+            return False
+        if kind != 'districts' and not end <= date.fromisoformat(value['publishedAt']) <= today:
+            return False
+        if kind == 'official':
+            return (len(value['values']) == 2 and {v['kind'] for v in value['values']} == {'new', 'resale'}
+                    and all(type(v[k]) in (int, float) and 50 <= v[k] <= 150
+                            for v in value['values'] for k in ('momIndex', 'yoyIndex')))
+        if kind == 'districts':
+            rows = value['rows']
+            return (len(rows) == 10 and {r['name'] for r in rows} == DISTRICT_NAMES
+                    and all(type(r['count']) is int and 0 <= r['count'] <= 50000
+                            and all(type(r[k]) in (int, float) and 0 <= r[k] <= 1000 for k in ('area', 'amount'))
+                            and (r['count'] == 0 or r['area'] > 0 and r['amount'] > 0) for r in rows))
+        return type(value['price']) in (int, float) and 1000 <= value['price'] <= 300000
+    except (KeyError, ValueError, TypeError, OverflowError):
+        return False
+
+
+def parse_official(html, url, today):
+    text = Document(html).text
+    period = re.search(r'(\d{4})年(\d{1,2})月份70个大中城市商品住宅销售价格变动情况', text)
+    published = re.search(r'(\d{4})/(\d{2})/(\d{2})\d{2}:\d{2}', text)
+    if not period or not published:
+        return None
+    values = []
+    for number, kind, name in ((1, 'new', '新建商品住宅'), (2, 'resale', '二手住宅')):
+        found = None
+        for table in re.finditer(r'<table\b[^>]*>.*?</table>', html, re.S | re.I):
+            prefix = Document(html[max(0, table.start()-4000):table.start()]).text
+            heading = fr'表{number}[：:]\d{{4}}年\d{{1,2}}月70个大中城市{name}销售价格指数'
+            if not re.search(heading, prefix):
+                continue
+            if '环比' not in Document(table[0]).text or '同比' not in Document(table[0]).text:
+                continue
+            for row in cells(table[0]):
+                if '杭州' in row:
+                    i = row.index('杭州')
+                    try:
+                        found = dict(kind=kind, momIndex=float(row[i+1]), yoyIndex=float(row[i+2]))
+                    except (ValueError, IndexError):
+                        return None
+                    break
+            if found:
+                break
+        if not found:
+            return None
+        values.append(found)
+    try:
+        result = dict(**month_period(*period.groups()), publishedAt='-'.join(published.groups()),
+                      source='国家统计局·70城住宅销售价格指数', scope='杭州·国家统计局调查口径', url=url, values=values)
+        return result if valid_market('official', result, today) else None
+    except ValueError:
+        return None
+
+
+def parse_districts(html, url, today):
+    if '杭州商品住宅成交数据' not in Document(html).text:
+        return None
+    section = re.search(r'各区县成交排行(.*?)企业权益销售排行', html, re.S)
+    if not section:
+        return None
+    text = Document(section[1]).text
+    month = re.search(r'(\d{4})年(\d{1,2})月', text)
+    if not month or not all(x in text for x in ('成交套数(套)', '成交面积(万㎡)', '成交金额(亿元)')):
+        return None
+    rows = []
+    try:
+        for row in cells(section[1], 'ul', 'li'):
+            if len(row) == 5 and row[1] in DISTRICT_NAMES:
+                rows.append(dict(name=row[1], count=int(row[2].replace(',', '')),
+                                 area=float(row[3].replace(',', '')), amount=float(row[4].replace(',', ''))))
+        result = dict(**month_period(*month.groups()), source='中指云·杭州区县成交排行',
+                      scope='杭州商品住宅（不含保障性住房）·来源所列十区', url=url, rows=rows)
+        return result if valid_market('districts', result, today) else None
+    except ValueError:
+        return None
+
+
+def parse_cric(html, url, today):
+    text = Document(html).text.split('THEEND')[0]
+    title = re.search(r'(\d{4})年(\d{1,2})月杭州房地产市场月报', text[:300])
+    published = re.search(r'克而瑞浙江区域[·•](\d{4}-\d{2}-\d{2})\d{2}:\d{2}', text)
+    if not title or not published or '新房市场' not in text or '数据来源：克而瑞' not in text:
+        return None
+    section = text.split('新房市场', 1)[1].split('区域与板块', 1)[0].split('库存与去化', 1)[0]
+    # Require current-month transaction language, excluding last month's comparison and district prices.
+    month = int(title[2])
+    match = re.search(fr'{month}月成交面积[\d.]+万㎡[^。；]{{0,100}}[；。]成交均价(?:为|达)?([\d,]+)元/㎡', section)
+    if not match:
+        match = re.search(fr'{month}月新房成交面积[\d.]+万㎡[^。]{{0,180}}?成交均价(?:为|达)?([\d,]+)元/㎡', text)
+    if not match:
+        return None
+    try:
+        result = dict(**month_period(*title.groups()), publishedAt=published[1],
+                      price=float(match[1].replace(',', '')), source='克而瑞浙江区域·杭州市场月报',
+                      scope='杭州新房（普通住宅、别墅）' if '统计口径：普通住宅、别墅' in text else '杭州新房·克而瑞报告口径', url=url)
+        return result if valid_market('cric', result, today) else None
+    except ValueError:
+        return None
+
+
+def collect_market(kind, previous, today, get=fetch):
+    parser = {'official': parse_official, 'districts': parse_districts, 'cric': parse_cric}[kind]
+    urls, errors = [], []
+    if kind == 'districts':
+        urls = [DISTRICTS]
+    else:
+        indices = [NBS] if kind == 'official' else [CRIC + '1', CRIC + '2']
+        for index in indices:
+            try:
+                for href, title in Document(get(index)).links:
+                    url = urljoin(index, href)
+                    host = urlsplit(url).hostname
+                    match = (host == 'www.stats.gov.cn' and '70个大中城市商品住宅销售价格变动情况' in title) if kind == 'official' else (
+                        host == 'www.haofangdp.com' and re.search(r'\d{4}年\d{1,2}月杭州房地产市场月报', title)
+                        and '/newslist/reviewconsultation?' in url)
+                    if match and url not in urls:
+                        urls.append(url)
+            except Exception:
+                errors.append('IndexUnavailable')
+        urls = urls[:3]
+        fallback = previous.get('url') or (CRIC_REPORT if kind == 'cric' else '')
+        if fallback and fallback not in urls:
+            urls.append(fallback)
+    incoming = []
+    for url in urls:
+        try:
+            parsed = parser(get(url), url, today)
+            if parsed:
+                incoming.append(parsed)
+            else:
+                errors.append('UnrecognizedReport')
+        except Exception:
+            errors.append('SourceUnavailable')
+    candidates = incoming + ([previous] if valid_market(kind, previous, today) else [])
+    # For the same month prefer freshly fetched data (publishers can revise statistics).
+    latest = max(candidates, key=lambda r: (r['periodEnd'], r.get('publishedAt', '')), default=None)
+    return latest, dict(kind=kind, status='ok' if incoming and not errors else 'partial' if incoming else 'unavailable')
+
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('--previous-url')
     args = p.parse_args()
     seed = json.loads((ROOT / 'news/housing-prices.json').read_text())
     previous = seed['records'][:]
+    previous_market = seed.get('market', {}).copy()
     if args.previous_url:
         try:
             old = json.loads(fetch(args.previous_url)).get('housingPrices', {})
             previous += old.get('records', [])
+            for kind, record in old.get('market', {}).items():
+                if valid_market(kind, record, datetime.now(timezone.utc).date()) and record['periodEnd'] >= previous_market.get(kind, {}).get('periodEnd', ''):
+                    previous_market[kind] = record
         except Exception as exc:
             # Prevent replacing a newer live record with the seed during an outage.
             raise SystemExit(f'Cannot retain previous prices: {exc}')
@@ -184,12 +353,16 @@ def main():
         results = list(pool.map(lambda k: collect_kind(k, records, now.date()), ('new', 'resale')))
     for incoming, _ in results:
         records += incoming
+    kinds = ('official', 'districts', 'cric')
+    with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
+        market_results = list(pool.map(lambda k: collect_market(k, previous_market.get(k, {}), now.date()), kinds))
     payload = dict(checkedAt=now.isoformat(), records=merge_records(records, now.date()),
-                   sources=[s for _, s in results])
+                   sources=[s for _, s in results], market={k: r for k, (r, _) in zip(kinds, market_results) if r},
+                   marketSources=[s for _, s in market_results])
     output = ROOT / 'news/data/housing.json'
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')) + '\n')
-    print(json.dumps({'priceSources': payload['sources'], 'records': len(payload['records'])}, ensure_ascii=False))
+    print(json.dumps({'priceSources': payload['sources'], 'marketSources': payload['marketSources'], 'records': len(payload['records'])}, ensure_ascii=False))
 
 
 if __name__ == '__main__':

@@ -26,6 +26,17 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       "杭州成交价",
     );
     assert.equal(await page.locator(".price-card").count(), 2);
+    assert.equal(await page.locator(".official-grid > div").count(), 2);
+    assert.match(
+      await page.locator(".official-prices").innerText(),
+      /环比.*(?:上涨|下降|持平)/s,
+    );
+    assert.equal(await page.locator(".housing-table tbody tr").count(), 10);
+    assert.match(await page.locator(".cric-prices").innerText(), /元\/㎡/);
+    const marketBefore = await page
+      .locator(".housing-market")
+      .allTextContents();
+
     assert.equal(
       await page.locator(".housing-watchlist, .watch-project").count(),
       0,
@@ -89,6 +100,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.equal(
       await page.locator(".xihu-hotspots, #xihu-heading").count(),
       0,
+    );
+    assert.deepEqual(
+      await page.locator(".housing-market").allTextContents(),
+      marketBefore,
     );
     await page.locator('[data-filter="all"]').click();
     await page.locator(".article").first().waitFor();

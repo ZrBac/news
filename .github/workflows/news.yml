@@ -43,6 +43,8 @@ jobs:
           node --test tests/casual-games-core.cjs tests/extra-games-core.cjs tests/games-core.cjs tests/table-games-core.cjs tests/sw-compat.cjs
       - name: Collect news and retain the previous archive
         run: python scripts/collect_news.py --previous-url https://news.zacai.fun/data/news.json
+      - name: Update Hangzhou transaction price reports
+        run: python scripts/collect_housing_prices.py --previous-url https://news.zacai.fun/data/latest.json
       - name: Build news portal
         env:
           NEWS_REFRESH_ENDPOINT: ${{ vars.NEWS_REFRESH_ENDPOINT }}

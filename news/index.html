@@ -108,7 +108,9 @@
               文娱
             </button>
             <button data-filter="sports" aria-pressed="false">体育</button>
-            <button data-filter="housing" aria-pressed="false">杭州房市</button>
+            <button data-filter="housing" aria-pressed="false">
+              杭州成交价
+            </button>
           </div>
           <div class="filter-row">
             <label class="search-box"
@@ -152,6 +154,11 @@
               更新页面
             </button>
           </p>
+          <section
+            id="housing-prices"
+            aria-label="杭州成交价格"
+            hidden
+          ></section>
           <div
             id="articles"
             class="article-list"

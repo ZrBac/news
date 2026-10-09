@@ -816,3 +816,116 @@ dialog::backdrop {
   display: block;
   margin-top: 5px;
 }
+
+.housing-view .filter-row,
+.housing-view #date-panel,
+.housing-view #view-note,
+.housing-view #articles,
+.housing-view #load-more,
+.housing-view #list-end,
+.housing-view #archive-notice {
+  display: none;
+}
+.price-intro,
+.price-explanation,
+.price-samples > p,
+.price-links p {
+  color: var(--secondary);
+  line-height: 1.8;
+}
+.price-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin: 20px 0;
+}
+.price-card {
+  border: 1px solid var(--line);
+  padding: 20px;
+  min-width: 0;
+}
+.price-card h2,
+.price-samples h2,
+.price-links h2 {
+  font-size: 17px;
+  margin: 0 0 12px;
+}
+.price-card h2 span,
+.price-samples h2 span {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--muted);
+  margin-left: 10px;
+}
+.price-card p {
+  margin: 8px 0;
+}
+.price-card .price-value {
+  font-size: 32px;
+  line-height: 1.4;
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+.price-value small {
+  font-size: 13px;
+  font-weight: 400;
+  margin-left: 8px;
+}
+.price-period,
+.price-published {
+  font-size: 12px;
+  color: var(--muted);
+}
+.price-card a,
+.price-table-wrap a,
+.price-links a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.price-status {
+  font-size: 12px;
+  color: var(--secondary);
+}
+.price-samples,
+.price-links {
+  border-top: 1px solid var(--line);
+  margin-top: 28px;
+  padding-top: 24px;
+}
+.price-table-wrap table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 13px;
+}
+.price-table-wrap th,
+.price-table-wrap td {
+  text-align: left;
+  border-bottom: 1px solid var(--line);
+  padding: 12px 4px;
+}
+.price-table-wrap th {
+  font-weight: 400;
+  color: var(--muted);
+}
+.price-table-wrap td small {
+  display: block;
+  color: var(--muted);
+  font-size: 11px;
+}
+.price-table-wrap td:nth-child(2) {
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.price-links a {
+  display: inline-block;
+  margin: 6px 20px 6px 0;
+}
+@media (max-width: 600px) {
+  .price-grid {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .price-card {
+    padding: 16px;
+  }
+}

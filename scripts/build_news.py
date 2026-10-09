@@ -83,6 +83,9 @@ def main():
     shutil.copytree(ROOT / 'news/data', output / 'data', dirs_exist_ok=True)
     (output / '.nojekyll').touch()
     data = json.loads((output / 'data/news.json').read_text())
+    price_file = ROOT / 'news/data/housing.json'
+    data['housingPrices'] = json.loads((price_file if price_file.exists() else ROOT / 'news/housing-prices.json').read_text())
+    (output / 'data/news.json').write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n')
     build_news_pages(data, output)
     # A tiny health file avoids downloading and parsing the entire archive in Workers.
     updated_at = data['updatedAt']

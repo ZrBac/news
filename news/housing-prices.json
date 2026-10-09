@@ -1,0 +1,58 @@
+{
+  "records": [
+    {
+      "kind": "new",
+      "price": 42198,
+      "periodStart": "2026-09-28",
+      "periodEnd": "2026-10-04",
+      "publishedAt": "2026-10-08",
+      "scope": "杭州市商品住宅（不含保障性住房）",
+      "metric": "成交均价",
+      "source": "中指云·杭州房地产市场周报",
+      "url": "https://www.cih-index.com/report/detail/129673.html"
+    },
+    {
+      "kind": "resale",
+      "price": 23200,
+      "periodStart": "2026-09-01",
+      "periodEnd": "2026-09-30",
+      "publishedAt": "2026-10-02",
+      "scope": "杭州市区二手住宅（含富阳、临安）",
+      "metric": "网签均价",
+      "source": "杭州贝壳研究院数据·潮新闻报道",
+      "url": "https://tidenews.com.cn/news.html?id=3576502"
+    }
+  ],
+  "samples": [
+    {
+      "name": "越秀星汇城",
+      "area": "临安·青山湖科技城",
+      "kind": "resale",
+      "price": 9010,
+      "count": 30,
+      "period": "2026年9月",
+      "periodEnd": "2026-09-30",
+      "url": "https://tidenews.com.cn/news.html?id=3576502"
+    },
+    {
+      "name": "中天珺府",
+      "area": "临安·青山湖科技城",
+      "kind": "resale",
+      "price": 9914,
+      "count": 18,
+      "period": "2026年9月",
+      "periodEnd": "2026-09-30",
+      "url": "https://tidenews.com.cn/news.html?id=3576502"
+    },
+    {
+      "name": "滨江江南之星",
+      "area": "萧山",
+      "kind": "resale",
+      "price": 30302,
+      "count": 14,
+      "period": "2026年9月",
+      "periodEnd": "2026-09-30",
+      "url": "https://tidenews.com.cn/news.html?id=3576502"
+    }
+  ]
+}

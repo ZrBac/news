@@ -225,8 +225,70 @@
     }
     return state.view === "brief" ? selectBrief(articles) : articles;
   }
+  function renderHousingPrices() {
+    const panel = $("#housing-prices");
+    const active = state.view === "housing";
+    panel.hidden = !active;
+    $("#news-content").classList.toggle("housing-view", active);
+    if (!active) return;
+    const data = state.data.housingPrices || {};
+    const records = (Array.isArray(data.records) ? data.records : [])
+      .filter(
+        (r) =>
+          r &&
+          ["new", "resale"].includes(r.kind) &&
+          Number.isFinite(r.price) &&
+          r.price > 0 &&
+          safeUrl(r.url) &&
+          /^\d{4}-\d{2}-\d{2}$/.test(r.periodStart) &&
+          /^\d{4}-\d{2}-\d{2}$/.test(r.periodEnd),
+      )
+      .sort(
+        (a, b) =>
+          b.periodEnd.localeCompare(a.periodEnd) ||
+          String(b.publishedAt).localeCompare(String(a.publishedAt)),
+      );
+    const cards = ["new", "resale"]
+      .map((kind) => {
+        const record = records.find((r) => r.kind === kind);
+        const label = kind === "new" ? "新房" : "二手房";
+        if (!record)
+          return `<section class="price-card"><h2>${label}</h2><p>暂未收录可核实的成交价格。</p></section>`;
+        const status = (data.sources || []).find((s) => s.kind === kind);
+        const stale =
+          Date.now() - Date.parse(record.periodEnd + "T00:00:00+08:00") >
+          45 * 86400000;
+        return `<section class="price-card"><h2>${label}<span>${escape(record.metric)}</span></h2>
+        <p class="price-value">${escape(record.price.toLocaleString("zh-CN"))}<small>元/㎡</small></p>
+        <p class="price-period">统计期 ${escape(record.periodStart)} 至 ${escape(record.periodEnd)}</p>
+        <p>${escape(record.scope)}</p>
+        <a href="${escape(safeUrl(record.url))}" target="_blank" rel="noopener noreferrer">${escape(record.source)} ↗</a>
+        <p class="price-published">发布于 ${escape(record.publishedAt)}</p>
+        ${stale ? '<p class="price-status">统计期已超过 45 天，请留意原站后续发布。</p>' : ""}
+        ${status && status.status !== "ok" ? '<p class="price-status">本轮部分数据未能核实，保留已收录价格。</p>' : ""}</section>`;
+      })
+      .join("");
+    const samples = (Array.isArray(data.samples) ? data.samples : []).filter(
+      (r) => r && Number.isFinite(r.price) && r.price > 0 && safeUrl(r.url),
+    );
+    panel.innerHTML = `<p class="price-intro">最新已收录的成交均价。新房与二手房分别标注统计周期，价格随来源发布更新。</p>
+      <div class="price-grid">${cards}</div>
+      <p class="price-explanation">这里展示已公开的成交、网签统计；暂未接入全市实时逐套成交库。不同周期和成交房源构成的均价不能直接比较。</p>
+      ${
+        samples.length
+          ? `<section class="price-samples"><h2>小区成交样本 <span>二手房</span></h2>
+      <p>来源已公开的月度网签均价，非单套成交价。每条保留统计月份。</p>
+      <div class="price-table-wrap"><table><thead><tr><th scope="col">小区 / 统计期</th><th scope="col">网签均价</th><th scope="col">套数</th></tr></thead><tbody>${samples.map((r) => `<tr><td><a href="${escape(safeUrl(r.url))}" target="_blank" rel="noopener noreferrer">${escape(r.name)} ↗</a><small>${escape(r.area)} · ${escape(r.period)}</small></td><td>${escape(r.price.toLocaleString("zh-CN"))}<small>元/㎡</small></td><td>${escape(r.count)}</td></tr>`).join("")}</tbody></table></div>
+      <p class="price-published">来源：杭州贝壳研究院数据，潮新闻报道。点击小区名查看原文。</p></section>`
+          : ""
+      }
+      <section class="price-links"><h2>查具体房源</h2><p>具体房源的面积、楼层和成交时间会影响价格。以下平台部分单套价格需在 App 内查看。</p>
+      <a href="https://hz.5i5j.com/solds/" target="_blank" rel="noopener noreferrer">我爱我家·杭州成交记录 ↗</a>
+      <a href="https://m.fang.com/chengjiao/hz/" target="_blank" rel="noopener noreferrer">房天下·杭州成交记录 ↗</a></section>`;
+  }
   function render() {
     if (!state.data) return;
+    renderHousingPrices();
     const articles = matchingArticles();
     const titles = {
       all: "最新资讯",
@@ -235,7 +297,7 @@
       ai: "人工智能",
       entertainment: "文娱",
       sports: "体育",
-      housing: "杭州房市",
+      housing: "杭州成交价",
       brief: "每日速览",
       saved: "我的收藏",
     };
@@ -245,6 +307,8 @@
       partial && state.view !== "brief"
         ? `已加载 ${articles.length} 条资讯`
         : `${articles.length} 条资讯`;
+    if (state.view === "housing")
+      $("#result-count").textContent = "公开成交数据";
     $$("[data-view]").forEach((el) => {
       const active =
         el.dataset.view === state.view ||
@@ -658,7 +722,8 @@
     }
   }
   function ensureArticles(fresh = false) {
-    if (loading || state.view === "saved" || !hasArchive()) return;
+    if (loading || ["saved", "housing"].includes(state.view) || !hasArchive())
+      return;
     if (archiveJob?.data === state.data) return archiveJob.promise;
     const data = state.data;
     const needed = () => (state.view === "brief" ? 10 : state.limit + 1);
@@ -671,7 +736,7 @@
       try {
         while (
           state.data === data &&
-          state.view !== "saved" &&
+          !["saved", "housing"].includes(state.view) &&
           hasArchive(data) &&
           matchingArticles().length < needed()
         ) {

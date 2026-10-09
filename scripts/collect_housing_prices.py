@@ -203,7 +203,7 @@ def parse_watch_feed(xml, project, now):
 def collect_watch(project, previous, now, get=fetch):
     names = '(' + ' OR '.join('"' + alias + '"' for alias in project['aliases']) + ')'
     sites = '(' + ' OR '.join('site:' + domain for domain in WATCH_DOMAINS) + ')'
-    url = 'https://news.google.com/rss/search?' + urlencode(dict(q=f'{names} {sites} when:90d', hl='zh-CN', gl='CN', ceid='CN:zh-Hans'))
+    url = 'https://news.google.com/rss/search?' + urlencode(dict(q=f'{project.get("queryPrefix", "")} {names} {sites} when:90d', hl='zh-CN', gl='CN', ceid='CN:zh-Hans'))
     stories = [s for s in previous.get('stories', []) if valid_watch_story(s, project, now)]
     status = 'ok'
     try:
@@ -222,11 +222,13 @@ def main():
     seed = json.loads((ROOT / 'news/housing-prices.json').read_text())
     previous = seed['records'][:]
     previous_watch = {}
+    previous_hotspots = {}
     if args.previous_url:
         try:
             old = json.loads(fetch(args.previous_url)).get('housingPrices', {})
             previous += old.get('records', [])
             previous_watch = {p['id']: p for p in old.get('watchlist', [])}
+            previous_hotspots = old.get('xihuHotspots', {})
         except Exception as exc:
             # Prevent replacing a newer live record with the seed during an outage.
             raise SystemExit(f'Cannot retain previous prices: {exc}')
@@ -237,10 +239,12 @@ def main():
     for incoming, _ in results:
         records += incoming
     projects = json.loads((ROOT / 'news/housing-watchlist.json').read_text())
+    hotspots = json.loads((ROOT / 'news/xihu-hotspots.json').read_text())
+    previous_watch[hotspots['id']] = previous_hotspots
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-        watchlist = list(pool.map(lambda p: collect_watch(p, previous_watch.get(p['id'], {}), now), projects))
+        watched = list(pool.map(lambda p: collect_watch(p, previous_watch.get(p['id'], {}), now), projects + [hotspots]))
     payload = dict(checkedAt=now.isoformat(), records=merge_records(records, now.date()),
-                   samples=seed['samples'], sources=[s for _, s in results], watchlist=watchlist)
+                   samples=seed['samples'], sources=[s for _, s in results], watchlist=watched[:-1], xihuHotspots=watched[-1])
     output = ROOT / 'news/data/housing.json'
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')) + '\n')

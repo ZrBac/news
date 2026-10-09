@@ -1022,3 +1022,98 @@ dialog::backdrop {
     padding: 16px;
   }
 }
+
+.xihu-hotspots {
+  border-top: 1px solid var(--line);
+  margin: 32px 0;
+  padding-top: 24px;
+}
+.xihu-hotspots h2 {
+  font-size: 19px;
+  margin: 0 0 12px;
+}
+.xihu-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 20px 0;
+}
+.xihu-toolbar button {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  margin-right: 6px;
+}
+.xihu-toolbar button[aria-pressed="true"] {
+  color: var(--accent);
+  border-color: var(--accent);
+}
+.xihu-toolbar > span {
+  color: var(--muted);
+  font-size: 12px;
+}
+.xihu-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.xihu-property {
+  border: 1px solid var(--line);
+  padding: 18px;
+  min-width: 0;
+}
+.xihu-property-heading {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  justify-content: space-between;
+}
+.xihu-property h3 {
+  font-size: 17px;
+  margin: 0;
+}
+.xihu-property-heading > span {
+  color: var(--muted);
+  white-space: nowrap;
+  font-size: 12px;
+}
+.xihu-price {
+  font-size: 22px;
+  font-weight: 600;
+  margin: 8px 0;
+}
+.xihu-basis {
+  font-size: 13px;
+  color: var(--secondary);
+}
+.xihu-property summary,
+.xihu-updates summary {
+  cursor: pointer;
+  color: var(--accent);
+  font-size: 13px;
+}
+.xihu-property details p {
+  font-size: 13px;
+  color: var(--secondary);
+}
+.xihu-property a,
+.xihu-updates a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.xihu-listing {
+  display: inline-block;
+  margin-top: 16px;
+  font-size: 13px;
+}
+.xihu-updates {
+  margin-top: 20px;
+}
+@media (max-width: 600px) {
+  .xihu-grid {
+    grid-template-columns: 1fr;
+  }
+  .xihu-toolbar {
+    flex-wrap: wrap;
+  }
+}

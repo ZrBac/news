@@ -35,6 +35,23 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       /约340万元/,
     );
     const watched = await page.locator(".watch-fact strong").allTextContents();
+    assert.equal(await page.locator(".xihu-property:visible").count(), 5);
+    await page.locator('[data-housing-type="new"]').click();
+    assert.equal(await page.locator(".xihu-property:visible").count(), 2);
+    assert.equal(
+      await page
+        .locator('.xihu-property[data-property-type="resale"]:visible')
+        .count(),
+      0,
+    );
+    await page.locator(".xihu-property:visible summary").first().click();
+    assert.match(
+      await page.locator(".xihu-property:visible").first().innerText(),
+      /非实际成交价/,
+    );
+    await page.locator('[data-housing-type="resale"]').click();
+    assert.equal(await page.locator(".xihu-property:visible").count(), 3);
+    await page.locator('[data-housing-type="all"]').click();
     await page.locator(".watch-project summary").last().click();
     assert.match(
       await page.locator(".watch-project").last().innerText(),
@@ -83,6 +100,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       await page.locator(".watch-fact strong").allTextContents(),
       watched,
     );
+    await page.locator('[data-housing-type="new"]').click();
+    assert.equal(await page.locator(".xihu-property:visible").count(), 2);
     await page.locator('[data-filter="all"]').click();
     await page.locator(".article").first().waitFor();
     assert(await page.locator("#search").isVisible());

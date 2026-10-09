@@ -87,6 +87,8 @@ def main():
     data['housingPrices'] = json.loads((price_file if price_file.exists() else ROOT / 'news/housing-prices.json').read_text())
     if 'watchlist' not in data['housingPrices']:
         data['housingPrices']['watchlist'] = json.loads((ROOT / 'news/housing-watchlist.json').read_text())
+    if 'xihuHotspots' not in data['housingPrices']:
+        data['housingPrices']['xihuHotspots'] = json.loads((ROOT / 'news/xihu-hotspots.json').read_text())
     (output / 'data/news.json').write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n')
     build_news_pages(data, output)
     # A tiny health file avoids downloading and parsing the entire archive in Workers.

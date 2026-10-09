@@ -1,0 +1,83 @@
+{
+  "id": "xihu-hotspots",
+  "aliases": ["紫璋台", "文鼎苑", "西城年华", "知海棠", "观紫金宸庐"],
+  "queryPrefix": "杭州",
+  "reviewedAt": "2026-10-09",
+  "items": [
+    {
+      "id": "zizhangtai",
+      "name": "建发金辉紫璋台",
+      "type": "resale",
+      "area": "西湖·三墩北",
+      "value": "25,085元/㎡",
+      "priceLabel": "2026年8月 · 网签均价",
+      "priceNote": "该月网签28套。均价覆盖当月成交样本，具体户型、楼层另行比较。",
+      "priceSource": "杭州网·潮新闻报道",
+      "priceUrl": "https://hznews.hangzhou.com.cn/jingji/content/2026-09/02/content_9296065.htm",
+      "basis": "8月成交28套，连续两个月成交放量。",
+      "basisUrl": "https://hznews.hangzhou.com.cn/jingji/content/2026-09/02/content_9296065.htm",
+      "listingUrl": "https://www.fang.com/xiaoqu/hz-2010186764/",
+      "listingLabel": "房天下·小区房源"
+    },
+    {
+      "id": "wendingyuan",
+      "name": "文鼎苑",
+      "type": "resale",
+      "area": "西湖·申花",
+      "value": "503万元",
+      "priceLabel": "2026-08-01 · 单套成交总价",
+      "priceNote": "我爱我家公开成交样本：120.48㎡三室，单价41,750元/㎡。仅代表这一套，不代表小区均价。",
+      "priceSource": "我爱我家·成交记录",
+      "priceUrl": "https://hz.5i5j.com/solds/xihuqu/a5p8r3/",
+      "basis": "2026年前9个月累计成交96套，超过去年全年59套。",
+      "basisUrl": "https://tidenews.com.cn/news.html?id=3576502",
+      "listingUrl": "https://hz.esf.fang.com/loupan/2010064400.htm",
+      "listingLabel": "房天下·小区房源"
+    },
+    {
+      "id": "xicheng-nianhua",
+      "name": "西城年华",
+      "type": "resale",
+      "area": "西湖·申花",
+      "value": "成交价格待核实",
+      "priceLabel": "2026年9月 · 成交活跃",
+      "priceNote": "已确认成交量和户型分布，暂未收录同时具有明确日期、口径的近期成交价格。",
+      "priceSource": "潮新闻·9月成交报道",
+      "priceUrl": "https://tidenews.com.cn/news.html?id=3576502",
+      "basis": "9月网签13套，报道中有7套为42.43㎡户型。",
+      "basisUrl": "https://tidenews.com.cn/news.html?id=3576502",
+      "listingUrl": "https://www.fang.com/xiaoqu/hz-2010087008/",
+      "listingLabel": "房天下·小区房源"
+    },
+    {
+      "id": "zhihaitang",
+      "name": "绿城知海棠",
+      "type": "new",
+      "area": "西湖·之江",
+      "value": "33,257元/㎡",
+      "priceLabel": "2026年9月下旬 · 开盘报价",
+      "priceNote": "房天下9月29日开盘监测中的销售价格，非实际成交价；批次、房号不同可能有差异。",
+      "priceSource": "房天下·开盘监测",
+      "priceUrl": "https://hz.newhouse.fang.com/2026-09-29/55125142.htm",
+      "basis": "9月下旬有新批次开盘，收录为近期供应动态。",
+      "basisUrl": "https://hz.newhouse.fang.com/2026-09-29/55125142.htm",
+      "listingUrl": "https://hz.58.com/xinfang/loupan/59116627.html",
+      "listingLabel": "58爱房·楼盘与户型"
+    },
+    {
+      "id": "guanzijin-chenlu",
+      "name": "绿城观紫金宸庐",
+      "type": "new",
+      "area": "西湖·云谷",
+      "value": "约55,000元/㎡",
+      "priceLabel": "2026-09-24报道 · 在售报价",
+      "priceNote": "克而瑞报道的叠墅在售均价，非实际成交价；具体房源及总价以原站和销售公示为准。",
+      "priceSource": "克而瑞好房点评·乐居报道",
+      "priceUrl": "https://hz.leju.com/news/2026-09-24/17457508823050360774847.shtml",
+      "basis": "9月24日报道称项目为纯叠墅，开盘以来去化约90%。",
+      "basisUrl": "https://hz.leju.com/news/2026-09-24/17457508823050360774847.shtml",
+      "listingUrl": "https://hz.cdgoufangtong.com/",
+      "listingLabel": "杭州购房通·查找楼盘"
+    }
+  ]
+}

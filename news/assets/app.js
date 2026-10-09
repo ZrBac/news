@@ -225,6 +225,36 @@
     }
     return state.view === "brief" ? selectBrief(articles) : articles;
   }
+  function housingWatchlist(data) {
+    const projects = Array.isArray(data.watchlist) ? data.watchlist : [];
+    if (!projects.length) return "";
+    const factHTML = (f) =>
+      `<div class="watch-fact"><dt>${escape(f.label)}</dt><dd><strong>${escape(f.value)}</strong><p>${escape(f.note)}</p><small>${escape(f.dateLabel || "报道日期")} ${escape(f.date)} · <a href="${escape(safeUrl(f.url))}" target="_blank" rel="noopener noreferrer">${escape(f.source)} ↗</a></small></dd></div>`;
+    return `<section class="housing-watchlist" aria-label="重点关注小区"><h2>重点关注</h2>
+      <p class="watch-intro">两盘的成交与进展分别记录。相关报道自动检索，价格保留核实日期与原始口径。</p>
+      <div class="watch-grid">${projects
+        .map((p) => {
+          const facts = (Array.isArray(p.facts) ? p.facts : []).filter(
+            (f) => f && safeUrl(f.url),
+          );
+          const stories = (Array.isArray(p.stories) ? p.stories : []).filter(
+            (a) => a && safeUrl(a.url),
+          );
+          const links = (Array.isArray(p.links) ? p.links : []).filter(
+            (a) => a && safeUrl(a.url),
+          );
+          return `<section class="watch-project"><h3>${escape(p.name)}</h3><p class="watch-market">${escape(p.area)} · ${escape(p.market)}</p>
+          <dl>${facts.slice(0, 2).map(factHTML).join("")}</dl>
+          <details><summary>项目进展与相关报道</summary><dl>${facts.slice(2).map(factHTML).join("")}</dl>
+          <p class="watch-focus">${escape(p.focus)}</p>
+          ${links.map((a) => `<p><a href="${escape(safeUrl(a.url))}" target="_blank" rel="noopener noreferrer">${escape(a.label)} ↗</a></p>`).join("")}
+          <h4>近期报道</h4><p class="price-published">按楼盘名称匹配标题，通过 Google 新闻检索指定媒体。</p>
+          ${stories.length ? `<ul class="watch-stories">${stories.map((a) => `<li><a href="${escape(safeUrl(a.url))}" target="_blank" rel="noopener noreferrer">${escape(a.title)}</a><small>${escape(String(a.publishedAt).slice(0, 10))} · ${escape(a.source)}</small></li>`).join("")}</ul>` : '<p class="price-published">最近90天暂未检索到标题匹配的报道；上方资料可直接查看原文。</p>'}
+          ${p.status === "unavailable" ? '<p class="price-status">本轮报道检索暂不可用，保留已收录内容。</p>' : ""}
+          <p class="price-published">资料核实于 ${escape(p.reviewedAt)}${p.checkedAt ? ` · 报道检查 ${escape(formatTime(p.checkedAt))}` : ""}</p></details></section>`;
+        })
+        .join("")}</div></section>`;
+  }
   function renderHousingPrices() {
     const panel = $("#housing-prices");
     const active = state.view === "housing";
@@ -271,7 +301,7 @@
     const samples = (Array.isArray(data.samples) ? data.samples : []).filter(
       (r) => r && Number.isFinite(r.price) && r.price > 0 && safeUrl(r.url),
     );
-    panel.innerHTML = `<p class="price-intro">最新已收录的成交均价。新房与二手房分别标注统计周期，价格随来源发布更新。</p>
+    panel.innerHTML = `${housingWatchlist(data)}<h2 class="city-price-heading">杭州整体成交</h2><p class="price-intro">最新已收录的成交均价。新房与二手房分别标注统计周期，价格随来源发布更新。</p>
       <div class="price-grid">${cards}</div>
       <p class="price-explanation">这里展示已公开的成交、网签统计；暂未接入全市实时逐套成交库。不同周期和成交房源构成的均价不能直接比较。</p>
       ${

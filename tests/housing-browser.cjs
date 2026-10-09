@@ -26,6 +26,20 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       "杭州成交价",
     );
     assert.equal(await page.locator(".price-card").count(), 2);
+    assert.deepEqual(
+      await page.locator(".watch-project h3").allTextContents(),
+      ["建发云启之江", "润启未来之城"],
+    );
+    assert.match(
+      await page.locator(".watch-project").first().innerText(),
+      /约340万元/,
+    );
+    const watched = await page.locator(".watch-fact strong").allTextContents();
+    await page.locator(".watch-project summary").last().click();
+    assert.match(
+      await page.locator(".watch-project").last().innerText(),
+      /不是实际成交价/,
+    );
     assert.match(
       await page.locator("#housing-prices").innerText(),
       /统计期.*2026-/,
@@ -64,6 +78,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.deepEqual(
       await page.locator(".price-value").allTextContents(),
       prices,
+    );
+    assert.deepEqual(
+      await page.locator(".watch-fact strong").allTextContents(),
+      watched,
     );
     await page.locator('[data-filter="all"]').click();
     await page.locator(".article").first().waitFor();

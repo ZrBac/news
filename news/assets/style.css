@@ -929,3 +929,96 @@ dialog::backdrop {
     padding: 16px;
   }
 }
+
+.housing-watchlist {
+  margin: 24px 0 32px;
+}
+.housing-watchlist > h2,
+.city-price-heading {
+  font-size: 19px;
+  margin: 0 0 12px;
+}
+.watch-intro,
+.watch-market,
+.watch-focus {
+  color: var(--secondary);
+}
+.watch-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 18px;
+}
+.watch-project {
+  border: 1px solid var(--line);
+  padding: 20px;
+  min-width: 0;
+}
+.watch-project h3 {
+  font-size: 18px;
+  margin: 0;
+}
+.watch-market {
+  margin: 6px 0 18px;
+  font-size: 12px;
+}
+.watch-project dl,
+.watch-project dd {
+  margin: 0;
+}
+.watch-fact {
+  padding: 14px 0;
+  border-top: 1px solid var(--line);
+}
+.watch-fact dt {
+  font-size: 12px;
+  color: var(--secondary);
+}
+.watch-fact strong {
+  display: block;
+  font-size: 23px;
+  margin-top: 5px;
+  font-variant-numeric: tabular-nums;
+}
+.watch-fact p {
+  font-size: 13px;
+  margin: 8px 0;
+  color: var(--secondary);
+}
+.watch-fact small,
+.watch-stories small {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+}
+.watch-project a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  overflow-wrap: anywhere;
+}
+.watch-project summary {
+  cursor: pointer;
+  padding: 12px 0 0;
+  color: var(--accent);
+}
+.watch-project h4 {
+  margin: 24px 0 6px;
+}
+.watch-stories {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.watch-stories li {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--line);
+  font-size: 13px;
+}
+@media (max-width: 800px) {
+  .watch-grid {
+    grid-template-columns: 1fr;
+  }
+  .watch-project {
+    padding: 16px;
+  }
+}

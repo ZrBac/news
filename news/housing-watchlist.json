@@ -1,0 +1,93 @@
+[
+  {
+    "id": "yunqi-zhijiang",
+    "name": "建发云启之江",
+    "aliases": ["云启之江", "鹭云启之江"],
+    "area": "西湖·之江",
+    "market": "已交付 · 重点看二手成交",
+    "reviewedAt": "2026-10-09",
+    "facts": [
+      {
+        "label": "103㎡三房 · 披露成交案例",
+        "value": "约340万元",
+        "date": "2026-09-27",
+        "source": "潮新闻·我爱问佳骏",
+        "url": "https://tidenews.com.cn/news.html?id=3571743",
+        "note": "报道提及的近期成交，未公开具体签约日期、楼层及是否含车位；不是小区均价。"
+      },
+      {
+        "label": "128㎡四房 · 披露成交案例",
+        "value": "约400万元",
+        "date": "2026-09-27",
+        "source": "潮新闻·我爱问佳骏",
+        "url": "https://tidenews.com.cn/news.html?id=3571743",
+        "note": "同篇报道的另一户型案例；不同组团、楼层和附带车位需分别核实。"
+      },
+      {
+        "label": "交付进展",
+        "value": "已交付",
+        "date": "2026-02-11",
+        "source": "浙江在线·住在杭州",
+        "url": "https://zzhz.zjol.com.cn/ycpd/szhgrym/202602/t20260211_31502370.shtml",
+        "note": "该日报道项目在岁末年初全面交付。"
+      }
+    ],
+    "focus": "重点跟踪东、西区及不同组团，103㎡、128㎡、139㎡户型的真实成交、车位计价和挂牌转成交变化。",
+    "links": [
+      {
+        "label": "东区成交记录（价格可能未公开）",
+        "url": "https://hz.5i5j.com/sold/100000002314751/o1/"
+      }
+    ]
+  },
+  {
+    "id": "runqi-weilai",
+    "name": "润启未来之城",
+    "aliases": ["润启未来之城", "润启未来城"],
+    "area": "西湖·三墩北",
+    "market": "新房期房 · 重点看分批次成交",
+    "reviewedAt": "2026-10-09",
+    "facts": [
+      {
+        "label": "已收录成交均价 · 历史周报",
+        "value": "36,047元/㎡",
+        "date": "2026-05-21",
+        "source": "克而瑞数据·乐居报道",
+        "url": "https://hz.leju.com/news/2026-05-21/09277463037754763698416.shtml",
+        "note": "统计期2026-05-11至05-17，成交43套。该价格较早，尚未取得更新且可核实的项目成交单价。"
+      },
+      {
+        "label": "2026年9月 · 成交规模",
+        "value": "56套 / 2.67亿元",
+        "date": "2026-09-30",
+        "source": "中指云·杭州项目销售排行",
+        "url": "https://www.cih-index.com/data/house/hangzhou.html",
+        "note": "统计期为2026年9月。来源未同时给出项目成交面积，不据此推算每平方米成交价。",
+        "dateLabel": "统计截至"
+      },
+      {
+        "label": "20、27号楼 · 推售价格",
+        "value": "约37,700元/㎡",
+        "date": "2026-09-18",
+        "source": "克而瑞好房点评",
+        "url": "https://www.haofangdp.com/fjdpbj/newslist/reviewconsultation?itemId=7506532815656908779",
+        "note": "9月17日领证，129套、约125/139㎡；这是该批次推售均价，不是实际成交价。"
+      },
+      {
+        "label": "交付计划",
+        "value": "报道指向2028年",
+        "date": "2026-07-11",
+        "source": "都市快报·楼市问答",
+        "url": "https://mdaily.hangzhou.com.cn/dskb/2026/07/11/article_detail_2_20260711B063.html",
+        "note": "具体楼栋交付日以合同为准；继续关注施工、莲池路站及自带商业进展。"
+      }
+    ],
+    "focus": "重点跟踪125/139㎡高层、110㎡洋房分批次成交，以及车位、装修和优惠是否计入合同总价。",
+    "links": [
+      {
+        "label": "项目成交排行来源",
+        "url": "https://www.cih-index.com/data/house/hangzhou.html"
+      }
+    ]
+  }
+]

@@ -1,6 +1,6 @@
 import importlib.util
 import unittest
-from datetime import date, datetime, timezone
+from datetime import date
 from pathlib import Path
 
 spec = importlib.util.spec_from_file_location('prices', Path(__file__).resolve().parents[1] / 'scripts/collect_housing_prices.py')
@@ -52,27 +52,6 @@ class HousingPriceTests(unittest.TestCase):
         self.assertEqual(prices.merge_records([record] + incoming, self.today), [record])
         older = dict(record, periodStart='2026-09-14', periodEnd='2026-09-20', publishedAt='2026-10-09', price=38000)
         self.assertEqual(prices.merge_records([older, record], self.today)[0], record)
-
-    def test_watchlist_uses_exact_project_and_allowed_publisher(self):
-        now = datetime(2026, 10, 9, tzinfo=timezone.utc)
-        project = {'aliases': ['云启之江', '鹭云启之江']}
-        xml = '''<rss><channel><item><title>云启之江成交情况</title>
-        <link>https://news.google.com/rss/articles/test</link>
-        <pubDate>Thu, 08 Oct 2026 00:00:00 GMT</pubDate>
-        <source url="https://tidenews.com.cn">潮新闻</source></item></channel></rss>'''
-        stories = prices.parse_watch_feed(xml, project, now)
-        self.assertEqual(len(stories), 1)
-        for bad in (xml.replace('云启之江成交情况', '建发云之城成交情况'),
-                    xml.replace('tidenews.com.cn', 'tidenews.com.cn.fake.example'),
-                    xml.replace('08 Oct 2026', '08 Oct 2027'),
-                    xml.replace('08 Oct 2026', '08 Jan 2026'),
-                    xml.replace('https://news.google.com/rss/articles/test', 'javascript:alert(1)')):
-            self.assertFalse(prices.parse_watch_feed(bad, project, now))
-        def failed(url):
-            raise TimeoutError()
-        result = prices.collect_watch(project, {'stories': stories}, now, failed)
-        self.assertEqual(result['status'], 'unavailable')
-        self.assertEqual(result['stories'], stories)
 
 
 if __name__ == '__main__':

@@ -31,8 +31,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       0,
     );
     assert.equal(
-      await page.locator("#xihu-heading").innerText(),
-      "西湖区房源动态",
+      await page.locator(".xihu-hotspots, #xihu-heading").count(),
+      0,
     );
     assert.equal(
       await page
@@ -44,9 +44,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     assert.doesNotMatch(
       await page.locator("#housing-prices").innerText(),
-      /建发云启之江|润启未来之城|约340万元|36,047|25,085|资料核实于|小区成交样本/,
+      /西湖区房源动态|紫璋台|建发云启之江|润启未来之城|约340万元|36,047|25,085|资料核实于|小区成交样本/,
     );
-    assert.match(await page.locator(".xihu-hotspots").innerText(), /自动跟踪/);
     assert.match(
       await page.locator("#housing-prices").innerText(),
       /统计期.*2026-/,
@@ -88,8 +87,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     assert.equal(await page.locator(".watch-project").count(), 0);
     assert.equal(
-      await page.locator("#xihu-heading").innerText(),
-      "西湖区房源动态",
+      await page.locator(".xihu-hotspots, #xihu-heading").count(),
+      0,
     );
     await page.locator('[data-filter="all"]').click();
     await page.locator(".article").first().waitFor();

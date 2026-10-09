@@ -9,18 +9,15 @@ import calendar
 import concurrent.futures
 import json
 import re
-import xml.etree.ElementTree as ET
-from datetime import date, datetime, timedelta, timezone
-from email.utils import parsedate_to_datetime
+from datetime import date, datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
-from urllib.parse import urlencode, urljoin, urlsplit
+from urllib.parse import urljoin, urlsplit
 from urllib.request import Request, urlopen
 
 ROOT = Path(__file__).resolve().parents[1]
 CIH = 'https://www.cih-index.com/citydetail/3146b167-dcc5-4be2-9db2-47f2a6bda5b6'
 HZ = 'https://hznews.hangzhou.com.cn/jingji/'
-WATCH_DOMAINS = ('tidenews.com.cn', 'hangzhou.com.cn', 'zjol.com.cn', 'leju.com', 'cih-index.com', 'haofangdp.com')
 
 
 class Document(HTMLParser):
@@ -168,65 +165,16 @@ def merge_records(records, today):
     return sorted(by_period.values(), key=lambda r: (r['periodEnd'], r['publishedAt']), reverse=True)[:24]
 
 
-def valid_watch_story(story, project, now):
-    try:
-        published = datetime.fromisoformat(story['publishedAt'].replace('Z', '+00:00'))
-        publisher = urlsplit(story['publisherUrl']).hostname or ''
-        url = urlsplit(story['url'])
-        return (published.tzinfo is not None and now - timedelta(days=90) <= published <= now + timedelta(minutes=10)
-                and any(alias in story['title'] for alias in project['aliases'])
-                and any(publisher == d or publisher.endswith('.' + d) for d in WATCH_DOMAINS)
-                and url.scheme == 'https' and url.hostname == 'news.google.com'
-                and not url.username and not url.password)
-    except (KeyError, ValueError, TypeError):
-        return False
-
-
-def parse_watch_feed(xml, project, now):
-    stories = []
-    for item in ET.fromstring(xml).findall('.//item')[:120]:
-        source = item.find('source')
-        if source is None:
-            continue
-        try:
-            story = dict(title=Document(item.findtext('title') or '').text[:240],
-                         url=item.findtext('link') or '', publisherUrl=source.get('url', ''),
-                         source=Document(source.text or '').text[:80],
-                         publishedAt=parsedate_to_datetime(item.findtext('pubDate') or '').isoformat())
-            if valid_watch_story(story, project, now):
-                stories.append(story)
-        except (ValueError, TypeError, OverflowError):
-            continue
-    return stories
-
-
-def collect_watch(project, previous, now, get=fetch):
-    names = '(' + ' OR '.join('"' + alias + '"' for alias in project['aliases']) + ')'
-    sites = '(' + ' OR '.join('site:' + domain for domain in WATCH_DOMAINS) + ')'
-    url = 'https://news.google.com/rss/search?' + urlencode(dict(q=f'{project.get("queryPrefix", "")} {names} {sites} when:90d', hl='zh-CN', gl='CN', ceid='CN:zh-Hans'))
-    stories = [s for s in previous.get('stories', []) if valid_watch_story(s, project, now)]
-    status = 'ok'
-    try:
-        stories += parse_watch_feed(get(url), project, now)
-    except Exception:
-        status = 'unavailable'
-    unique = {s['url']: s for s in stories}
-    ordered = sorted(unique.values(), key=lambda s: s['publishedAt'], reverse=True)[:6]
-    return dict(project, stories=ordered, checkedAt=now.isoformat(), status=status)
-
-
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('--previous-url')
     args = p.parse_args()
     seed = json.loads((ROOT / 'news/housing-prices.json').read_text())
     previous = seed['records'][:]
-    previous_hotspots = {}
     if args.previous_url:
         try:
             old = json.loads(fetch(args.previous_url)).get('housingPrices', {})
             previous += old.get('records', [])
-            previous_hotspots = old.get('xihuHotspots', {})
         except Exception as exc:
             # Prevent replacing a newer live record with the seed during an outage.
             raise SystemExit(f'Cannot retain previous prices: {exc}')
@@ -236,10 +184,8 @@ def main():
         results = list(pool.map(lambda k: collect_kind(k, records, now.date()), ('new', 'resale')))
     for incoming, _ in results:
         records += incoming
-    hotspots = json.loads((ROOT / 'news/xihu-hotspots.json').read_text())
-    watched = collect_watch(hotspots, previous_hotspots, now)
     payload = dict(checkedAt=now.isoformat(), records=merge_records(records, now.date()),
-                   sources=[s for _, s in results], xihuHotspots=watched)
+                   sources=[s for _, s in results])
     output = ROOT / 'news/data/housing.json'
     output.parent.mkdir(parents=True, exist_ok=True)
     output.write_text(json.dumps(payload, ensure_ascii=False, separators=(',', ':')) + '\n')

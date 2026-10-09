@@ -893,35 +893,3 @@ dialog::backdrop {
   font-size: 19px;
   margin: 0 0 12px;
 }
-.watch-intro {
-  color: var(--secondary);
-}
-.watch-stories small {
-  display: block;
-  font-size: 11px;
-  color: var(--muted);
-}
-.xihu-hotspots a {
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  overflow-wrap: anywhere;
-}
-.watch-stories {
-  list-style: none;
-  margin: 0;
-  padding: 0;
-}
-.watch-stories li {
-  padding: 10px 0;
-  border-bottom: 1px solid var(--line);
-  font-size: 13px;
-}
-.xihu-hotspots {
-  border-top: 1px solid var(--line);
-  margin: 32px 0;
-  padding-top: 24px;
-}
-.xihu-hotspots h2 {
-  font-size: 19px;
-  margin: 0 0 12px;
-}

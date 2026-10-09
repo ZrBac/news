@@ -225,21 +225,6 @@
     }
     return state.view === "brief" ? selectBrief(articles) : articles;
   }
-  function housingStories(group) {
-    const stories = (Array.isArray(group.stories) ? group.stories : []).filter(
-      (a) => a && safeUrl(a.url),
-    );
-    return `${stories.length ? `<ul class="watch-stories">${stories.map((a) => `<li><a href="${escape(safeUrl(a.url))}" target="_blank" rel="noopener noreferrer">${escape(a.title)}</a><small>${escape(String(a.publishedAt).slice(0, 10))} · ${escape(a.source)}</small></li>`).join("")}</ul>` : `<p class="price-published">${group.status === "unavailable" ? "报道暂未加载成功，稍后自动重试。" : group.checkedAt ? "最近90天暂未检索到标题匹配的报道。" : "等待首次自动检索。"}</p>`}
-      ${group.status === "unavailable" && stories.length ? '<p class="price-status">本轮检索暂不可用，保留已收录报道。</p>' : ""}
-      ${group.checkedAt ? `<p class="price-published">最近检查 ${escape(formatTime(group.checkedAt))}</p>` : ""}`;
-  }
-  function xihuHotspots(data) {
-    const group = data.xihuHotspots || {};
-    if (!group.id) return "";
-    return `<section class="xihu-hotspots" aria-labelledby="xihu-heading"><h2 id="xihu-heading">西湖区房源动态</h2>
-      <p class="watch-intro">自动跟踪紫璋台、文鼎苑、西城年华、知海棠、观紫金宸庐的相关报道。</p>
-      ${housingStories(group)}</section>`;
-  }
   function renderHousingPrices() {
     const panel = $("#housing-prices");
     const active = state.view === "housing";
@@ -285,8 +270,7 @@
       .join("");
     panel.innerHTML = `<h2 class="city-price-heading">杭州整体成交</h2><p class="price-intro">自动检查来源发布的成交均价。新房与二手房分别标注统计周期，没有新数据时保留上次结果。</p>
       <div class="price-grid">${cards}</div>
-      <p class="price-explanation">这里展示已公开的成交、网签统计；暂未接入全市实时逐套成交库。不同周期和成交房源构成的均价不能直接比较。</p>
-      ${xihuHotspots(data)}`;
+      <p class="price-explanation">这里展示已公开的成交、网签统计；暂未接入全市实时逐套成交库。不同周期和成交房源构成的均价不能直接比较。</p>`;
   }
 
   function render() {

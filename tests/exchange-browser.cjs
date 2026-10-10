@@ -27,7 +27,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.equal(await page.locator("#search").isVisible(), false);
     assert.equal(await page.locator("#articles").isVisible(), false);
     assert.equal(await page.locator("#housing-prices").isVisible(), false);
-    assert.match(await page.locator(".fx-notes").innerText(), /20个自然日/);
+    assert.match(await page.locator(".fx-notes").innerText(), /30个自然日/);
     for (const [code, name] of [
       ["JPY", "日元"],
       ["THB", "泰铢"],

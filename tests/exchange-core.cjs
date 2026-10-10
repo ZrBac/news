@@ -18,16 +18,36 @@ function fixture() {
     points,
   };
 }
-test("quote direction, 30 calendar days, 20 calendar day low rather than 20 observations", () => {
+test("quote direction, 30 calendar day low rather than 30 observations", () => {
   const data = fixture();
   data.points[0].rate = 6;
   const info = analyze(data, TODAY);
   assert.equal(info.low, true);
-  assert.equal(info.windowStart, "2026-09-20");
+  assert.equal(info.windowStart, "2026-09-10");
   assert.equal(info.periodStart, "2026-09-10");
   assert.equal(info.latest.rate, 7);
-  assert(info.samples < 20);
+  assert(info.samples < 30);
   assert(info.points.every((p) => p.date >= "2026-09-10"));
+  data.points.find((p) => p.date === "2026-09-15").rate = 6.9;
+  assert.equal(
+    analyze(data, TODAY).low,
+    false,
+    "a lower quote 24 days ago must count",
+  );
+  data.points.find((p) => p.date === "2026-09-15").rate = 7.1;
+  data.points.find((p) => p.date === "2026-09-10").rate = 6.9;
+  assert.equal(
+    analyze(data, TODAY).low,
+    false,
+    "the first day of the 30-day window is included",
+  );
+  data.points.find((p) => p.date === "2026-09-10").rate = 7.1;
+  data.points.find((p) => p.date === "2026-09-09").rate = 6.8;
+  assert.equal(
+    analyze(data, TODAY).low,
+    true,
+    "a quote before the 30-day window is excluded",
+  );
 });
 test("ties highlight, higher current quote does not, comparison uses six decimal places", () => {
   const data = fixture();

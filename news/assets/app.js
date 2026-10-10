@@ -345,21 +345,21 @@
         ${info.points.length > 1 ? `<label class="fx-slider-label" for="fx-day">滑动查看日期</label><input id="fx-day" type="range" min="0" max="${info.points.length - 1}" value="${info.points.length - 1}" step="1" aria-describedby="fx-readout"/>` : ""}`;
     }
     const alert = info.low
-      ? `<p class="fx-alert" role="status">${info.tied ? "并列" : "达到"}近20天最低</p>`
+      ? `<p class="fx-alert" role="status">${info.tied ? "并列" : "达到"}近30天最低</p>`
       : "";
     const status = !info.verified
       ? "本轮获取失败，显示上次数据，暂停最低提醒。"
       : info.stale
         ? "报价日期较早，暂停最低提醒，等待来源更新。"
         : !info.complete
-          ? "历史数据不足，暂不判断20天最低。"
+          ? "历史数据不足，暂不判断30天最低。"
           : info.low
             ? "按最新已公布的参考汇率比较。"
-            : "最新参考汇率尚未达到近20天最低。";
+            : "最新参考汇率尚未达到近30天最低。";
     panel.innerHTML = `${tabs}<section class="fx-summary${info.low ? " is-low" : ""}"><div class="fx-heading"><h2>${name} <span>${exchangeCurrency} / CNY</span></h2>${alert}</div>
       <p class="fx-unit">1 ${name}兑人民币</p><p class="fx-value">${rateText(info.latest.rate)} <small>元</small></p>
       <p class="price-published">报价日期 ${escape(info.latest.date)} · 每日参考汇率</p><p class="fx-status">${status}</p>
-      ${info.complete ? `<p class="price-published">20天区间最低 ${rateText(info.min)} · ${escape(info.windowStart)} 至 ${escape(info.windowEnd)} · ${info.samples} 个报价日</p>` : ""}</section>
+      ${info.complete ? `<p class="price-published">30天区间最低 ${rateText(info.min)} · ${escape(info.windowStart)} 至 ${escape(info.windowEnd)} · ${info.samples} 个报价日</p>` : ""}</section>
       <section class="fx-history"><h2>近一个月走势</h2><p class="price-published">${escape(info.periodStart)} 至 ${escape(info.periodEnd)} · 最近30个自然日</p>${graph}</section>
       <details class="fx-records"><summary>每日记录（${info.points.length} 个报价日）</summary><table class="housing-table"><thead><tr><th scope="col">日期</th><th scope="col">1${name}兑人民币</th></tr></thead><tbody>${[
         ...info.points,
@@ -372,7 +372,7 @@
         .join("")}</tbody></table></details>
       <div class="fx-notes"><p>来源：<a href="${escape(safeUrl(data.sourceUrl))}" target="_blank" rel="noopener noreferrer">欧洲央行（ECB）参考汇率 ↗</a>。由同日人民币兑欧元报价除以${name}兑欧元报价换算；不是银行现汇买入价或卖出价。</p>
       <p>随网站自动检查更新，来源通常在欧洲工作日每日发布一次。周末及休市日不新增报价，图表只连接已公布的数据点。</p>
-      <p>提醒比较截至最新报价日期的20个自然日（含当天），达到或并列最低均高亮；按六位小数比较，历史不足、获取失败或报价超过4天时暂停提醒。</p>
+      <p>提醒比较截至最新报价日期的30个自然日（含当天），达到或并列最低均高亮；按六位小数比较，历史不足、获取失败或报价超过4天时暂停提醒。</p>
       ${data.checkedAt ? `<p>最近检查 ${escape(formatTime(data.checkedAt))}（北京时间）；检查时间不代表新报价。</p>` : ""}</div>`;
   }
   function renderHousingPrices() {

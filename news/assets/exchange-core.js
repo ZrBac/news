@@ -48,12 +48,12 @@
     if (!points.length) return null;
     const latest = points[points.length - 1];
     const end = dayNumber(latest.date),
-      cutoff = end - 19;
+      cutoff = end - 29;
     const window = points.filter((p) => dayNumber(p.date) >= cutoff);
     const complete =
       !malformed &&
       dayNumber(points[0].date) <= cutoff &&
-      window.length >= 10 &&
+      window.length >= 15 &&
       window.every(
         (p, i) => !i || dayNumber(p.date) - dayNumber(window[i - 1].date) <= 5,
       );

@@ -190,6 +190,16 @@ def build_news_pages(data, output):
                           'indexes': indexes, 'shards': shards,
                           'categories': {key: sorted(value) for key, value in categories.items()},
                           'oldest': articles[-1]['publishedAt'] if articles else None}}
+    # Observation history is only for the collector. Open the small public
+    # summary on demand so source statistics do not slow down the news list.
+    latest.pop('sourceQualityState', None)
+    quality = latest.pop('sourceQuality', None)
+    if quality:
+        body = json.dumps(quality, ensure_ascii=False, separators=(',', ':')).encode()
+        path = '/data/source-quality.' + hashlib.sha256(body).hexdigest()[:16] + '.json'
+        (output / path.lstrip('/')).write_bytes(body)
+        latest['sourceQuality'] = {'schema': 1, 'path': path,
+                                  'startedAt': quality['startedAt'], 'updatedAt': quality['updatedAt']}
     (output / 'data/latest.json').write_text(
         json.dumps(latest, ensure_ascii=False, separators=(',', ':')) + '\n')
 

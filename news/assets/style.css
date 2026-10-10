@@ -722,10 +722,10 @@ dialog::backdrop {
   text-decoration: underline;
 }
 .source-row {
-  display: flex;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
   align-items: center;
-  gap: 12px;
+  gap: 10px 12px;
   padding: 13px 0;
   border-bottom: 1px solid var(--line);
   font-size: 13px;
@@ -743,6 +743,79 @@ dialog::backdrop {
 }
 .source-status.unavailable {
   color: var(--accent);
+}
+.source-name {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.source-controls {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  font-size: 12px;
+  align-items: center;
+}
+.source-controls label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.source-controls select {
+  border: 1px solid var(--line);
+  background: var(--paper);
+  color: var(--ink);
+  padding: 6px;
+  font: inherit;
+  min-height: 34px;
+}
+.source-count {
+  margin: 12px 0 0;
+}
+.source-metrics {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin: 0;
+}
+.source-metrics dt {
+  font-size: 11px;
+  color: var(--muted);
+}
+.source-metrics dd {
+  font-size: 14px;
+  margin: 4px 0 0;
+}
+.source-history,
+.source-flags {
+  grid-column: 1 / -1;
+  margin: 0;
+  font-size: 11px;
+}
+.source-history summary,
+.source-explanation summary {
+  color: var(--secondary);
+  cursor: pointer;
+}
+.source-history table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+  margin-top: 8px;
+}
+.source-history th,
+.source-history td {
+  padding: 6px 0;
+  border-bottom: 1px solid var(--line);
+  font-weight: normal;
+}
+.source-flags {
+  color: var(--accent);
+}
+.source-explanation {
+  font-size: 12px;
+  line-height: 1.8;
+  margin-top: 20px;
 }
 .toast {
   position: fixed;

@@ -21,6 +21,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 UTC = timezone.utc
+BEIJING = timezone(timedelta(hours=8))
+QUALITY_WINDOW_DAYS = 7
 AI_PATTERN = re.compile(
     r'(?<![a-z0-9])(?:AI|AGI|LLMs?|GPT[a-z0-9_.-]*|ChatGPT|OpenAI|Anthropic|'
     r'Claude|Gemini|Copilot|DeepSeek[a-z0-9_.-]*|Qwen[a-z0-9_.-]*|Llama|Codex|'
@@ -401,24 +403,181 @@ def recent_housing_articles(previous, incoming, now, allowed_sources):
     return merge_articles(candidates(previous), candidates(incoming), now, allowed_sources)[:120]
 
 
+def quality_title_key(article):
+    """Match same-day headlines, preserving version numbers and decimal points."""
+    title = str(article.get('title', ''))
+    if urllib.parse.urlsplit(article.get('url', '')).hostname == 'news.google.com':
+        title = title.rsplit(' - ', 1)[0]
+    title = re.sub(r'[\s“”‘’"\'「」『』《》〈〉，,。！!？?：:；;、（）()【】\[\]]', '', title).casefold()
+    return hashlib.sha256(title.encode()).hexdigest()[:16]
+
+
+def validate_quality_state(state):
+    if (not isinstance(state, dict) or state.get('schema') != 1
+            or not parse_date(state.get('startedAt')) or not parse_date(state.get('updatedAt'))
+            or not isinstance(state.get('sources'), dict)):
+        raise ValueError('Invalid previous source-quality history')
+    for source in state['sources'].values():
+        if (not isinstance(source, dict) or not isinstance(source.get('identity'), str)
+                or not parse_date(source.get('startedAt'))
+                or not isinstance(source.get('seen'), list) or not isinstance(source.get('daily'), list)
+                or not isinstance(source.get('failureStreak'), int) or source['failureStreak'] < 0):
+            raise ValueError('Invalid previous source-quality source')
+        for field in ('lastCheckedAt', 'lastNewAt', 'noNewSince'):
+            if source.get(field) is not None and not parse_date(source[field]):
+                raise ValueError('Invalid previous source-quality timestamp')
+        for row in source['seen']:
+            if (not isinstance(row, list) or len(row) != 4
+                    or not all(isinstance(value, str) and re.fullmatch(r'[a-f0-9]{16}', value) for value in row[:2])
+                    or not parse_date(row[2] + 'T00:00:00+08:00')
+                    or (row[3] is not None and not parse_date(str(row[3]) + 'T00:00:00+08:00'))):
+                raise ValueError('Invalid previous source-quality article')
+        for day in source['daily']:
+            if (not isinstance(day, dict) or not parse_date(str(day.get('date', '')) + 'T00:00:00+08:00')
+                    or not all(type(day.get(key)) is int and day[key] >= 0
+                               for key in ('checks', 'successes', 'newCount'))
+                    or day['successes'] > day['checks']):
+                raise ValueError('Invalid previous source-quality day')
+    return state
+
+
+def update_source_quality(previous_state, sources, statuses, incoming, baseline, now):
+    """Persist observations independently of the shared 6,000-story archive."""
+    if previous_state is not None:
+        validate_quality_state(previous_state)
+        if parse_date(previous_state['updatedAt']) > now:
+            raise ValueError('Source-quality history is newer than this collection')
+    stamp = iso(now)
+    today = now.astimezone(BEIJING).date()
+    first_day = (today - timedelta(days=QUALITY_WINDOW_DAYS - 1)).isoformat()
+    oldest = (today - timedelta(days=30)).isoformat()
+    state = {'schema': 1, 'startedAt': (previous_state or {}).get('startedAt', stamp),
+             'updatedAt': stamp, 'sources': {}}
+    status_by_id = {item['id']: item for item in statuses}
+    incoming_by_source, baseline_by_source = {}, {}
+    for collection, grouped in ((incoming, incoming_by_source), (baseline, baseline_by_source)):
+        for article in collection:
+            if isinstance(article, dict):
+                grouped.setdefault(article.get('sourceId'), []).append(article)
+
+    def record(article, observed):
+        url, published = safe_url(article.get('url')), parse_date(article.get('publishedAt'))
+        if not url or not published or not article.get('title') or not now - timedelta(days=30) <= published <= now + timedelta(minutes=10):
+            return None
+        return [hashlib.sha256(url.encode()).hexdigest()[:16], quality_title_key(article),
+                published.astimezone(BEIJING).date().isoformat(), observed]
+
+    for source in sources:
+        source_id = source['id']
+        identity = hashlib.sha256(json.dumps({key: source.get(key) for key in
+            ('url', 'format', 'category', 'titleFilter')}, sort_keys=True).encode()).hexdigest()[:16]
+        old = (previous_state or {}).get('sources', {}).get(source_id)
+        fresh = not old or old['identity'] != identity
+        if fresh:
+            old = {'identity': identity, 'startedAt': stamp, 'seen': [], 'daily': [],
+                   'failureStreak': 0, 'lastCheckedAt': None, 'lastNewAt': None, 'noNewSince': None}
+        current = {**old, 'seen': [list(row) for row in old['seen']
+                                  if row[2] >= oldest or (row[3] and row[3] >= first_day)],
+                   'daily': [dict(day) for day in old['daily'] if day['date'] >= oldest]}
+        seen = {row[0]: row for row in current['seen']}
+        titles = {(row[1], row[2]) for row in current['seen']}
+        # The first successful feed is a baseline, including older stories that
+        # the public archive may already have evicted. Never invent past totals.
+        initializing = fresh or not current.get('lastCheckedAt')
+        if initializing:
+            for article in baseline_by_source.get(source_id, []):
+                row = record(article, None)
+                if row:
+                    seen[row[0]] = row
+                    titles.add((row[1], row[2]))
+        new_count = 0
+        for article in incoming_by_source.get(source_id, []):
+            row = record(article, today.isoformat())
+            if not row or row[0] in seen:
+                continue
+            if initializing or (row[1], row[2]) in titles:
+                row[3] = None
+            else:
+                new_count += 1
+            seen[row[0]] = row
+            titles.add((row[1], row[2]))
+        current['seen'] = list(seen.values())
+        day = next((day for day in current['daily'] if day['date'] == today.isoformat()), None)
+        if day is None:
+            day = {'date': today.isoformat(), 'checks': 0, 'successes': 0, 'newCount': 0}
+            current['daily'].append(day)
+        status = status_by_id[source_id]
+        day['checks'] += 1
+        if status['status'] == 'ok':
+            day['successes'] += 1
+            day['newCount'] += new_count
+            # An outage or a gap in collection breaks a continuous successful
+            # observation period; it is not evidence that a publisher stopped.
+            previous_check = parse_date(current.get('lastCheckedAt'))
+            if new_count:
+                current['lastNewAt'] = stamp
+                current['noNewSince'] = stamp
+            elif (not current.get('noNewSince') or current['failureStreak']
+                  or not previous_check or now - previous_check > timedelta(hours=3)):
+                current['noNewSince'] = stamp
+            current['failureStreak'] = 0
+            current['lastCheckedAt'] = stamp
+        else:
+            current['failureStreak'] += 1
+            current['noNewSince'] = None
+        status['newCount'] = new_count
+        state['sources'][source_id] = current
+
+    title_sources = {}
+    for source_id, source in state['sources'].items():
+        for row in source['seen']:
+            title_sources.setdefault((row[1], row[2]), set()).add(source_id)
+    public = {'schema': 1, 'startedAt': state['startedAt'], 'updatedAt': stamp,
+              'windowDays': QUALITY_WINDOW_DAYS, 'sources': []}
+    for source in sources:
+        source_id, status = source['id'], status_by_id[source['id']]
+        tracked = state['sources'][source_id]
+        duplicates = {}
+        for row in tracked['seen']:
+            if row[3] and row[3] >= first_day and len(title_sources[(row[1], row[2])]) > 1:
+                duplicates[row[3]] = duplicates.get(row[3], 0) + 1
+        days = [{**day, 'duplicateCount': duplicates.get(day['date'], 0)} for day in tracked['daily']
+                if day['date'] >= first_day]
+        new_count = sum(day['newCount'] for day in days)
+        duplicate_count = sum(day['duplicateCount'] for day in days)
+        no_new_since = parse_date(tracked.get('noNewSince'))
+        public['sources'].append({'id': source_id, 'startedAt': tracked['startedAt'],
+            'newCount': new_count, 'duplicateCount': duplicate_count,
+            'duplicateRate': round(duplicate_count / new_count, 4) if new_count else None,
+            'checks': sum(day['checks'] for day in days), 'successes': sum(day['successes'] for day in days),
+            'observedDays': len(days), 'failureStreak': tracked['failureStreak'],
+            'noNewDays': int((now - no_new_since).total_seconds() // 86400) if no_new_since else None,
+            'lastNewAt': tracked.get('lastNewAt'), 'daily': days})
+    return state, public
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', type=Path, default=ROOT / 'news/data/news.json')
     parser.add_argument('--previous-url')
     args = parser.parse_args()
     sources = json.loads((ROOT / 'news/sources.json').read_text())
-    previous, previous_models, previous_housing = [], [], []
+    previous, previous_models, previous_housing, quality_states = [], [], [], []
     if args.output.exists():
         old = json.loads(args.output.read_text())
         previous = old.get('articles', [])
         previous_models = old.get('modelReleases', [])
         previous_housing = old.get('housingArticles', [])
+        if old.get('sourceQualityState') is not None:
+            quality_states.append(validate_quality_state(old['sourceQualityState']))
     if args.previous_url:
         try:
-            old = json.loads(fetch(args.previous_url, 15_000_000))
+            old = json.loads(fetch(args.previous_url, 30_000_000))
             previous += old.get('articles', [])
             previous_models += old.get('modelReleases', [])
             previous_housing += old.get('housingArticles', [])
+            if old.get('sourceQualityState') is not None:
+                quality_states.append(validate_quality_state(old['sourceQualityState']))
         except urllib.error.HTTPError as exc:
             if exc.code != 404:
                 raise SystemExit(f'Cannot safely read previous archive; aborting to preserve history: {exc}')
@@ -435,15 +594,17 @@ def main():
     articles = merge_articles(previous, incoming, now, allowed_sources)
     models = recent_model_releases(previous + previous_models, incoming, now, allowed_sources)
     housing = recent_housing_articles(previous + previous_housing, incoming, now, allowed_sources)
-    previous_urls = {safe_url(a.get('url')) for a in previous if isinstance(a, dict)}
-    for status in statuses:
-        status['newCount'] = sum(a['sourceId'] == status['id'] and a['url'] not in previous_urls for a in articles)
-        print('SOURCE_METRIC ' + json.dumps({k: status[k] for k in
-              ('id', 'checkedAt', 'status', 'fetchedCount', 'newCount', 'durationMs')}))
     if not incoming:
         raise SystemExit('All feeds unavailable. Keep the last successful deployment; do not publish an empty site.')
+    old_quality = max(quality_states, key=lambda state: state['updatedAt']) if quality_states else None
+    quality_state, quality = update_source_quality(old_quality, sources, statuses, incoming,
+                                                   previous + previous_models + previous_housing, now)
+    for status in statuses:
+        print('SOURCE_METRIC ' + json.dumps({k: status[k] for k in
+              ('id', 'checkedAt', 'status', 'fetchedCount', 'newCount', 'durationMs')}))
     result = {'version': 1, 'updatedAt': iso(now), 'retentionDays': 30, 'sources': statuses,
-              'articles': articles, 'modelReleases': models, 'housingArticles': housing}
+              'articles': articles, 'modelReleases': models, 'housingArticles': housing,
+              'sourceQualityState': quality_state, 'sourceQuality': quality}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, ensure_ascii=False, separators=(',', ':')) + '\n')
     print(f'Collected {len(incoming)} items; retained {len(articles)} unique items; {sum(s["status"] == "ok" for s in statuses)}/{len(sources)} sources available.')

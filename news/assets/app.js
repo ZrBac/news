@@ -794,23 +794,263 @@
       $("#source-filter").innerHTML = markup;
     $("#source-filter").value = state.source;
   }
-  function showSources() {
-    $("#dialog-title").textContent = "资讯来源";
-    const sourceRows = state.data
-      ? state.data.sources
-          .map(
-            (s) =>
-              `<div class="source-row"><div><a href="${escape(safeUrl(s.home))}" target="_blank" rel="noopener noreferrer">${escape(s.name)} ${icon("arrow-up-right")}</a><small>${s.latestAt ? "最近发布：" + escape(formatTime(s.latestAt)) : "本轮未取得有效资讯"}</small></div><span class="source-status ${s.status === "ok" ? "" : "unavailable"}">${s.status === "ok" ? "● 本轮已连接" : "○ 暂不可用"}</span></div>`,
-          )
-          .join("")
-      : "<p>资讯尚未加载完成，请稍后再试。</p>";
-    $("#dialog-content").innerHTML =
-      "<p>通过公开 RSS 获取标题、发布时间及简短摘要，点击资讯前往原站阅读完整内容。标注“聚合”的来源由 Google 新闻汇集该网站的报道。不同来源有各自的报道视角。</p>" +
-      sourceRows +
-      "<p>计划每小时检查一次，来源失败时保留已收录内容。本站归档保留最近 30 天、最多 6000 条，历史从首次上线后逐步积累；并不代表全网实时热度榜。</p>";
-    $("#info-dialog").showModal();
+  let sourceDialogToken = 0;
+  let sourceQuality = null;
+  let sourceQualityMessage = "";
+  let sourceQualityRetry = false;
+  let sourceSort = "default",
+    sourceCategory = "all",
+    sourceAttention = false;
+  const qualityStorage = "zrbac-source-quality-v1";
+  function validateSourceQuality(quality, meta) {
+    const count = (n) => Number.isInteger(n) && n >= 0;
+    if (
+      !quality ||
+      quality.schema !== 1 ||
+      quality.windowDays !== 7 ||
+      quality.updatedAt !== meta.updatedAt ||
+      quality.startedAt !== meta.startedAt ||
+      !Number.isFinite(Date.parse(quality.startedAt)) ||
+      !Array.isArray(quality.sources) ||
+      quality.sources.length > 200
+    )
+      throw new Error("Invalid source quality summary");
+    const ids = new Set();
+    for (const item of quality.sources) {
+      if (
+        !item ||
+        typeof item.id !== "string" ||
+        ids.has(item.id) ||
+        !Number.isFinite(Date.parse(item.startedAt)) ||
+        ![
+          "newCount",
+          "duplicateCount",
+          "checks",
+          "successes",
+          "failureStreak",
+          "observedDays",
+        ].every((key) => count(item[key])) ||
+        item.duplicateCount > item.newCount ||
+        item.successes > item.checks ||
+        item.observedDays > 7 ||
+        !(item.noNewDays === null || count(item.noNewDays)) ||
+        !(
+          item.lastNewAt === null || Number.isFinite(Date.parse(item.lastNewAt))
+        ) ||
+        !(item.duplicateRate === null
+          ? item.newCount === 0
+          : Number.isFinite(item.duplicateRate) &&
+            item.newCount > 0 &&
+            Math.abs(
+              item.duplicateRate - item.duplicateCount / item.newCount,
+            ) <= 0.0001) ||
+        !Array.isArray(item.daily) ||
+        item.daily.length > 7
+      )
+        throw new Error("Invalid source quality row");
+      ids.add(item.id);
+      const days = new Set();
+      for (const day of item.daily) {
+        if (
+          !day ||
+          typeof day.date !== "string" ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(day.date) ||
+          !Number.isFinite(Date.parse(day.date + "T00:00:00+08:00")) ||
+          days.has(day.date) ||
+          !["checks", "successes", "newCount", "duplicateCount"].every((key) =>
+            count(day[key]),
+          ) ||
+          day.successes > day.checks ||
+          day.duplicateCount > day.newCount
+        )
+          throw new Error("Invalid source quality day");
+        days.add(day.date);
+      }
+      if (
+        item.observedDays !== item.daily.length ||
+        ["checks", "successes", "newCount", "duplicateCount"].some(
+          (key) =>
+            item[key] !== item.daily.reduce((sum, day) => sum + day[key], 0),
+        )
+      )
+        throw new Error("Inconsistent source quality totals");
+    }
+    return quality;
   }
+  function sourceFlags(source, quality) {
+    const flags = [];
+    if (source.status !== "ok")
+      flags.push(
+        quality?.failureStreak > 1
+          ? `连续失败 ${quality.failureStreak} 次`
+          : "本轮暂不可用",
+      );
+    if (quality?.noNewDays >= 7) flags.push(`${quality.noNewDays} 天未新增`);
+    if (quality?.newCount >= 20 && quality.duplicateRate >= 0.5)
+      flags.push("同标题较多");
+    return flags;
+  }
+  function renderSources() {
+    if (!state.data) {
+      $("#dialog-content").innerHTML = "<p>资讯尚未加载完成，请稍后再试。</p>";
+      return;
+    }
+    const metrics = new Map(
+      (sourceQuality?.sources || []).map((item) => [item.id, item]),
+    );
+    let sources = state.data.sources.filter(
+      (source) =>
+        (sourceCategory === "all" || source.category === sourceCategory) &&
+        (!sourceAttention ||
+          sourceFlags(source, metrics.get(source.id)).length),
+    );
+    if (sourceSort !== "default")
+      sources = [...sources].sort((a, b) => {
+        const left = metrics.get(a.id),
+          right = metrics.get(b.id);
+        const key = {
+          new: "newCount",
+          duplicate: "duplicateRate",
+          idle: "noNewDays",
+        }[sourceSort];
+        return (right?.[key] ?? -1) - (left?.[key] ?? -1);
+      });
+    const summary = sourceQuality
+      ? `近 7 天 · 统计自 ${formatTime(sourceQuality.startedAt)} 开始 · 最近统计 ${formatTime(sourceQuality.updatedAt)}`
+      : sourceQualityMessage;
+    $("#dialog-content").innerHTML =
+      "<p>来源连接状态与质量统计。新增量从开始统计后逐次积累，首轮只建立基线；日期均为北京时间。</p>" +
+      `<p id="source-quality-status" role="status">${escape(summary)}${sourceQualityRetry ? ' <button class="text-button" data-retry-quality>重试统计</button>' : ""}</p>` +
+      `<div class="source-controls"><label>分类 <select id="source-quality-category"><option value="all">全部</option>${[...new Set(state.data.sources.map((source) => source.category))].map((category) => `<option value="${escape(category)}"${sourceCategory === category ? " selected" : ""}>${escape(categoryNames[category] || category)}</option>`).join("")}</select></label>` +
+      `<label>排序 <select id="source-quality-sort">${[
+        ["default", "默认"],
+        ["new", "新增量最多"],
+        ["duplicate", "重复率最高"],
+        ["idle", "未新增最久"],
+      ]
+        .map(
+          ([value, label]) =>
+            `<option value="${value}"${sourceSort === value ? " selected" : ""}>${label}</option>`,
+        )
+        .join("")}</select></label>` +
+      `<label><input id="source-quality-attention" type="checkbox"${sourceAttention ? " checked" : ""}> 只看需关注</label></div>` +
+      `<p class="source-count">${sources.length} 个来源</p><div id="source-quality-list">` +
+      sources
+        .map((source) => {
+          const quality = metrics.get(source.id),
+            flags = sourceFlags(source, quality);
+          const rate =
+            quality?.duplicateRate == null
+              ? "—"
+              : `${Math.round(quality.duplicateRate * 100)}%`;
+          return (
+            `<div class="source-row" data-source-id="${escape(source.id)}"><div class="source-name"><a href="${escape(safeUrl(source.home))}" target="_blank" rel="noopener noreferrer">${escape(source.name)} ${icon("arrow-up-right")}</a><small>${source.latestAt ? "最近发布：" + escape(formatTime(source.latestAt)) : "本轮未取得有效资讯"}</small></div>` +
+            `<span class="source-status ${source.status === "ok" ? "" : "unavailable"}">${source.status === "ok" ? "● 本轮已连接" : "○ 暂不可用"}</span>` +
+            `<dl class="source-metrics"><div><dt>近7天新增</dt><dd>${quality ? quality.newCount + " 条" : "—"}</dd></div><div><dt>同标题重复率</dt><dd>${rate}</dd></div><div><dt>连续未新增</dt><dd>${quality?.noNewDays == null ? "—" : quality.noNewDays + " 天"}</dd></div></dl>` +
+            (flags.length
+              ? `<p class="source-flags">${flags.map(escape).join(" · ")}</p>`
+              : "") +
+            (quality
+              ? `<details class="source-history"><summary>已记录 ${quality.observedDays}/7 天 · 每日统计</summary><table><thead><tr><th scope="col">日期</th><th scope="col">新增</th><th scope="col">同标题</th><th scope="col">成功检查</th></tr></thead><tbody>${[
+                  ...quality.daily,
+                ]
+                  .reverse()
+                  .map(
+                    (day) =>
+                      `<tr><td>${escape(day.date.slice(5).replace("-", "/"))}</td><td>${day.newCount}</td><td>${day.duplicateCount}</td><td>${day.successes}/${day.checks}</td></tr>`,
+                  )
+                  .join("")}</tbody></table></details>`
+              : "") +
+            "</div>"
+          );
+        })
+        .join("") +
+      (sources.length
+        ? ""
+        : '<p class="source-empty">当前没有符合筛选条件的来源。</p>') +
+      '</div><details class="source-explanation"><summary>统计口径</summary><p>近7天包含今天和前6个自然日；不足7天时显示已有记录。新增为首次观察到的有效资讯，同一来源同日同标题的修订不再计数。重复率为新增条目中，与其他来源同日同标题的比例，Google 新闻末尾的发布方标签不参与比较；不同标题的同一事件不算入。</p><p>连续未新增按成功检查的连续观察时长计算，满24小时计1天；采集失败或检查间隔超过3小时后重新计时。重复率达到50%且至少新增20条、连续7天未新增或本轮采集失败时列入“需关注”。低频官方公告源可结合发布周期判断。</p><p>只展示标题、短摘要和原文链接。标注“聚合”的来源由 Google 新闻汇集报道。资讯归档保留最近30天、最多6000条；质量记录独立保存，不受资讯归档条数限制。</p></details>';
+  }
+  async function loadSourceQuality(token) {
+    const data = state.data,
+      meta = data?.sourceQuality;
+    if (
+      !meta ||
+      meta.schema !== 1 ||
+      !/^\/data\/source-quality\.[a-f0-9]{16}\.json$/.test(meta.path) ||
+      meta.updatedAt !== data.updatedAt
+    ) {
+      sourceQualityMessage = "质量统计将在下次自动更新后开始记录。";
+      renderSources();
+      return;
+    }
+    let quality;
+    try {
+      try {
+        const cached = JSON.parse(
+          localStorage.getItem(qualityStorage) || "null",
+        );
+        if (cached?.path === meta.path)
+          quality = validateSourceQuality(cached.data, meta);
+      } catch {}
+      if (!quality) {
+        quality = validateSourceQuality(
+          await requestJSON(meta.path, { cache: "no-cache" }, 10000),
+          meta,
+        );
+        try {
+          localStorage.setItem(
+            qualityStorage,
+            JSON.stringify({ path: meta.path, data: quality }),
+          );
+        } catch {}
+      }
+      if (token !== sourceDialogToken || !$("#info-dialog").open) return;
+      if (state.data !== data) {
+        showSources();
+        return;
+      }
+      sourceQuality = quality;
+      sourceQualityMessage = "";
+      sourceQualityRetry = false;
+    } catch {
+      if (token !== sourceDialogToken || !$("#info-dialog").open) return;
+      if (state.data !== data) {
+        showSources();
+        return;
+      }
+      sourceQualityMessage =
+        navigator.onLine === false
+          ? "当前离线，尚未保存本轮质量统计；联网后可重试。"
+          : "质量统计暂时未能加载，来源连接状态仍可查看。";
+      sourceQualityRetry = true;
+    }
+    renderSources();
+  }
+  function showSources() {
+    const token = ++sourceDialogToken;
+    $("#dialog-title").textContent = "资讯来源";
+    sourceQuality = null;
+    sourceQualityMessage = "正在读取质量统计…";
+    sourceQualityRetry = false;
+    renderSources();
+    $("#info-dialog").showModal();
+    if (state.data) loadSourceQuality(token);
+  }
+  $("#dialog-content").addEventListener("change", (event) => {
+    if (event.target.id === "source-quality-sort")
+      sourceSort = event.target.value;
+    else if (event.target.id === "source-quality-category")
+      sourceCategory = event.target.value;
+    else if (event.target.id === "source-quality-attention")
+      sourceAttention = event.target.checked;
+    else return;
+    renderSources();
+  });
+  $("#dialog-content").addEventListener("click", (event) => {
+    if (event.target.closest("[data-retry-quality]")) showSources();
+  });
   function showAbout() {
+    sourceDialogToken++;
     $("#dialog-title").textContent = "关于本站";
     $("#dialog-content").innerHTML =
       '<p>个人新闻订阅页，汇总综合新闻、杭州房市、科技、AI、模型发布、文娱和体育资讯，计划每小时检查更新。</p><h3>排序与分类</h3><p>新闻按来源标注的发布时间排列，AI 分类依据标题关键词及来源。模型栏目筛选模型发布、升级与开放消息，标题识别可能遗漏；普通产品功能更新与发布传闻不收录到该栏目。每日速览从不同分类与来源中选取最多 10 条，不代表热度排名。</p><h3>内容与收藏</h3><p>标题及短摘要来自对应资讯源，点击标题阅读原文。收藏仅保存在当前浏览器，不会跨设备同步。</p><p><a href="https://github.com/ZrBac/news/issues" target="_blank" rel="noopener noreferrer">问题反馈</a></p>';

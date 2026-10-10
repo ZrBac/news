@@ -43,6 +43,7 @@ const server = http.createServer(async (request, response) => {
     for (const name of [
       "indexed-news-browser.cjs",
       "news-loading-browser.cjs",
+      "source-quality-browser.cjs",
       "news-pages-browser.cjs",
       "pwa-browser.cjs",
       "guide-download-browser.cjs",

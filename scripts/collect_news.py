@@ -2,8 +2,10 @@
 """Collect public RSS metadata. Standard library only; never execute feed content."""
 import argparse
 import concurrent.futures
+import gzip
 import hashlib
 import html
+import io
 import json
 import re
 import sys
@@ -187,8 +189,16 @@ def fetch(url, max_bytes=5_000_000):
     request = urllib.request.Request(url, headers={'User-Agent': 'ZrBacNews/1.0 (+https://news.zacai.fun/)', 'Accept': 'application/rss+xml, application/xml, application/json, text/xml;q=0.9, */*;q=0.5'})
     with urllib.request.urlopen(request, timeout=25) as response:
         data = response.read(max_bytes + 1)
+        encoding = response.headers.get('Content-Encoding', '').strip().lower()
     if len(data) > max_bytes:
         raise ValueError('Response exceeds size limit')
+    # urllib does not decode compressed HTTP responses. Some feeds send gzip
+    # even without Accept-Encoding, and proxies occasionally omit the header.
+    if encoding in ('gzip', 'x-gzip') or data.startswith(b'\x1f\x8b'):
+        with gzip.GzipFile(fileobj=io.BytesIO(data)) as compressed:
+            data = compressed.read(max_bytes + 1)
+        if len(data) > max_bytes:
+            raise ValueError('Decompressed response exceeds size limit')
     return data
 
 

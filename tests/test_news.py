@@ -1,4 +1,6 @@
+import gzip
 import importlib.util
+import io
 import json
 import os
 import re
@@ -6,6 +8,7 @@ import subprocess
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -33,6 +36,28 @@ class FeedTests(unittest.TestCase):
         self.assertEqual(items[0]['excerpt'], '正文摘要')
         self.assertEqual(items[0]['url'], 'https://example.com/story')
         self.assertEqual(items[0]['category'], 'ai')
+
+    def test_fetch_decodes_gzip_feeds_with_or_without_encoding_header(self):
+        feed = self.feed()
+        for body, headers in ((feed, {}), (gzip.compress(feed), {'Content-Encoding': 'gzip'}),
+                              (gzip.compress(feed), {})):
+            with self.subTest(headers=headers, compressed=body != feed):
+                response = io.BytesIO(body)
+                response.headers = headers
+                with patch.object(collector.urllib.request, 'urlopen', return_value=response):
+                    decoded = collector.fetch('https://example.com/feed')
+                self.assertEqual(decoded, feed)
+                self.assertEqual(len(collector.parse_feed(decoded, self.source, self.now)), 1)
+
+    def test_fetch_limits_downloaded_and_decompressed_response_sizes(self):
+        for body, message in ((b'x' * 101, 'Response exceeds size limit'),
+                              (gzip.compress(b'x' * 10000), 'Decompressed response exceeds size limit')):
+            with self.subTest(message=message):
+                response = io.BytesIO(body)
+                response.headers = {}
+                with patch.object(collector.urllib.request, 'urlopen', return_value=response):
+                    with self.assertRaisesRegex(ValueError, message):
+                        collector.fetch('https://example.com/feed', max_bytes=100)
 
     def test_rejects_unsafe_links_undated_old_and_future_articles(self):
         self.assertFalse(collector.parse_feed(self.feed(link='javascript:alert(1)'), self.source, self.now))

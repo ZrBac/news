@@ -205,6 +205,17 @@
     if (mode === "saved") render();
   });
   window.addEventListener("hashchange", route);
+  window.addEventListener("reading-change", () => {
+    try {
+      const items = JSON.parse(
+        localStorage.getItem("zrbac-guide-saved") || "[]",
+      );
+      if (Array.isArray(items))
+        saved = new Set(items.filter((id) => /^\d+-\d+$/.test(id)));
+    } catch {}
+    counts();
+    render();
+  });
   window.addEventListener("online", () => {
     if (!book || book.partial) window.guideInitialLoad = loadIndex();
   });

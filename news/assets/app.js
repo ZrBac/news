@@ -2,6 +2,12 @@
   "use strict";
   const $ = (selector) => document.querySelector(selector);
   const $$ = (selector) => [...document.querySelectorAll(selector)];
+  new MutationObserver(() => {
+    $("#update-status").hidden = !$("#load-notice").hidden;
+  }).observe($("#load-notice"), {
+    attributes: true,
+    attributeFilter: ["hidden"],
+  });
   const paths = {
     search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/>',
     moon: '<path d="M20.9 13a9 9 0 0 1-10-10 9 9 0 1 0 10 10Z"/>',
@@ -176,11 +182,13 @@
   function articleCard(article, index) {
     const saved = state.saved.has(article.id);
     const source = sourceFor(article);
-    return `<article class="article"><div class="article-body">
+    const read = window.NewsPersonal?.isRead(article.id);
+    return `<article class="article${read ? " read" : ""}" data-article-id="${escape(article.id)}"><div class="article-body">
       ${state.view === "brief" ? `<span class="article-number">${String(index + 1).padStart(2, "0")}</span>` : ""}
       <h3><a href="${escape(safeUrl(article.url))}" target="_blank" rel="noopener noreferrer">${escape(article.title)}</a></h3>
       ${article.excerpt ? `<p>${escape(article.excerpt)}</p>` : ""}
-      <div class="article-meta"><span>${escape(source.name)}</span><time datetime="${escape(article.publishedAt)}" title="北京时间 ${escape(formatTime(article.publishedAt))}">${escape(relativeTime(article.publishedAt))}</time><span class="category-label ${escape(article.category)}">${categoryNames[article.category]}</span></div>
+      <div class="article-meta"><span>${escape(source.name)}</span><time datetime="${escape(article.publishedAt)}" title="北京时间 ${escape(formatTime(article.publishedAt))}">${escape(relativeTime(article.publishedAt))}</time><span class="category-label ${escape(article.category)}">${categoryNames[article.category]}</span>${read ? '<span class="read-label">已读</span>' : ""}</div>
+      ${article.reports?.length ? `<details class="article-reports"><summary>其他 ${article.reports.length} 篇报道</summary>${article.reports.map((a) => `<a href="${escape(safeUrl(a.url))}" target="_blank" rel="noopener noreferrer">${escape(sourceFor(a).name)} · ${escape(a.title)}</a>`).join("")}</details>` : ""}
       </div><button class="save-button${saved ? " saved" : ""}" data-save="${escape(article.id)}" aria-label="${saved ? "取消收藏" : "收藏"}：${escape(article.title)}" aria-pressed="${saved}" title="${saved ? "取消收藏" : "收藏文章"}">${icon("bookmark")}</button></article>`;
   }
   function selectBrief(articles) {
@@ -219,10 +227,7 @@
     return selected;
   }
   function hasSectionSnapshot(data = state.data) {
-    return (
-      (state.view === "models" && Array.isArray(data?.modelReleases)) ||
-      (state.view === "gaming" && Array.isArray(data?.gamingArticles))
-    );
+    return state.view === "models" && Array.isArray(data?.modelReleases);
   }
   function matchingArticles() {
     let articles =
@@ -232,9 +237,16 @@
           )
         : state.view === "models" && Array.isArray(state.data.modelReleases)
           ? state.data.modelReleases
-          : state.view === "gaming" && Array.isArray(state.data.gamingArticles)
-            ? state.data.gamingArticles
-            : state.data.articles;
+          : state.data.articles;
+    if (state.view === "gaming")
+      articles = [
+        ...new Map(
+          [...articles, ...(state.data.gamingArticles || [])].map((article) => [
+            article.id,
+            article,
+          ]),
+        ).values(),
+      ].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
     if (state.view === "brief")
       articles = [
         ...new Map(
@@ -265,7 +277,23 @@
         ),
       );
     }
-    return state.view === "brief" ? selectBrief(articles) : articles;
+    if (window.NewsPersonal?.onlyUnread())
+      articles = articles.filter((a) => !window.NewsPersonal.isRead(a.id));
+    if (state.view === "brief") return selectBrief(articles);
+    if (state.view === "saved") return articles;
+    const groups = new Map();
+    for (const article of articles) {
+      const title = /^https?:\/\/news\.google\.com\//.test(article.url)
+        ? article.title.replace(/ - [^-]+$/, "")
+        : article.title;
+      const key = title
+        .replace(/[\s“”‘’"'《》【】「」。，、：:!?！？]/gu, "")
+        .toLowerCase();
+      const existing = groups.get(key);
+      if (existing) existing.reports.push(article);
+      else groups.set(key, { ...article, reports: [] });
+    }
+    return [...groups.values()];
   }
   function housingMarket(data) {
     const market = data.market || {};
@@ -527,10 +555,6 @@
   }
 
   function render() {
-    if (!state.data) return;
-    renderHousingPrices();
-    renderExchangeRates();
-    const articles = matchingArticles();
     const titles = {
       all: "最新资讯",
       general: "综合热点",
@@ -546,19 +570,6 @@
       saved: "我的收藏",
     };
     $("#section-title").textContent = titles[state.view] || titles.all;
-    const partial =
-      hasArchive() &&
-      state.view !== "saved" &&
-      !hasBriefSnapshot() &&
-      !hasSectionSnapshot();
-    $("#result-count").textContent =
-      partial && state.view !== "brief"
-        ? `已加载 ${articles.length} 条资讯`
-        : `${articles.length} 条资讯`;
-    if (state.view === "housing")
-      $("#result-count").textContent = "成交数据 · 楼盘动态";
-    if (state.view === "exchange")
-      $("#result-count").textContent = "美元 · 日元 · 泰铢";
     $$("[data-view]").forEach((el) => {
       const active =
         el.dataset.view === state.view ||
@@ -586,7 +597,7 @@
     ].includes(state.view);
     if (state.view === "gaming")
       note.textContent =
-        "新游发布、版本更新、主机与游戏行业动态。展示近30天最新60条，点击标题查看原报道。";
+        "新游发布、版本更新、主机与游戏行业动态。可按来源、日期回看已收录报道。";
     if (state.view === "housing")
       note.textContent =
         "关注杭州新房、二手房成交、价格变化、购房政策与土拍。按报道发布时间排序，点击标题查看原报道及数据口径。";
@@ -612,6 +623,24 @@
     $("#date-trigger span:last-child").textContent = state.date
       ? state.date.slice(5).replace("-", "/")
       : "日期";
+    if (!state.data) return;
+    renderSourceFilter();
+    renderHousingPrices();
+    renderExchangeRates();
+    const articles = matchingArticles();
+    const partial =
+      hasArchive() &&
+      state.view !== "saved" &&
+      !hasBriefSnapshot() &&
+      !hasSectionSnapshot();
+    $("#result-count").textContent =
+      partial && state.view !== "brief"
+        ? `已加载 ${articles.length} 条资讯`
+        : `${articles.length} 条资讯`;
+    if (state.view === "housing")
+      $("#result-count").textContent = "成交数据 · 楼盘动态";
+    if (state.view === "exchange")
+      $("#result-count").textContent = "美元 · 日元 · 泰铢";
     $("#articles").setAttribute("aria-busy", "false");
     if (articles.length) {
       $("#articles").innerHTML = articles
@@ -638,6 +667,8 @@
       render();
       return;
     }
+    clearTimeout(searchTimer);
+    searchTimer = null;
     state.view = [
       "all",
       "general",
@@ -712,13 +743,6 @@
           `<a href="${escape(safeUrl(s.home))}" target="_blank" rel="noopener noreferrer">${escape(s.name)}</a>`,
       )
       .join("");
-    $("#source-filter").innerHTML =
-      '<option value="all">全部来源</option>' +
-      state.data.sources
-        .map(
-          (s) => `<option value="${escape(s.id)}">${escape(s.name)}</option>`,
-        )
-        .join("");
     const ok = state.data.sources.filter((s) => s.status === "ok").length;
     const stale =
       Date.now() - Date.parse(state.data.updatedAt) > 2 * 3600 * 1000;
@@ -736,6 +760,39 @@
         ? dayOf(state.data.archive.oldest)
         : dates[0];
     $("#date-filter").max = dayOf(Date.now());
+  }
+  function renderSourceFilter() {
+    const catalog = state.data.archive?.categories;
+    const ids =
+      state.view === "saved"
+        ? new Set(
+            [...state.saved.values()]
+              .filter(
+                (a) => state.filter === "all" || a.category === state.filter,
+              )
+              .map((a) => a.sourceId),
+          )
+        : catalog && state.filter !== "all"
+          ? new Set(catalog[state.filter] || [])
+          : null;
+    if (ids && state.filter === "models")
+      (state.data.modelReleases || []).forEach((a) => ids.add(a.sourceId));
+    const sources = state.data.sources.filter(
+      (source) => !ids || ids.has(source.id),
+    );
+    if (!sources.some((source) => source.id === state.source))
+      state.source = "all";
+    const markup =
+      '<option value="all">全部来源</option>' +
+      sources
+        .map(
+          (source) =>
+            `<option value="${escape(source.id)}">${escape(source.name)}</option>`,
+        )
+        .join("");
+    if ($("#source-filter").innerHTML !== markup)
+      $("#source-filter").innerHTML = markup;
+    $("#source-filter").value = state.source;
   }
   function showSources() {
     $("#dialog-title").textContent = "资讯来源";
@@ -805,11 +862,17 @@
       focusSearch();
     }
   });
+  let searchTimer;
   $("#search").addEventListener("input", (e) => {
     state.query = e.target.value.trim();
     state.limit = 12;
+    clearTimeout(searchTimer);
     render();
-    ensureArticles();
+    searchTimer = setTimeout(() => {
+      searchTimer = null;
+      render();
+      ensureArticles();
+    }, 250);
   });
   $("#source-filter").addEventListener("change", (e) => {
     state.source = e.target.value;
@@ -857,6 +920,20 @@
     );
   });
   document.addEventListener("click", (e) => {
+    const readLink = e.target.closest(".article h3 a, .article-reports a");
+    if (readLink) {
+      const card = readLink.closest(".article");
+      window.NewsPersonal?.markRead(card.dataset.articleId);
+      card.classList.add("read");
+      if (!card.querySelector(".read-label"))
+        card
+          .querySelector(".article-meta")
+          .insertAdjacentHTML(
+            "beforeend",
+            '<span class="read-label">已读</span>',
+          );
+      if (window.NewsPersonal?.onlyUnread()) setTimeout(render, 0);
+    }
     if (e.target.closest("[data-housing-jump]")) {
       $("#housing-news").scrollIntoView({ behavior: "smooth", block: "start" });
       $("#housing-news-title").focus({ preventScroll: true });
@@ -949,6 +1026,11 @@
     }
   });
   loadSaved();
+  window.addEventListener("reading-change", () => {
+    loadSaved();
+    render();
+    ensureArticles();
+  });
   const cacheKey = "zrbac-news-cache-v1";
   let archiveJob = null;
   let loading = false;
@@ -982,6 +1064,14 @@
         name: "DataError",
       });
     data.articles = data.articles.filter(validArticle);
+    if (
+      data.archive?.lookup &&
+      (!window.NewsArchive.available(data) ||
+        !window.NewsArchive.validMetadata(data))
+    )
+      throw Object.assign(new Error("Invalid lookup index"), {
+        name: "DataError",
+      });
     if (Array.isArray(data.modelReleases))
       data.modelReleases = data.modelReleases
         .filter((a) => validArticle(a) && a.category === "models")
@@ -1040,6 +1130,10 @@
     }
   }
   function hasArchive(data = state.data) {
+    if (window.NewsArchive.available(data)) {
+      const remaining = window.NewsArchive.remaining(data, state);
+      return remaining === null || remaining.length > 0;
+    }
     return !!data?.archive && data.archive.loaded < data.archive.pages.length;
   }
   function hasBriefSnapshot(data = state.data) {
@@ -1056,7 +1150,18 @@
   }
   function persistData(data) {
     try {
-      localStorage.setItem(cacheKey, JSON.stringify(data));
+      localStorage.setItem(
+        cacheKey,
+        JSON.stringify(
+          window.NewsArchive.available(data)
+            ? {
+                ...data,
+                articles: data.articles.slice(0, 150),
+                archive: { ...data.archive, loaded: 0 },
+              }
+            : data,
+        ),
+      );
     } catch {
       // A large archive can exceed localStorage; keep the small current-news page.
       if (data.archive)
@@ -1075,6 +1180,7 @@
   function ensureArticles(fresh = false) {
     if (
       loading ||
+      searchTimer ||
       hasBriefSnapshot() ||
       ["saved", "housing", "exchange"].includes(state.view) ||
       hasSectionSnapshot() ||
@@ -1084,25 +1190,85 @@
     if (archiveJob?.data === state.data) return archiveJob.promise;
     const data = state.data;
     const needed = () => (state.view === "brief" ? 10 : state.limit + 1);
-    if (matchingArticles().length >= needed()) return;
+    const criteriaKey = () =>
+      JSON.stringify([
+        state.view,
+        state.filter,
+        state.query,
+        state.source,
+        state.date,
+        state.limit,
+      ]);
+    const needsArticles = () => {
+      const articles = matchingArticles();
+      if (articles.length < needed()) return true;
+      // The gaming snapshot already contains the newest 60 game stories.
+      if (
+        state.view === "gaming" &&
+        !state.query &&
+        state.source === "all" &&
+        !state.date &&
+        needed() <= 60
+      )
+        return false;
+      const next = window.NewsArchive.available(data)
+        ? window.NewsArchive.newestRemaining(data, state)
+        : null;
+      return (
+        next &&
+        Date.parse(next) > Date.parse(articles[needed() - 1].publishedAt)
+      );
+    };
+    if (!needsArticles()) return;
     const notice = $("#archive-notice");
-    const job = { data };
+    const job = { data, criteria: criteriaKey() };
     archiveJob = job;
     job.promise = (async () => {
       let failed = false;
       try {
         while (
           state.data === data &&
+          !searchTimer &&
           !hasBriefSnapshot(data) &&
           !["saved", "housing", "exchange"].includes(state.view) &&
           !hasSectionSnapshot(data) &&
           hasArchive(data) &&
-          matchingArticles().length < needed()
+          needsArticles()
         ) {
-          if (!navigator.onLine) throw new Error("Offline");
+          job.criteria = criteriaKey();
           notice.hidden = false;
           notice.textContent = "正在查找较早资讯…";
           $("#load-more").disabled = true;
+          if (window.NewsArchive.available(data)) {
+            await window.NewsArchive.prepare(data, state, requestJSON, fresh);
+            if (state.data !== data) return;
+            const remaining = window.NewsArchive.remaining(data, state);
+            if (remaining === null) continue;
+            job.criteria = criteriaKey();
+            const pages = remaining.slice(0, 3);
+            if (!pages.length) break;
+            const articles = await Promise.all(
+              pages.map((number) =>
+                window.NewsArchive.page(
+                  data,
+                  number,
+                  requestJSON,
+                  validArticle,
+                  fresh,
+                ),
+              ),
+            );
+            if (state.data !== data) return;
+            window.NewsArchive.mark(data, pages);
+            data.articles = [
+              ...new Map(
+                [...data.articles, ...articles.flat()].map((a) => [a.id, a]),
+              ).values(),
+            ].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+            render();
+            continue;
+          }
+          if (!navigator.onLine) throw new Error("Offline");
           // Commit complete batches in order, so the loaded list stays a continuous
           // newest-first prefix even when a request fails or filters change.
           const paths = data.archive.pages.slice(
@@ -1142,8 +1308,12 @@
       } finally {
         if (archiveJob === job) {
           archiveJob = null;
-          if (!failed) notice.hidden = true;
+          const changed = job.criteria !== criteriaKey();
+          if (!failed || changed) notice.hidden = true;
+          if (state.data === data && window.NewsArchive.available(data))
+            window.NewsArchive.prune(data);
           render();
+          if (changed) setTimeout(() => ensureArticles(), 0);
         }
       }
     })();
@@ -1359,5 +1529,6 @@
       $("#load-notice").hidden = false;
     }
   });
+  route();
   window.newsInitialLoad = load(false, true);
 })();

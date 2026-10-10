@@ -9,6 +9,14 @@ const source = fs
     JSON.stringify(["/", "/games/", "/guide/", "/assets/news/compat.test.js"]),
   )
   .replace(
+    "__NEWS_SHELL__",
+    JSON.stringify(["/", "/assets/news/compat.test.js"]),
+  )
+  .replace(
+    "__GAMES_SHELL__",
+    JSON.stringify(["/", "/games/", "/assets/news/compat.test.js"]),
+  )
+  .replace(
     "__GUIDE_SHELL__",
     JSON.stringify(["/", "/guide/", "/assets/news/compat.test.js"]),
   )

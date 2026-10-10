@@ -125,7 +125,7 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
         /casual-games-core\./.test(request.url),
       );
       await cache.delete("/games/");
-      await cache.delete(game);
+      if (game) await cache.delete(game);
       return new Promise((resolve) => {
         const channel = new MessageChannel();
         channel.port1.onmessage = (event) => {

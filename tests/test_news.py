@@ -80,6 +80,24 @@ class FeedTests(unittest.TestCase):
         self.assertLessEqual(len(item['excerpt']), 90)
         self.assertEqual(item['sourceId'], 'example')
 
+    def test_busy_sources_do_not_displace_older_low_volume_sources_and_categories(self):
+        base = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        allowed = {key: {'id': key, 'category': category} for key, category in
+                   (('busy', 'sports'), ('quiet', 'sports'), ('games', 'gaming'))}
+        busy = [dict(base, title='比赛新闻' + str(i), category='sports', sourceId='busy',
+                     url=f'https://example.com/busy/{i}', publishedAt=collector.iso(self.now)) for i in range(6500)]
+        quiet = [dict(base, title='赛场记录' + str(i), category='sports', sourceId='quiet',
+                      url=f'https://example.com/quiet/{i}', publishedAt=collector.iso(self.now - timedelta(days=28))) for i in range(5)]
+        games = [dict(base, title='游戏发布' + str(i), category='gaming', sourceId='games',
+                      url=f'https://example.com/games/{i}', publishedAt=collector.iso(self.now - timedelta(days=29))) for i in range(20)]
+        archive = collector.merge_articles(busy + quiet + games, [], self.now, allowed)
+        self.assertEqual(len(archive), 6000)
+        self.assertEqual(len([a for a in archive if a['sourceId'] == 'quiet']), 5)
+        self.assertEqual(len([a for a in archive if a['category'] == 'gaming']), 20)
+        self.assertEqual([a['publishedAt'] for a in archive],
+                         sorted([a['publishedAt'] for a in archive], reverse=True))
+        self.assertFalse(collector.merge_articles(archive, [], self.now + timedelta(days=31), allowed))
+
     def test_stable_id_and_unique_titles(self):
         item = collector.parse_feed(self.feed(), self.source, self.now)[0]
         same_title = dict(item, url='https://example.com/duplicate')
@@ -145,7 +163,7 @@ class FeedTests(unittest.TestCase):
                 for i in range(6000)]
         archive = collector.merge_articles([housing] + busy, [], self.now, allowed)
         self.assertEqual(len(archive), 6000)
-        self.assertFalse(any(a['category'] == 'housing' for a in archive))
+        self.assertTrue(any(a['category'] == 'housing' for a in archive))
         retained = collector.recent_housing_articles([housing] + busy, [], self.now, allowed)
         self.assertEqual(retained, [housing])
         self.assertEqual(collector.recent_housing_articles(retained, [], self.now, allowed), retained)
@@ -189,7 +207,7 @@ class FeedTests(unittest.TestCase):
                      publishedAt='2026-09-23T03:00:00Z', sourceId='source' + str(i)) for i in range(6001)]
         allowed = {a['sourceId'] for a in busy} | {'example'}
         shared = collector.merge_articles([release], busy, self.now, allowed)
-        self.assertFalse(any(a['sourceId'] == 'example' for a in shared))
+        self.assertTrue(any(a['sourceId'] == 'example' for a in shared))
         models = collector.recent_model_releases([release], busy, self.now, allowed)
         self.assertEqual(len(models), 1)
         self.assertEqual(models[0]['category'], 'models')
@@ -327,6 +345,7 @@ class BuildTests(unittest.TestCase):
         builder = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(builder)
         articles = [{'id': str(i), 'publishedAt': '2026-10-08T04:00:00Z',
+                     'category': 'tech', 'sourceId': 'example',
                      'title': '测试资讯' + str(i)} for i in range(701)]
         data = {'updatedAt': '2026-10-08T05:00:00Z', 'articles': articles, 'sources': []}
         with tempfile.TemporaryDirectory() as tmp:
@@ -342,6 +361,12 @@ class BuildTests(unittest.TestCase):
                 self.assertLessEqual(len(page['articles']), 150)
                 combined.extend(page['articles'])
             self.assertEqual(combined, articles)
+            index = json.loads((output / latest['archive']['lookup'].lstrip('/')).read_text())
+            self.assertEqual(len(index['rows']), len(articles))
+            self.assertEqual(latest['archive']['categories'], {'tech': ['example']})
+            self.assertEqual(index['rows'][-1][2], '2026-10-08')
+            last_page = index['pages'][index['rows'][-1][4]]
+            self.assertIn(articles[-1], json.loads((output / last_page.lstrip('/')).read_text())['articles'])
             data['updatedAt'] = '2026-10-08T06:00:00Z'
             builder.build_news_pages(data, output)
             self.assertEqual(json.loads((output / 'data/latest.json').read_text())['archive'],

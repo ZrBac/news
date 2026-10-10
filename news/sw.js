@@ -1,6 +1,8 @@
 /* Build replaces these constants; news-only publications keep the same shell version. */
 const CACHE = "news-shell-__BUILD_ID__";
 const SHELL = __SHELL_FILES__;
+const NEWS_SHELL = __NEWS_SHELL__;
+const GAMES_SHELL = __GAMES_SHELL__;
 const GUIDE_SHELL = __GUIDE_SHELL__;
 const GUIDE_FILES = __GUIDE_FILES__;
 const GUIDE_REVISION = __GUIDE_REVISION__;
@@ -125,10 +127,31 @@ self.addEventListener("install", (event) => {
   event.waitUntil(
     (async () => {
       const cache = await caches.open(CACHE);
-      const result = await stageMissing(cache, SHELL, null, true);
+      // Keep previously prepared entrances usable across an update. First-time
+      // news readers download only the news shell.
+      const assets = new Set(NEWS_SHELL),
+        pages = new Set(["/"]);
+      for (const name of (await caches.keys()).filter(
+        (name) => name.startsWith("news-shell-") && name !== CACHE,
+      )) {
+        const previous = await caches.open(name);
+        for (const [page, group] of [
+          ["/games/", GAMES_SHELL],
+          ["/guide/", GUIDE_SHELL],
+        ])
+          if (await previous.match(page)) {
+            pages.add(page);
+            group.forEach((path) => assets.add(path));
+          }
+      }
+      const result = await stageMissing(cache, [...assets], null, true);
       if (result.failed) throw new Error("Incomplete offline download");
       try {
-        await validateShell((path) => cache.match(path));
+        await validateShell(
+          (path) => cache.match(path),
+          [...pages],
+          [...assets],
+        );
       } catch (error) {
         await caches.delete(CACHE);
         throw error;
@@ -157,12 +180,12 @@ async function repairShell(guide = false, report) {
   }
   repairing = (async () => {
     const cache = await caches.open(CACHE);
-    const assets = guide ? GUIDE_SHELL : SHELL;
+    const assets = guide ? GUIDE_SHELL : GAMES_SHELL;
     const paths = guide ? [...assets, ...GUIDE_FILES] : assets;
     const { staged, failed } = await stageMissing(cache, paths, report);
     await validateShell(
       (path) => staged.get(path) || cache.match(path),
-      guide ? ["/", "/guide/"] : undefined,
+      guide ? ["/", "/guide/"] : ["/", "/games/"],
       assets,
     );
     for (const [path, response] of staged) await cache.put(path, response);
@@ -222,7 +245,7 @@ self.addEventListener("message", (event) => {
           missing = [];
         // The Home Screen start URL is '/', even when installation starts in /games/.
         // Check the entire launch shell, not just assets of the currently open page.
-        const required = guide ? [...GUIDE_SHELL, ...GUIDE_FILES] : SHELL;
+        const required = guide ? [...GUIDE_SHELL, ...GUIDE_FILES] : GAMES_SHELL;
         for (const path of required)
           if (!(await cache.match(path))) missing.push(path);
         event.ports[0].postMessage({

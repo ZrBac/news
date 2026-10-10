@@ -354,7 +354,35 @@ def merge_articles(previous, incoming, now, allowed_sources):
         if key not in seen:
             seen.add(key)
             result.append(article)
-    return result[:6000]
+    if len(result) <= 6000:
+        return result
+    # Reserve part of the archive for every category and distribute that reserve
+    # among its sources. Unused places go to the newest remaining stories.
+    protected = set()
+    for category in ('general', 'tech', 'ai', 'models', 'entertainment', 'gaming', 'sports', 'housing'):
+        pool = [article for article in result if article['category'] == category]
+        if not pool:
+            continue
+        budget = min(750, len(pool))
+        share = max(1, budget // len({article['sourceId'] for article in pool}))
+        chosen, counts = [], {}
+        for article in pool:
+            source = article['sourceId']
+            if counts.get(source, 0) < share and len(chosen) < budget:
+                chosen.append(article)
+                counts[source] = counts.get(source, 0) + 1
+        selected = {article['id'] for article in chosen}
+        for article in pool:
+            if len(selected) >= budget:
+                break
+            selected.add(article['id'])
+        protected.update(selected)
+    selected = set(protected)
+    for article in result:
+        if len(selected) >= 6000:
+            break
+        selected.add(article['id'])
+    return [article for article in result if article['id'] in selected]
 
 
 def recent_model_releases(previous, incoming, now, allowed_sources):

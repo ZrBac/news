@@ -150,7 +150,7 @@
 }
 .entry-summary {
   color: var(--secondary);
-  font-size: 14px;
+  font-size: calc(14px * var(--reading-scale));
   line-height: 1.85;
   margin: 10px 0;
 }
@@ -163,7 +163,7 @@
 .entry-body,
 .chapter-intro > div {
   line-height: 1.95;
-  font-size: 14px;
+  font-size: calc(14px * var(--reading-scale));
   overflow-wrap: anywhere;
   word-break: break-word;
 }

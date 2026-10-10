@@ -27,6 +27,15 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       await route.fulfill({ json: original });
     });
     await page.goto(base, { waitUntil: "domcontentloaded" });
+    assert.equal(await page.locator(".skeleton").count(), 12);
+    const initialListTop = await page
+      .locator("#articles")
+      .evaluate((el) => el.getBoundingClientRect().top);
+    assert(
+      (await page
+        .locator(".footer")
+        .evaluate((el) => el.getBoundingClientRect().top)) > 844,
+    );
     assert.equal(
       await page.locator("#offline-tools, #offline-status").count(),
       0,
@@ -40,8 +49,32 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     resolveNews();
     await page.locator(".article").first().waitFor();
+    const loadedListTop = await page
+      .locator("#articles")
+      .evaluate((el) => el.getBoundingClientRect().top);
+    assert(
+      Math.abs(initialListTop - loadedListTop) < 2,
+      "news controls must reserve their first-load space",
+    );
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+    const firstCache = await page.evaluate(async () => {
+      const name = (await caches.keys()).find((name) =>
+        name.startsWith("news-shell-"),
+      );
+      return (await (await caches.open(name)).keys()).map(
+        (request) => new URL(request.url).pathname,
+      );
+    });
+    assert(
+      !firstCache.some(
+        (path) =>
+          path === "/guide/" ||
+          path === "/games/" ||
+          /guide-index|games-core/.test(path),
+      ),
+      "news-only visitors must not pre-download guide or game resources",
+    );
     await page.unroute("**/data/latest.json*");
     let fullDownloads = 0;
     page.on("request", (r) => {

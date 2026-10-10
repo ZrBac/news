@@ -12,6 +12,12 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const latest = await (
       await page.request.get(base + "/data/latest.json")
     ).json();
+    // Installed older editions must keep working during the rollout.
+    delete latest.archive.lookup;
+    delete latest.archive.categories;
+    await page.route("**/data/latest.json*", (route) =>
+      route.fulfill({ json: latest }),
+    );
     assert(full.articles.length > 600);
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));

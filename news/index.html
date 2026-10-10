@@ -18,6 +18,22 @@
     <meta name="viewport" content="width=device-width,initial-scale=1" />
     <meta name="color-scheme" content="light dark" />
     <meta name="theme-color" content="#ffffff" />
+    <script>
+      try {
+        const theme =
+          localStorage.getItem("zrbac-news-theme") === "dark"
+            ? "dark"
+            : "light";
+        document.documentElement.dataset.theme = theme;
+        document.querySelector('meta[name="theme-color"]').content =
+          theme === "dark" ? "#181818" : "#ffffff";
+        const size = JSON.parse(
+          localStorage.getItem("zrbac-reading-preferences-v1") || "{}",
+        )?.size;
+        if (["large", "larger"].includes(size))
+          document.documentElement.dataset.readingSize = size;
+      } catch {}
+    </script>
     <meta
       name="news-refresh-endpoint"
       content="https://zacai.fun/api/news-refresh"
@@ -46,6 +62,8 @@
     <title>资讯 · 综合热点与 AI 科技资讯</title>
     <link rel="stylesheet" href="/assets/news/compat.css" />
     <script src="/assets/news/compat.js" defer></script>
+    <script src="/assets/news/personal.js" defer></script>
+    <script src="/assets/news/archive.js" defer></script>
     <script src="/assets/news/exchange-core.js" defer></script>
     <script src="/assets/news/app.js" defer></script>
     <script src="/assets/news/pwa.js" defer></script>
@@ -79,7 +97,10 @@
     <main class="page">
       <div class="update-bar">
         <span id="edition-date">资讯更新</span>
-        <span id="update-status" role="status">正在加载…</span>
+        <div class="connection-status">
+          <span id="update-status" role="status">正在加载…</span
+          ><span id="load-notice" role="status" hidden></span>
+        </div>
         <button id="refresh-news" title="请求抓取并发布最新新闻">
           刷新资讯
         </button>
@@ -164,7 +185,7 @@
               <span data-icon="calendar"></span><span>日期</span>
             </button>
           </div>
-          <div id="date-panel" class="date-panel" hidden>
+          <div id="date-panel" class="date-panel">
             <label for="date-filter">按发布日期查看（北京时间）</label
             ><input type="date" id="date-filter" /><button
               id="clear-date"
@@ -173,8 +194,36 @@
               查看全部日期
             </button>
           </div>
-          <p id="view-note" class="view-note" hidden></p>
-          <p id="load-notice" class="view-note" role="status" hidden></p>
+          <details class="reading-options">
+            <summary>阅读设置</summary>
+            <div class="reading-controls">
+              <label
+                >字号
+                <select id="reading-size">
+                  <option value="normal">标准</option>
+                  <option value="large">较大</option>
+                  <option value="larger">大号</option>
+                </select></label
+              >
+              <label><input id="only-unread" type="checkbox" /> 只看未读</label>
+              <button id="export-bookmarks" class="text-button">
+                导出收藏
+              </button>
+              <button id="import-bookmarks" class="text-button">
+                导入收藏
+              </button>
+              <input
+                id="bookmarks-file"
+                type="file"
+                accept="application/json,.json"
+                hidden
+              />
+            </div>
+            <p id="reading-status" class="reading-status" role="status"></p>
+          </details>
+          <p id="view-note" class="view-note">
+            按不同分类和来源选取当天最多10条消息，可切换日期回看。
+          </p>
           <p id="refresh-notice" class="view-note" role="status" hidden></p>
           <p id="pwa-update" class="pwa-update" role="status" hidden>
             网站有新版本。<button id="apply-update" class="text-button">
@@ -193,10 +242,8 @@
             aria-live="polite"
             aria-busy="true"
           >
-            <div class="loading-state">
-              <span class="loading-ring"></span>
-              <p>正在加载资讯…</p>
-            </div>
+            <p class="sr-only">正在加载资讯…</p>
+            __NEWS_SKELETON__
           </div>
           <button id="load-more" class="load-more" hidden>
             加载更多 <span data-icon="arrow-down"></span>

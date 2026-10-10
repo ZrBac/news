@@ -91,6 +91,42 @@ def build_news_pages(data, output):
         name = hashlib.sha256(body).hexdigest()[:16] + '.json'
         (folder / name).write_bytes(body)
         pages.append('/data/archive/' + name)
+    # The legacy export stays chronological. New readers use a compact lookup
+    # and category chunks, fetching only the pages containing matching stories.
+    lookup_pages, rows, categories, locations, shards = [], [], {}, {}, []
+    def row(article, page):
+        day = datetime.fromisoformat(article['publishedAt'].replace('Z', '+00:00')).astimezone(
+            timezone(timedelta(hours=8))).date().isoformat()
+        source = article.get('sourceId', '')
+        categories.setdefault(article['category'], set()).add(source)
+        return [source, article['category'], day,
+                (article['title'] + ' ' + article.get('excerpt', '')).lower(), page]
+    rows.extend(row(article, -1) for article in articles[:size])
+    for category in dict.fromkeys(article['category'] for article in articles):
+        pool = [article for article in articles[size:] if article['category'] == category]
+        for offset in range(0, len(pool), 100):
+            batch = pool[offset:offset + 100]
+            body = json.dumps({'articles': batch}, ensure_ascii=False, separators=(',', ':')).encode()
+            name = hashlib.sha256(body).hexdigest()[:16] + '.json'
+            (folder / name).write_bytes(body)
+            page = len(lookup_pages)
+            lookup_pages.append('/data/archive/' + name)
+            shards.append({'path': lookup_pages[-1], 'category': category,
+                           'sources': sorted({article.get('sourceId', '') for article in batch}),
+                           'days': sorted({row(article, page)[2] for article in batch}),
+                           'newest': batch[0]['publishedAt']})
+            for article in batch:
+                locations[article['id']] = page
+    rows.extend(row(article, locations[article['id']]) for article in articles[size:])
+    def write_lookup(selected):
+        lookup = json.dumps({'schema': 1, 'pages': lookup_pages, 'rows': selected},
+                            ensure_ascii=False, separators=(',', ':')).encode()
+        path = '/data/archive/index.' + hashlib.sha256(lookup).hexdigest()[:16] + '.json'
+        (output / path.lstrip('/')).write_bytes(lookup)
+        return path
+    lookup_path = write_lookup(rows)
+    indexes = {category: write_lookup([row for row in rows if row[1] == category])
+               for category in categories}
     # Model releases are less frequent than general news. Include a compact
     # reading list so opening this section never scans the news archive.
     releases, seen = [], set()
@@ -150,6 +186,9 @@ def build_news_pages(data, output):
               'housingArticles': housing,
               'briefArticles': brief_articles, 'briefDays': brief_days,
               'archive': {'pages': pages, 'loaded': 0, 'total': len(articles),
+                          'lookup': lookup_path,
+                          'indexes': indexes, 'shards': shards,
+                          'categories': {key: sorted(value) for key, value in categories.items()},
                           'oldest': articles[-1]['publishedAt'] if articles else None}}
     (output / 'data/latest.json').write_text(
         json.dumps(latest, ensure_ascii=False, separators=(',', ':')) + '\n')
@@ -181,6 +220,11 @@ def main():
     (output / f'assets/news/guide-book.{digest}.json').write_bytes(old_book)
     # New HTML always requests the matching assets, even with cached older releases.
     homepage = (output / 'index.html').read_text()
+    skeleton = ('<div class="article-placeholder skeleton" aria-hidden="true"><div class="article-body">'
+                '<span class="skeleton-line short"></span><span class="skeleton-line title"></span>'
+                '<span class="skeleton-line title"></span><span class="skeleton-line"></span>'
+                '<span class="skeleton-line short"></span></div></div>')
+    homepage = homepage.replace('__NEWS_SKELETON__', skeleton * 12)
     homepage = homepage.replace('content="https://zacai.fun/api/news-refresh"',
                                 f'content="{html_escape(refresh_endpoint, quote=True)}"')
     pages = {'/': homepage, '/games/': (output / 'games/index.html').read_text(),
@@ -188,7 +232,7 @@ def main():
     pages.update({path: (output / path.lstrip('/') / 'index.html').read_text() for path in static_paths})
     shell_files = ['/', '/games/', '/guide/', '/manifest.webmanifest', '/assets/news/icon-180.png',
                    '/assets/news/icon-192.png', '/assets/news/icon-512.png']
-    for filename in ('compat.js', 'compat.css', 'exchange-core.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json'):
+    for filename in ('compat.js', 'compat.css', 'archive.js', 'personal.js', 'exchange-core.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json'):
         asset = output / 'assets/news' / filename
         digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:12]
         versioned = asset.with_name(f'{asset.stem}.{digest}{asset.suffix}')
@@ -205,10 +249,17 @@ def main():
         asset = output / path.lstrip('/')
         shell_digest.update((asset / 'index.html' if path.endswith('/') else asset).read_bytes())
     worker = worker.replace('__BUILD_ID__', shell_digest.hexdigest()[:16])
+    news_shell = list(dict.fromkeys(['/', '/manifest.webmanifest',
+        '/assets/news/icon-180.png', '/assets/news/icon-192.png', '/assets/news/icon-512.png',
+        *re.findall(r'/assets/news/[\w.-]+\.[a-f0-9]{12}\.(?:json|js|css|svg)\b', pages['/'])]))
+    game_shell = list(dict.fromkeys([*news_shell, '/games/',
+        *re.findall(r'/assets/news/[\w.-]+\.[a-f0-9]{12}\.(?:json|js|css|svg)\b', pages['/games/'])]))
     guide_shell = list(dict.fromkeys(['/', '/guide/', '/manifest.webmanifest',
         '/assets/news/icon-180.png', '/assets/news/icon-192.png', '/assets/news/icon-512.png',
         *re.findall(r'/assets/news/[\w.-]+\.[a-f0-9]{12}\.(?:json|js|css|svg)\b', pages['/'] + pages['/guide/'])]))
     worker = worker.replace('__SHELL_FILES__', json.dumps(shell_files))
+    worker = worker.replace('__NEWS_SHELL__', json.dumps(news_shell))
+    worker = worker.replace('__GAMES_SHELL__', json.dumps(game_shell))
     worker = worker.replace('__GUIDE_SHELL__', json.dumps(guide_shell))
     worker = worker.replace('__GUIDE_FILES__', json.dumps([chapter['file'] for chapter in chapters]))
     worker = worker.replace('__GUIDE_REVISION__', json.dumps(json.loads(old_book)['revision']))

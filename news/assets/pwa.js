@@ -178,7 +178,7 @@
       const paths = [
         ...new Set([
           "/",
-          ...(isGuide ? ["/guide/"] : ["/games/", "/guide/"]),
+          ...(isGuide ? ["/guide/"] : ["/games/"]),
           "/manifest.webmanifest",
           ...Array.from(
             document.querySelectorAll("script[src], link[rel=stylesheet]"),

@@ -387,6 +387,11 @@ dialog p {
   justify-content: space-between;
   gap: 12px;
 }
+@media (max-width: 760px) {
+  header {
+    border-top: 0;
+  }
+}
 @media (max-width: 380px) {
   main {
     padding: 16px 14px 0;

@@ -702,6 +702,9 @@ dialog::backdrop {
   }
 }
 @media (max-width: 760px) {
+  .header {
+    border-top: 0;
+  }
   .header-inner {
     gap: 16px;
     min-height: 60px;

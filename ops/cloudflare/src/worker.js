@@ -1,3 +1,5 @@
+import { handleGuide } from "./guide.js";
+
 const ORIGINS = new Set(["https://news.zacai.fun", "http://news.zacai.fun"]);
 const API = "/api/news-refresh";
 const WORKFLOW =
@@ -69,10 +71,20 @@ export default {
       return response;
     };
     const { pathname, search } = new URL(request.url);
-    if (![API, API + "/status"].includes(pathname) || search)
+    if (
+      ![
+        API,
+        API + "/status",
+        "/api/life-guide/status",
+        "/api/life-guide/chat",
+      ].includes(pathname) ||
+      search
+    )
       return reply({ status: "not_found" }, 404);
     if (!ORIGINS.has(origin)) return reply({ status: "forbidden" }, 403);
     if (request.method === "OPTIONS") return reply({ status: "ok" });
+    if (pathname.startsWith("/api/life-guide/"))
+      return handleGuide(request, env, reply);
     const action =
       request.method === "GET" && pathname === API + "/status"
         ? "status"
@@ -133,6 +145,7 @@ export class NewsCoordinator {
         if (Date.now() < this.errorUntil)
           return json({ status: "unavailable" }, 503);
         const action = new URL(request.url).pathname;
+        if (action === "/guide-budget") return this.guideBudget();
         if (action === "/status") return json(await this.status());
         if (action === "/trigger" && this.env.MANUAL_ENABLED === "true")
           return json(await this.trigger());
@@ -163,6 +176,24 @@ export class NewsCoordinator {
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  async guideBudget() {
+    const day = new Date(Date.now()).toISOString().slice(0, 10);
+    const maximum = Math.floor(
+      Math.min(1000, Math.max(1, Number(this.env.GUIDE_DAILY_LIMIT) || 100)),
+    );
+    const stored = await this.ctx.storage.get("guide-budget");
+    const count = stored?.day === day ? stored.count : 0;
+    if (count >= maximum) {
+      const retryAfter = Math.ceil(
+        (Date.parse(day + "T00:00:00Z") + 86400000 - Date.now()) / 1000,
+      );
+      return json({ status: "rate_limited", retryAfter }, 429);
+    }
+    // Reserve before the paid call; failed requests also consume this budget.
+    await this.ctx.storage.put("guide-budget", { day, count: count + 1 });
+    return json({ status: "ok" });
   }
 
   github(path, options = {}) {

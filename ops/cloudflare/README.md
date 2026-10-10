@@ -83,3 +83,30 @@ npm run check
 - `npx wrangler tail` 可检查日志；监控 GitHub 令牌到期、Worker 请求/CPU/存储额度。凭证失效会返回 503，但已发布新闻仍可阅读。
 - Worker 代码改动由 `news-worker-check.yml` 自动测试；云端部署使用 `npm run deploy`，不会随着 Pages 构建自动上传。
 - 不要删除 Durable Object 命名空间或改动 `idFromName('news')`，否则会丢失冷却和重试预算。
+
+## 生活指南问答
+
+阅读入口是 `https://news.zacai.fun/guide/`，正文、搜索、收藏和离线阅读由 GitHub Pages 与浏览器完成。每小时发布资讯时检查原项目版本；只有正文或页面发生变化才更新离线资源。
+
+`news-refresh` Worker 增加了 `GET /api/life-guide/status` 和 `POST /api/life-guide/chat`。没有模型密钥时状态为 `ready: false`，网站会显示“AI 问答尚未配置”，仍然可以查找相关原文。已按上游 life-decision-guide 的 MIT 规则准备提示词，正文采用 CC BY 4.0；提示词源版本和完整许可见 `src/guide-prompt.js`、`LIFE-GUIDE-LICENSE`。
+
+### 开启问答（以 DeepSeek 为例）
+
+1. 打开 [DeepSeek 开放平台](https://platform.deepseek.com/)，登录后在 API Keys 中创建密钥，并确认账户有可用额度。不要把密钥发进聊天。
+2. 打开 Cloudflare 控制台 → **Workers & Pages** → **news-refresh** → **Settings** → **Variables and Secrets** → **Add**。类型选 **Secret**，名称填 `GUIDE_API_KEY`，值填刚创建的密钥，然后保存并部署。密钥只需要填在这里。
+3. 打开生活指南的“问答”，刷新页面。提示变成“问答已就绪”后输入一个问题，例如“房东不给退押金怎么办”。回答下方会列出可展开核对的正文条目。
+
+已部署的默认变量是 `GUIDE_API_URL=https://api.deepseek.com/chat/completions`、`GUIDE_MODEL=deepseek-flash`，来自 [DeepSeek 当前官方调用文档](https://api-docs.deepseek.com/)。其他支持相同 chat/completions 协议的服务可以替换这两个变量和密钥；URL 必须是完整的 HTTPS 接口地址，模型名以服务商文档为准。以后通过 Wrangler 部署时也要同步修改 `wrangler.jsonc` 中的变量，避免覆盖控制台的配置。
+
+模型 API 由模型服务商单独计费，Cloudflare 的请求额度不包含模型调用费用。默认每 IP 每分钟最多 6 次问答、全站每天最多 100 次模型请求（UTC 00:00 重置，对应北京时间 08:00）。全站预算由独立的 `life-guide-budget` Durable Object 实例持久保存；失败的模型请求也消耗预算。`GUIDE_DAILY_LIMIT` 可在 1–1000 之间调整。
+
+云函数先查询轻量索引，再读取最多三个相关章节中的完整条目。它不接受客户端提供的正文、任意模型地址或工具指令；条目里的来源、争议和适用条件一并交给模型，未检索到依据时不会调用模型。每次回答最多输出 2000 tokens，上游有超时限制。问题与参考原文会发送给所配置的模型服务商，Worker 日志不保存问题、回答和密钥。
+
+检查状态可在可信终端运行：
+
+```sh
+curl --fail -H 'Origin: https://news.zacai.fun' \
+  'https://news-refresh.944052796.workers.dev/api/life-guide/status'
+```
+
+返回 `{"ready":true}` 只表示配置完整；首次实际提问才能验证密钥、模型权限与账户额度。仓库中的测试使用模拟模型，没有模型密钥时不把模拟结果当作真实问答验证。

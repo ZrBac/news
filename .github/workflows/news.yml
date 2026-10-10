@@ -33,6 +33,8 @@ jobs:
           node --check news/assets/exchange-core.js
           node --test tests/exchange-core.cjs
           node --check news/assets/pwa.js
+          node --check news/assets/guide.js
+          node --test tests/guide-core.cjs
           node --check news/sw.js
           node --check news/assets/games.js
           node --check news/assets/games-core.js
@@ -49,6 +51,8 @@ jobs:
         run: python scripts/collect_housing_prices.py --previous-url https://news.zacai.fun/data/latest.json
       - name: Update foreign currency to CNY reference rates
         run: python scripts/collect_exchange_rates.py --previous-url https://news.zacai.fun/data/latest.json
+      - name: Sync life guide with its upstream revision
+        run: python scripts/sync_life_guide.py
       - name: Build news portal
         env:
           NEWS_REFRESH_ENDPOINT: ${{ vars.NEWS_REFRESH_ENDPOINT }}

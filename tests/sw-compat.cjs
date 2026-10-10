@@ -6,7 +6,7 @@ const source = fs
   .readFileSync(require.resolve("../news/sw.js"), "utf8")
   .replace(
     "__SHELL_FILES__",
-    JSON.stringify(["/", "/games/", "/assets/news/compat.test.js"]),
+    JSON.stringify(["/", "/games/", "/guide/", "/assets/news/compat.test.js"]),
   );
 function worker(options = {}) {
   const handlers = {},
@@ -75,6 +75,9 @@ test("Offline navigation aliases return their matching HTML without Object.hasOw
     ["/games/", "/games/"],
     ["/games/index.html", "/games/"],
     ["/games/?v=2", "/games/"],
+    ["/guide", "/guide/"],
+    ["/guide/", "/guide/"],
+    ["/guide/index.html?from=home", "/guide/"],
   ]) {
     assert.equal(await (await request(path)).text(), "cached " + expected);
   }
@@ -111,6 +114,7 @@ test("Cached navigation never waits on a stalled network request", async () => {
 test("Readiness includes the home-screen launch page, not only the game assets", async () => {
   const entries = new Map([
     ["/games/", new Response("games")],
+    ["/guide/", new Response("guide")],
     ["/assets/news/compat.test.js", new Response("asset")],
   ]);
   const result = await worker({ entries }).message("CHECK_OFFLINE", [
@@ -123,6 +127,7 @@ test("Readiness includes the home-screen launch page, not only the game assets",
 test("Repair fetches missing files and preserves existing cache entries", async () => {
   const entries = new Map([
       ["/games/", new Response("games")],
+      ["/guide/", new Response("guide")],
       ["/assets/news/compat.test.js", new Response("asset")],
     ]),
     fetched = [];
@@ -142,6 +147,7 @@ test("Repair fetches missing files and preserves existing cache entries", async 
 test("Repair never mixes a newer page with the current worker or erases working assets", async () => {
   const entries = new Map([
     ["/games/", new Response("games")],
+    ["/guide/", new Response("guide")],
     ["/assets/news/compat.test.js", new Response("asset")],
   ]);
   const w = worker({
@@ -153,10 +159,10 @@ test("Repair never mixes a newer page with the current worker or erases working 
   assert.equal(result.ready, false);
   assert.equal(result.reason, "download");
   assert(!entries.has("/"));
-  assert.equal(entries.size, 2);
+  assert.equal(entries.size, 3);
   const failed = await worker({ entries }).message("PREPARE_OFFLINE", [
     "/games/",
   ]);
   assert.equal(failed.ready, false);
-  assert.equal(entries.size, 2);
+  assert.equal(entries.size, 3);
 });

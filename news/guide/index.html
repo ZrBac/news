@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="资讯" />
+    <meta
+      name="description"
+      content="阅读、搜索和收藏《高性价比人生指南》，按正文查找生活决策依据。"
+    />
+    <meta name="guide-book" content="/assets/news/guide-book.json" />
+    <meta
+      name="guide-endpoint"
+      content="https://news-refresh.944052796.workers.dev/api/life-guide"
+    />
+    <link rel="canonical" href="https://news.zacai.fun/guide/" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/assets/news/icon-180.png" />
+    <link rel="icon" type="image/svg+xml" href="/assets/news/favicon.svg" />
+    <link rel="stylesheet" href="/assets/news/style.css" />
+    <link rel="stylesheet" href="/assets/news/compat.css" />
+    <link rel="stylesheet" href="/assets/news/guide.css" />
+    <script src="/assets/news/compat.js" defer></script>
+    <script src="/assets/news/guide-core.js" defer></script>
+    <script src="/assets/news/guide.js" defer></script>
+    <script src="/assets/news/pwa.js" defer></script>
+    <title>生活指南 · 资讯</title>
+  </head>
+  <body>
+    <a href="#guide-title" class="skip-link">跳到生活指南</a>
+    <header class="header">
+      <div class="header-inner">
+        <a class="brand" href="/"><span class="brand-name">资讯</span></a>
+        <div class="header-actions">
+          <a href="/" class="games-link">返回资讯</a>
+          <a href="/games/" class="games-link">小游戏</a>
+          <button
+            id="theme-toggle"
+            class="icon-button"
+            aria-label="切换深色模式"
+          >
+            ◐
+          </button>
+        </div>
+      </div>
+    </header>
+    <main id="life-guide" class="guide-page">
+      <div class="guide-heading">
+        <h1 id="guide-title" tabindex="-1">生活指南</h1>
+        <p>想省钱、处理工作和生活里的事，先找找书里怎么说。</p>
+      </div>
+      <nav class="guide-tabs" aria-label="指南功能">
+        <a href="#read" data-mode="read" aria-current="page">阅读</a>
+        <a href="#ask" data-mode="ask">问答</a>
+        <a href="#saved" data-mode="saved"
+          >收藏 <span id="guide-saved-count">0</span></a
+        >
+      </nav>
+      <section id="reader" aria-label="阅读指南">
+        <form id="guide-search-form" class="guide-search" role="search">
+          <label class="sr-only" for="guide-query">搜索正文</label>
+          <input
+            id="guide-query"
+            type="search"
+            placeholder="搜索正文，如：租房押金、离职补偿"
+            maxlength="200"
+          />
+          <button type="submit">搜索</button>
+        </form>
+        <div class="guide-filters">
+          <label
+            >章节<select id="guide-chapter">
+              <option value="">全部章节</option>
+            </select></label
+          >
+          <label
+            >证据<select id="guide-grade">
+              <option value="">全部等级</option>
+              <option value="A">A · 有数字与出处</option>
+              <option value="B">B · 有研究支持</option>
+              <option value="C">C · 经验或通用做法</option>
+            </select></label
+          >
+        </div>
+        <p id="guide-result-count" class="guide-muted" role="status">
+          正在加载正文…
+        </p>
+        <details id="chapter-intro" class="chapter-intro" hidden>
+          <summary>本章说明</summary>
+          <div></div>
+        </details>
+        <div id="guide-results"></div>
+        <button id="guide-more" class="guide-more" hidden>查看更多</button>
+      </section>
+      <section id="question-panel" aria-label="按指南问答" hidden>
+        <p class="guide-muted">
+          写清楚你的处境和想解决的事。回答会附章节出处，适用条件以正文为准。
+        </p>
+        <form id="guide-question-form">
+          <label for="guide-question">你想问什么？</label>
+          <textarea
+            id="guide-question"
+            rows="4"
+            maxlength="1000"
+            placeholder="例如：公司要裁员，我工作了三年，离职前应该确认什么？"
+            required
+          ></textarea>
+          <div class="question-actions">
+            <button id="guide-lookup" type="button">查找相关原文</button
+            ><button id="guide-ask" type="submit" disabled>AI 问答</button>
+          </div>
+        </form>
+        <p id="guide-ai-status" class="guide-muted" role="status">
+          正在检查问答服务…
+        </p>
+        <div id="guide-answer" aria-live="polite" hidden></div>
+        <div id="guide-references"></div>
+      </section>
+      <div id="offline-tools" class="guide-offline">
+        <span id="offline-status" role="status">正在检查离线资源…</span>
+        <button id="prepare-offline">准备离线使用</button>
+        <small id="offline-hint"></small>
+        <a id="offline-secure-link" href="https://news.zacai.fun/guide/" hidden
+          >用 Safari 打开安全页面</a
+        >
+      </div>
+      <p id="guide-error" role="alert" hidden></p>
+      <noscript
+        >阅读和搜索需要开启 JavaScript。也可以<a
+          href="https://github.com/eternity4719/HowToLiveBetter"
+          >阅读原项目</a
+        >。</noscript
+      >
+      <footer class="guide-attribution">
+        <p>
+          内容来自
+          <a
+            href="https://github.com/eternity4719/HowToLiveBetter"
+            target="_blank"
+            rel="noopener"
+            >eternity4719《高性价比人生指南》</a
+          >，采用
+          <a
+            href="https://creativecommons.org/licenses/by/4.0/"
+            target="_blank"
+            rel="noopener"
+            >CC BY 4.0</a
+          >。本站调整了排版与检索方式，条目正文保留原文。
+        </p>
+        <p id="guide-edition">版本信息加载中。</p>
+        <p>
+          证据等级和性价比档沿用作者标注，性价比是作者的判断。正文提供通用参考，政策金额和日期请核对原始来源。
+        </p>
+      </footer>
+    </main>
+    <div id="pwa-update" class="pwa-update" hidden>
+      <span>页面有新版本</span><button id="apply-update">更新页面</button>
+    </div>
+    <button id="install-app" class="guide-install">安装到桌面</button>
+    <dialog id="info-dialog" aria-labelledby="dialog-title">
+      <div class="dialog-heading">
+        <h2 id="dialog-title">安装到桌面</h2>
+        <button id="close-dialog" aria-label="关闭">×</button>
+      </div>
+      <div id="dialog-content"></div>
+    </dialog>
+  </body>
+</html>

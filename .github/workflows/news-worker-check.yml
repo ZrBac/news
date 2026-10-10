@@ -2,9 +2,19 @@ name: Check news cloud worker
 on:
   push:
     branches: [hexo]
-    paths: ['ops/cloudflare/**', '.github/workflows/news-worker-check.yml']
+    paths:
+      [
+        "ops/cloudflare/**",
+        "news/assets/guide-core.js",
+        ".github/workflows/news-worker-check.yml",
+      ]
   pull_request:
-    paths: ['ops/cloudflare/**', '.github/workflows/news-worker-check.yml']
+    paths:
+      [
+        "ops/cloudflare/**",
+        "news/assets/guide-core.js",
+        ".github/workflows/news-worker-check.yml",
+      ]
 permissions:
   contents: read
 jobs:
@@ -18,7 +28,7 @@ jobs:
       - uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
-          node-version: '22'
+          node-version: "22"
           cache: npm
           cache-dependency-path: ops/cloudflare/package-lock.json
       - run: npm ci

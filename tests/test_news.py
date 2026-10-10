@@ -357,7 +357,7 @@ class BuildTests(unittest.TestCase):
                 self.assertNotIn('/blog/', (output / 'index.html').read_text())
                 self.assertNotIn('/blog/', (output / 'assets/news/app.js').read_text())
                 self.assertEqual(re.findall(r'<loc>(.*?)</loc>', (output / 'sitemap.xml').read_text()),
-                                 ['https://news.zacai.fun/', 'https://news.zacai.fun/games/'])
+                                 ['https://news.zacai.fun/', 'https://news.zacai.fun/games/', 'https://news.zacai.fun/guide/'])
                 self.assertEqual(json.loads((output / 'data/status.json').read_text()),
                                  {'updatedAt': '2026-09-24T06:00:00Z'})
                 manifest = json.loads((output / 'manifest.webmanifest').read_text())
@@ -375,6 +375,18 @@ class BuildTests(unittest.TestCase):
                 shell = json.loads(re.search(r'const SHELL = (\[.*?\]);', worker, re.S).group(1))
                 self.assertNotIn('/data/news.json', shell)
                 self.assertIn('/games/', shell)
+                self.assertIn('/guide/', shell)
+                guide = (output / 'guide/index.html').read_text()
+                guide_data = re.search(r'/assets/news/guide-book\.[0-9a-f]{12}\.json', guide).group(0)
+                self.assertIn(guide_data, shell)
+                self.assertEqual(json.loads((output / guide_data.lstrip('/')).read_text()),
+                                 json.loads((output / 'guide/book.json').read_text()))
+                guide_index = json.loads((output / 'guide/search.json').read_text())
+                self.assertIn('押金', guide_index['lookup'])
+                self.assertTrue(all('body' not in e and 'summary' not in e for e in guide_index['entries']))
+                chapter = json.loads((output / f'guide/chapters/15.{guide_index["revision"][:12]}.json').read_text())
+                self.assertEqual(chapter['revision'], guide_index['revision'])
+                self.assertTrue(all('备注：' in e['body'] for e in chapter['entries']))
                 for path in shell:
                     self.assertTrue((output / (path.lstrip('/') + 'index.html' if path.endswith('/') else path.lstrip('/'))).is_file())
                 games = (output / 'games/index.html').read_text()

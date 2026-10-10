@@ -7,12 +7,15 @@ const PAGES = {
   "/games": "/games/",
   "/games/": "/games/",
   "/games/index.html": "/games/",
+  "/guide": "/guide/",
+  "/guide/": "/guide/",
+  "/guide/index.html": "/guide/",
 };
 
 async function validateShell(read) {
   const html = (
     await Promise.all(
-      ["/", "/games/"].map(async (path) => {
+      Array.from(new Set(Object.values(PAGES))).map(async (path) => {
         const response = await read(path);
         if (!response) throw new Error("Incomplete offline pages");
         return response.clone().text();
@@ -20,13 +23,13 @@ async function validateShell(read) {
     )
   ).join("\n");
   for (const asset of html.match(
-    /\/assets\/news\/[\w.-]+\.[a-f0-9]{12}\.(?:js|css|svg)/g,
+    /\/assets\/news\/[\w.-]+\.[a-f0-9]{12}\.(?:json|js|css|svg)\b/g,
   ) || []) {
     if (!SHELL.includes(asset))
       throw new Error("Page assets belong to another deployment");
   }
   for (const asset of SHELL.filter((url) =>
-    /\.[a-f0-9]{12}\.(js|css|svg)$/.test(url),
+    /\.[a-f0-9]{12}\.(js|css|svg|json)$/.test(url),
   )) {
     if (!html.includes(asset))
       throw new Error("Deployment changed during installation");

@@ -16,6 +16,40 @@ from xml.sax.saxutils import escape
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def build_guide_search(output):
+    """Workers search a small index, then fetch only selected full chapters."""
+    book = json.loads((output / 'guide/book.json').read_text())
+    def terms(text):
+        result = set(re.findall(r'[a-z0-9]{2,}', text.lower()))
+        for part in re.findall(r'[\u4e00-\u9fff]+', text):
+            result.update(part[i:i + 2] for i in range(len(part) - 1))
+        return result
+    vocabulary = set().union(*(terms(e['title']) for e in book['entries']),
+                             *(terms(c['question']) for c in book['chapters']))
+    entries, lookup = [], {}
+    for i, entry in enumerate(book['entries']):
+        record = {key: value for key, value in entry.items() if key not in ('body', 'url', 'summary')}
+        record['searchTitle'] = re.sub(r'\s+', '', entry['title'].lower())
+        entries.append(record)
+        title = terms(entry['title'])
+        for term in sorted(title | (terms(entry['summary']) & vocabulary)):
+            # Pack the row index and weight into one integer to keep the index small.
+            lookup.setdefault(term, []).append(i * 16 + (14 if term in title else 5))
+    index = {key: value for key, value in book.items() if key not in ('entries', 'chapters')}
+    index['chapters'] = [{key: value for key, value in chapter.items() if key != 'intro'}
+                         for chapter in book['chapters']]
+    index['entries'] = entries
+    index['lookup'] = lookup
+    (output / 'guide/search.json').write_text(json.dumps(index, ensure_ascii=False, separators=(',', ':')) + '\n')
+    folder = output / 'guide/chapters'
+    folder.mkdir(parents=True, exist_ok=True)
+    for chapter in book['chapters']:
+        body = {'schema': 1, 'revision': book['revision'],
+                'entries': [e for e in book['entries'] if e['chapter'] == chapter['id']]}
+        (folder / f'{chapter["id"]}.{book["revision"][:12]}.json').write_text(
+            json.dumps(body, ensure_ascii=False, separators=(',', ':')) + '\n')
+
+
 
 def build_news_pages(data, output):
     """Keep the full export for collectors; readers fetch a small initial page."""
@@ -110,15 +144,19 @@ def main():
     output.mkdir(parents=True)
     shutil.copy2(ROOT / 'news/index.html', output / 'index.html')
     shutil.copytree(ROOT / 'news/games', output / 'games')
+    shutil.copytree(ROOT / 'news/guide', output / 'guide')
+    build_guide_search(output)
     shutil.copytree(ROOT / 'news/assets', output / 'assets/news', dirs_exist_ok=True)
+    shutil.copy2(ROOT / 'news/guide/book.json', output / 'assets/news/guide-book.json')
     # New HTML always requests the matching assets, even with cached older releases.
     homepage = (output / 'index.html').read_text()
     homepage = homepage.replace('content="https://zacai.fun/api/news-refresh"',
                                 f'content="{html_escape(refresh_endpoint, quote=True)}"')
-    pages = {'/': homepage, '/games/': (output / 'games/index.html').read_text()}
-    shell_files = ['/', '/games/', '/manifest.webmanifest', '/assets/news/icon-180.png',
+    pages = {'/': homepage, '/games/': (output / 'games/index.html').read_text(),
+             '/guide/': (output / 'guide/index.html').read_text()}
+    shell_files = ['/', '/games/', '/guide/', '/manifest.webmanifest', '/assets/news/icon-180.png',
                    '/assets/news/icon-192.png', '/assets/news/icon-512.png']
-    for filename in ('compat.js', 'compat.css', 'exchange-core.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js'):
+    for filename in ('compat.js', 'compat.css', 'exchange-core.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-book.json'):
         asset = output / 'assets/news' / filename
         digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:12]
         versioned = asset.with_name(f'{asset.stem}.{digest}{asset.suffix}')
@@ -159,7 +197,7 @@ def main():
     (output / 'data/status.json').write_text(json.dumps({'updatedAt': updated_at}) + '\n')
     items = ''.join(f'<item><title>{escape(a["title"])}</title><link>{escape(a["url"])}</link><guid>{escape(a["url"])}</guid><pubDate>{format_datetime(datetime.fromisoformat(a["publishedAt"].replace("Z", "+00:00")))}</pubDate><description>{escape(a["excerpt"])}</description></item>' for a in data['articles'][:50])
     (output / 'news.xml').write_text('<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>资讯</title><link>https://news.zacai.fun/</link><description>综合热点与 AI 科技资讯。摘要来自原始资讯源。</description>' + items + '</channel></rss>')
-    urls = ['https://news.zacai.fun/', 'https://news.zacai.fun/games/']
+    urls = ['https://news.zacai.fun/', 'https://news.zacai.fun/games/', 'https://news.zacai.fun/guide/']
     (output / 'sitemap.xml').write_text('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ''.join(f'<url><loc>{escape(u)}</loc></url>' for u in urls) + '</urlset>')
     (output / 'robots.txt').write_text('User-agent: *\nAllow: /\nSitemap: https://news.zacai.fun/sitemap.xml\n')
     print(f'Built {output}; {len(data["articles"])} news items.')

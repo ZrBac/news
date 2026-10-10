@@ -37,7 +37,7 @@
       "<h3>iPhone / iPad</h3><p>在 Safari 的普通标签页中打开本站，点击分享按钮，选择“添加到主屏幕”。添加后先保持联网，从桌面图标打开一次，进入小游戏，等显示“已准备好，可离线玩”再断网。Safari 与桌面入口需要分别准备。</p>" +
       "<h3>Android</h3><p>在浏览器菜单中选择“安装应用”或“添加到主屏幕”。</p>" +
       "<h3>Mac Safari</h3><p>在支持的版本中，选择“文件 → 添加到程序坞”。</p>" +
-      "<p>首次联网准备完成后，可离线阅读已保存的资讯、收藏和游玩小游戏。更新资讯、打开新闻原文需要联网；清除浏览器数据会移除本地缓存。</p>";
+      "<p>首次联网准备完成后，可离线阅读已保存的资讯、生活指南、收藏和游玩小游戏。生活指南页面也可检查离线准备。更新资讯、AI 问答、打开原文链接需要联网；清除浏览器数据会移除本地缓存。</p>";
     document.querySelector("#info-dialog").showModal();
   });
 
@@ -46,7 +46,9 @@
     prepareButton = document.querySelector("#prepare-offline"),
     offlineHint = document.querySelector("#offline-hint"),
     secureLink = document.querySelector("#offline-secure-link"),
-    isGames = !!document.querySelector("#library");
+    isGames = !!document.querySelector("#library"),
+    isGuide = !!document.querySelector("#life-guide"),
+    hasOfflineTools = isGames || isGuide;
   let registration,
     applyingUpdate = false,
     checking,
@@ -54,7 +56,7 @@
     automaticRepair = false;
   const notice = document.querySelector("#pwa-update");
   const messages = {
-    ready: "已准备好，可离线玩",
+    ready: isGuide ? "已准备好，可离线阅读" : "已准备好，可离线玩",
     checking: "正在检查离线资源…",
     downloading: "正在准备离线资源，请保持联网…",
     controller: "还未完成离线准备，请保持联网后重试。",
@@ -74,7 +76,7 @@
     offlineStatus.textContent = messages[reason] || messages.registration;
     offlineStatus.classList.toggle("ready", reason === "ready");
     offlineStatus.dataset.state = reason;
-    if (offlineTools) offlineTools.hidden = !isGames;
+    if (offlineTools) offlineTools.hidden = !hasOfflineTools;
     if (prepareButton) {
       prepareButton.textContent =
         reason === "ready" || reason === "timeout"
@@ -146,7 +148,7 @@
     });
   }
   async function checkOffline(repair = false) {
-    if (!isGames || !support()) return;
+    if (!hasOfflineTools || !support()) return;
     if (checking) return checking;
     checking = (async () => {
       const controller = navigator.serviceWorker.controller;
@@ -158,11 +160,20 @@
         ...new Set([
           "/",
           "/games/",
+          "/guide/",
           "/manifest.webmanifest",
           ...Array.from(
             document.querySelectorAll("script[src], link[rel=stylesheet]"),
             (el) => new URL(el.src || el.href).pathname,
           ),
+          ...(isGuide
+            ? [
+                new URL(
+                  document.querySelector('meta[name="guide-book"]').content,
+                  location.href,
+                ).pathname,
+              ]
+            : []),
         ]),
       ];
       status(repair ? "downloading" : "checking");
@@ -192,7 +203,8 @@
   }
   async function start() {
     // News gets the network first. Games still prepare immediately on entry.
-    if (!isGames) await window.newsInitialLoad;
+    if (isGuide) await window.guideInitialLoad;
+    else if (!isGames) await window.newsInitialLoad;
     if (!support()) return;
     if (starting) return starting;
     starting = (async () => {

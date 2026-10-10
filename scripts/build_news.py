@@ -44,6 +44,17 @@ def build_news_pages(data, output):
         releases.append(article)
         if len(releases) == 60:
             break
+    housing, seen = [], set()
+    for article in data.get('housingArticles', articles):
+        if article.get('category') != 'housing':
+            continue
+        key = re.sub(r'\W', '', article['title'].rsplit(' - ', 1)[0]).casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        housing.append(article)
+        if len(housing) == 60:
+            break
     # Include several candidates from each category for today/yesterday. A busy
     # sports feed must not hide a day's only model or housing story from the brief.
     brief_days, brief_articles = [], []
@@ -51,7 +62,7 @@ def build_news_pages(data, output):
         today = datetime.fromisoformat(data['updatedAt'].replace('Z', '+00:00')).astimezone(
             timezone(timedelta(hours=8))).date()
         brief_days = [(today - timedelta(days=n)).isoformat() for n in range(2)]
-        candidates = sorted(articles + releases, key=lambda a: a['publishedAt'], reverse=True)
+        candidates = sorted(articles + releases + housing, key=lambda a: a['publishedAt'], reverse=True)
         for day in brief_days:
             for category in ('general', 'ai', 'models', 'tech', 'entertainment', 'sports', 'housing'):
                 pool, seen = [], set()
@@ -74,6 +85,7 @@ def build_news_pages(data, output):
                         others.append(article)
                 brief_articles.extend(selected + others[:max(0, 5 - len(selected))])
     latest = {**data, 'articles': articles[:size], 'modelReleases': releases,
+              'housingArticles': housing,
               'briefArticles': brief_articles, 'briefDays': brief_days,
               'archive': {'pages': pages, 'loaded': 0, 'total': len(articles),
                           'oldest': articles[-1]['publishedAt'] if articles else None}}

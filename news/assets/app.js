@@ -68,6 +68,7 @@
     source: "all",
     date: "",
     limit: 12,
+    housingLimit: 6,
     saved: new Map(),
   };
   const dayFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -152,6 +153,7 @@
     } else {
       const article =
         state.data.articles.find((a) => a.id === id) ||
+        state.data.housingArticles?.find((a) => a.id === id) ||
         state.data.briefArticles?.find((a) => a.id === id) ||
         state.data.modelReleases?.find((a) => a.id === id);
       if (!article) return;
@@ -438,12 +440,32 @@
       ${data.checkedAt ? `<p>最近检查 ${escape(formatTime(data.checkedAt))}（北京时间）；检查时间不代表新报价。</p>` : ""}</div>`;
     updateExchangeConversion();
   }
+  function housingNews() {
+    const articles = Array.isArray(state.data.housingArticles)
+      ? state.data.housingArticles
+      : [...state.data.articles, ...(state.data.briefArticles || [])].filter(
+          (a) => a.category === "housing",
+        );
+    const news = articles
+      .slice(0, state.housingLimit)
+      .map(articleCard)
+      .join("");
+    return `<section class="housing-news" id="housing-news" aria-labelledby="housing-news-title">
+      <h2 id="housing-news-title" tabindex="-1">楼盘与房市动态</h2>
+      <p class="price-intro">开盘、预售、报名登记、交付与房市报道，按发布时间更新。点击标题查看原文和楼盘详情。</p>
+      ${news || '<p class="price-intro">暂未收录近期报道，可通过上方入口查询楼盘。</p>'}
+      ${articles.length > state.housingLimit ? '<button class="housing-more" type="button" data-housing-more>查看更多动态</button>' : ""}
+      <p class="price-published">展示近30天最新${articles.length}条报道；楼盘报价的口径以原文为准。</p></section>`;
+  }
   function renderHousingPrices() {
     const panel = $("#housing-prices");
     const active = state.view === "housing";
     panel.hidden = !active;
     $("#news-content").classList.toggle("housing-view", active);
-    if (!active) return;
+    if (!active) {
+      panel.innerHTML = "";
+      return;
+    }
     const data = state.data.housingPrices || {};
     const records = (Array.isArray(data.records) ? data.records : [])
       .filter(
@@ -482,8 +504,14 @@
       })
       .join("");
     panel.innerHTML = `<h2 class="city-price-heading">杭州整体成交</h2><p class="price-intro">自动检查来源发布的成交均价。新房与二手房分别标注统计周期，没有新数据时保留上次结果。</p>
+      <div class="housing-links" aria-label="楼盘信息查询">
+        <button type="button" class="text-button" data-housing-jump>楼盘动态 ↓</button>
+        <a href="https://xinpan.zjol.com.cn/loupan/" target="_blank" rel="noopener noreferrer">住在杭州楼盘库 ↗</a>
+        <a href="https://zzhz.zjol.com.cn/yaohao/" target="_blank" rel="noopener noreferrer">登记查询 ↗</a>
+        <a href="https://hz.newhouse.fang.com/house/s/" target="_blank" rel="noopener noreferrer">房天下新房 ↗</a>
+      </div>
       <div class="price-grid">${cards}</div>
-      <p class="price-explanation">这里展示已公开的成交、网签统计；暂未接入全市实时逐套成交库。不同周期和成交房源构成的均价不能直接比较。</p>${housingMarket(data)}`;
+      <p class="price-explanation">这里展示已公开的成交、网签统计；暂未接入全市实时逐套成交库。不同周期和成交房源构成的均价不能直接比较。</p>${housingMarket(data)}${housingNews()}`;
   }
 
   function render() {
@@ -515,7 +543,7 @@
         ? `已加载 ${articles.length} 条资讯`
         : `${articles.length} 条资讯`;
     if (state.view === "housing")
-      $("#result-count").textContent = "公开成交数据";
+      $("#result-count").textContent = "成交数据 · 楼盘动态";
     if (state.view === "exchange")
       $("#result-count").textContent = "美元 · 日元 · 泰铢";
     $$("[data-view]").forEach((el) => {
@@ -621,6 +649,7 @@
       ? state.view
       : "all";
     state.limit = 12;
+    state.housingLimit = 6;
     state.query = "";
     state.source = "all";
     state.date = state.view === "brief" ? dayOf(Date.now()) : "";
@@ -809,6 +838,16 @@
     );
   });
   document.addEventListener("click", (e) => {
+    if (e.target.closest("[data-housing-jump]")) {
+      $("#housing-news").scrollIntoView({ behavior: "smooth", block: "start" });
+      $("#housing-news-title").focus({ preventScroll: true });
+      return;
+    }
+    if (e.target.closest("[data-housing-more]")) {
+      state.housingLimit += 6;
+      renderHousingPrices();
+      return;
+    }
     const currency = e.target.closest("[data-fx-currency]");
     if (
       currency &&
@@ -927,6 +966,10 @@
     if (Array.isArray(data.modelReleases))
       data.modelReleases = data.modelReleases
         .filter((a) => validArticle(a) && a.category === "models")
+        .slice(0, 60);
+    if (Array.isArray(data.housingArticles))
+      data.housingArticles = data.housingArticles
+        .filter((a) => validArticle(a) && a.category === "housing")
         .slice(0, 60);
     if (Array.isArray(data.briefArticles))
       data.briefArticles = data.briefArticles.filter(validArticle).slice(0, 70);

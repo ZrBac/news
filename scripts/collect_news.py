@@ -119,13 +119,14 @@ def article_category(title, source):
     return category
 
 HOUSING_LOCATION = re.compile(r'杭州|余杭|萧山|临平|钱塘|拱墅|临安|富阳')
-HOUSING_TOPIC = re.compile(r'楼市|房地产|房产|住房|住宅|二手房|新房|购房|买房|卖房|房价|房贷|公积金|土拍|宅地|涉宅|预售|网签|土地出让|地块成交')
+HOUSING_TOPIC = re.compile(r'楼市|房地产|房产|住房|住宅|二手房|新房|购房|买房|卖房|房价|房贷|公积金|土拍|宅地|涉宅|预售|网签|土地出让|地块成交|楼盘|新盘|户型|示范区|样板房|现房|交房')
+HOUSING_NOISE = re.compile(r'票房|电影|演唱会|门票|股市|股指|美股|港股|股债|彩票')
 
 
 def is_hangzhou_housing(title):
     # Google News appends the publisher name; “杭州网” is not story location evidence.
     title = title.rsplit(' - ', 1)[0]
-    return bool(HOUSING_LOCATION.search(title) and HOUSING_TOPIC.search(title))
+    return bool(HOUSING_LOCATION.search(title) and HOUSING_TOPIC.search(title) and not HOUSING_NOISE.search(title))
 
 
 class PlainText(HTMLParser):
@@ -233,12 +234,78 @@ def parse_feed(data, source, now):
     return articles
 
 
+class HousingDailyList(HTMLParser):
+    """Read the publisher's dated news rows, excluding navigation and sidebars."""
+    def __init__(self):
+        super().__init__()
+        self.items = []
+        self.current = None
+        self.depth = 0
+        self.capture = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == 'li':
+            if self.current is not None:
+                self.depth += 1
+            elif 'news_item' in attrs.get('class', '').split():
+                self.current = {'url': '', 'title': [], 'date': []}
+                self.depth = 1
+        if self.current is None:
+            return
+        if tag == 'a' and not self.current['url']:
+            self.current['url'] = attrs.get('href', '')
+        if tag == 'h2':
+            self.capture = 'title'
+        if tag == 'span' and 'time' in attrs.get('class', '').split():
+            self.capture = 'date'
+
+    def handle_data(self, data):
+        if self.current is not None and self.capture:
+            self.current[self.capture].append(data)
+
+    def handle_endtag(self, tag):
+        if self.current is None:
+            return
+        if (tag == 'h2' and self.capture == 'title') or (tag == 'span' and self.capture == 'date'):
+            self.capture = None
+        if tag == 'li':
+            self.depth -= 1
+            if self.depth == 0:
+                self.items.append(self.current)
+                self.current = None
+                self.capture = None
+
+
+def parse_housing_daily(data, source, now):
+    parser = HousingDailyList()
+    parser.feed(data.decode('utf-8'))
+    articles = []
+    for item in parser.items[:120]:
+        url = safe_url(urllib.parse.urljoin(source['url'], item['url']))
+        title = plain(''.join(item['title']))[:240]
+        date = re.search(r'\d{4}-\d{2}-\d{2}', ''.join(item['date']))
+        date = parse_date(date[0] + 'T00:00:00+08:00') if date else None
+        # Only accept the source's own daily-bulletin pages and explicit dates.
+        if not url or not re.fullmatch(r'https://zzhz\.zjol\.com\.cn/hz/bb/\d{6}/t\d{8}_\d+\.shtml', url):
+            continue
+        if not title or not date or not now - timedelta(days=30) <= date <= now + timedelta(minutes=10):
+            continue
+        if article_category(title, source) != 'housing':
+            continue
+        articles.append({'id': hashlib.sha256(url.encode()).hexdigest()[:16],
+                         'title': title, 'url': url, 'sourceId': source['id'],
+                         'category': 'housing', 'publishedAt': iso(date), 'excerpt': ''})
+    return articles
+
+
 def collect(source, now):
     status = {k: source[k] for k in ('id', 'name', 'home', 'category', 'color')}
     status['checkedAt'] = iso(now)
     started = time.monotonic()
     try:
-        articles = parse_feed(fetch(source['url']), source, now)
+        parser = parse_housing_daily if source.get('format') == 'housing-daily-list' else parse_feed
+        articles = parser(fetch(source['url']), source, now)
         if not articles:
             raise ValueError('No dated articles from the last 30 days')
         status.update(status='ok', fetchedCount=len(articles), latestAt=max(a['publishedAt'] for a in articles),
@@ -294,22 +361,30 @@ def recent_model_releases(previous, incoming, now, allowed_sources):
     return merge_articles(candidates(previous), candidates(incoming), now, allowed_sources)[:120]
 
 
+def recent_housing_articles(previous, incoming, now, allowed_sources):
+    def candidates(articles):
+        return [a for a in articles if isinstance(a, dict) and a.get('category') == 'housing']
+    return merge_articles(candidates(previous), candidates(incoming), now, allowed_sources)[:120]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', type=Path, default=ROOT / 'news/data/news.json')
     parser.add_argument('--previous-url')
     args = parser.parse_args()
     sources = json.loads((ROOT / 'news/sources.json').read_text())
-    previous, previous_models = [], []
+    previous, previous_models, previous_housing = [], [], []
     if args.output.exists():
         old = json.loads(args.output.read_text())
         previous = old.get('articles', [])
         previous_models = old.get('modelReleases', [])
+        previous_housing = old.get('housingArticles', [])
     if args.previous_url:
         try:
             old = json.loads(fetch(args.previous_url, 15_000_000))
             previous += old.get('articles', [])
             previous_models += old.get('modelReleases', [])
+            previous_housing += old.get('housingArticles', [])
         except urllib.error.HTTPError as exc:
             if exc.code != 404:
                 raise SystemExit(f'Cannot safely read previous archive; aborting to preserve history: {exc}')
@@ -325,6 +400,7 @@ def main():
     allowed_sources = {s['id']: s for s in sources}
     articles = merge_articles(previous, incoming, now, allowed_sources)
     models = recent_model_releases(previous + previous_models, incoming, now, allowed_sources)
+    housing = recent_housing_articles(previous + previous_housing, incoming, now, allowed_sources)
     previous_urls = {safe_url(a.get('url')) for a in previous if isinstance(a, dict)}
     for status in statuses:
         status['newCount'] = sum(a['sourceId'] == status['id'] and a['url'] not in previous_urls for a in articles)
@@ -333,7 +409,7 @@ def main():
     if not incoming:
         raise SystemExit('All feeds unavailable. Keep the last successful deployment; do not publish an empty site.')
     result = {'version': 1, 'updatedAt': iso(now), 'retentionDays': 30, 'sources': statuses,
-              'articles': articles, 'modelReleases': models}
+              'articles': articles, 'modelReleases': models, 'housingArticles': housing}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, ensure_ascii=False, separators=(',', ':')) + '\n')
     print(f'Collected {len(incoming)} items; retained {len(articles)} unique items; {sum(s["status"] == "ok" for s in statuses)}/{len(sources)} sources available.')

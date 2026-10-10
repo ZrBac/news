@@ -934,14 +934,38 @@ dialog::backdrop {
   margin: 0 0 12px;
 }
 
-.housing-market {
+.housing-links {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 18px;
+  margin: 16px 0;
+  font-size: 12px;
+}
+.housing-links a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.housing-market,
+.housing-news {
   border-top: 1px solid var(--line);
   margin-top: 28px;
   padding-top: 24px;
 }
-.housing-market h2 {
+.housing-market h2,
+.housing-news h2 {
   font-size: 19px;
   margin: 0 0 12px;
+}
+.housing-more {
+  display: block;
+  border: 1px solid var(--line);
+  padding: 10px 20px;
+  margin: 18px auto;
+  font-size: 13px;
+}
+#housing-news-title {
+  outline: none;
 }
 .housing-market a {
   text-decoration: underline;

@@ -316,9 +316,18 @@
     "color": "#52745b"
   },
   {
+    "id": "hz-housing-daily",
+    "name": "住在杭州·每日新盘播报",
+    "url": "https://zzhz.zjol.com.cn/hz/bb/",
+    "home": "https://zzhz.zjol.com.cn/hz/bb/",
+    "format": "housing-daily-list",
+    "category": "housing",
+    "color": "#786448"
+  },
+  {
     "id": "hz-housing-tide",
     "name": "潮新闻·杭州房市·聚合",
-    "url": "https://news.google.com/rss/search?q=site%3Atidenews.com.cn+%E6%9D%AD%E5%B7%9E+%28%E6%A5%BC%E5%B8%82+OR+%E4%BA%8C%E6%89%8B%E6%88%BF+OR+%E6%96%B0%E6%88%BF+OR+%E5%9C%9F%E6%8B%8D+OR+%E8%B4%AD%E6%88%BF+OR+%E4%BD%8F%E5%AE%85%29+when%3A30d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "url": "https://news.google.com/rss/search?q=site%3Atidenews.com.cn+%E6%9D%AD%E5%B7%9E+%28%E6%A5%BC%E5%B8%82+OR+%E4%BA%8C%E6%89%8B%E6%88%BF+OR+%E6%96%B0%E6%88%BF+OR+%E5%9C%9F%E6%8B%8D+OR+%E8%B4%AD%E6%88%BF+OR+%E4%BD%8F%E5%AE%85+OR+%E6%A5%BC%E7%9B%98+OR+%E6%96%B0%E7%9B%98+OR+%E6%88%B7%E5%9E%8B+OR+%E9%A2%84%E5%94%AE+OR+%E4%BA%A4%E6%88%BF+OR+%E6%A0%B7%E6%9D%BF%E6%88%BF%29+when%3A30d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
     "home": "https://tidenews.com.cn/",
     "category": "housing",
     "color": "#786448"
@@ -326,7 +335,7 @@
   {
     "id": "hz-housing-hangzhou",
     "name": "杭州网·房市·聚合",
-    "url": "https://news.google.com/rss/search?q=site%3Ahangzhou.com.cn+%E6%9D%AD%E5%B7%9E+%28%E6%A5%BC%E5%B8%82+OR+%E4%BA%8C%E6%89%8B%E6%88%BF+OR+%E6%96%B0%E6%88%BF+OR+%E5%9C%9F%E6%8B%8D+OR+%E8%B4%AD%E6%88%BF+OR+%E4%BD%8F%E5%AE%85%29+when%3A30d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "url": "https://news.google.com/rss/search?q=site%3Ahangzhou.com.cn+%E6%9D%AD%E5%B7%9E+%28%E6%A5%BC%E5%B8%82+OR+%E4%BA%8C%E6%89%8B%E6%88%BF+OR+%E6%96%B0%E6%88%BF+OR+%E5%9C%9F%E6%8B%8D+OR+%E8%B4%AD%E6%88%BF+OR+%E4%BD%8F%E5%AE%85+OR+%E6%A5%BC%E7%9B%98+OR+%E6%96%B0%E7%9B%98+OR+%E6%88%B7%E5%9E%8B+OR+%E9%A2%84%E5%94%AE+OR+%E4%BA%A4%E6%88%BF+OR+%E6%A0%B7%E6%9D%BF%E6%88%BF%29+when%3A30d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
     "home": "https://hznews.hangzhou.com.cn/jingji/",
     "category": "housing",
     "color": "#786448"
@@ -334,7 +343,7 @@
   {
     "id": "hz-housing-zjol",
     "name": "浙江在线·住在杭州·聚合",
-    "url": "https://news.google.com/rss/search?q=site%3Azjol.com.cn+%E6%9D%AD%E5%B7%9E+%28%E6%A5%BC%E5%B8%82+OR+%E4%BA%8C%E6%89%8B%E6%88%BF+OR+%E6%96%B0%E6%88%BF+OR+%E5%9C%9F%E6%8B%8D+OR+%E8%B4%AD%E6%88%BF+OR+%E4%BD%8F%E5%AE%85%29+when%3A30d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "url": "https://news.google.com/rss/search?q=site%3Azjol.com.cn+%E6%9D%AD%E5%B7%9E+%28%E6%A5%BC%E5%B8%82+OR+%E4%BA%8C%E6%89%8B%E6%88%BF+OR+%E6%96%B0%E6%88%BF+OR+%E5%9C%9F%E6%8B%8D+OR+%E8%B4%AD%E6%88%BF+OR+%E4%BD%8F%E5%AE%85+OR+%E6%A5%BC%E7%9B%98+OR+%E6%96%B0%E7%9B%98+OR+%E6%88%B7%E5%9E%8B+OR+%E9%A2%84%E5%94%AE+OR+%E4%BA%A4%E6%88%BF+OR+%E6%A0%B7%E6%9D%BF%E6%88%BF%29+when%3A30d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
     "home": "https://zzhz.zjol.com.cn/",
     "category": "housing",
     "color": "#786448"

@@ -96,19 +96,61 @@ class FeedTests(unittest.TestCase):
 
     def test_hangzhou_housing_requires_location_and_housing_topic(self):
         source = dict(self.source, category='housing')
-        for title in ('杭州二手房成交327套', '杭州新房成交99套', '临平推出购房补贴', '杭州AI选房服务与购房政策解读'):
+        for title in ('杭州二手房成交327套', '杭州新房成交99套', '临平推出购房补贴', '杭州AI选房服务与购房政策解读', '杭州楼盘户型首次亮相', '杭州新盘开放示范区'):
             with self.subTest(title=title):
                 feed = self.feed().replace(b'AI &amp; \xe7\xa7\x91\xe6\x8a\x80 <script>alert(1)</script>', title.encode())
                 articles = collector.parse_feed(feed, source, self.now)
                 self.assertEqual(len(articles), 1)
                 self.assertEqual(articles[0]['category'], 'housing')
                 self.assertEqual(len(collector.merge_articles(articles, [], self.now, {'example'})), 1)
-        for title in ('杭州银行利润增长', '杭州国庆旅游客流', '上海新房成交99套', '全国楼市政策调整', '王石不卖房了？ - 杭州网', '上海新房成交99套 - 住在杭州网'):
+        for title in ('杭州银行利润增长', '杭州国庆旅游客流', '杭州电影预售开启', '杭州演唱会门票预售', '上海新房成交99套', '全国楼市政策调整', '王石不卖房了？ - 杭州网', '上海新房成交99套 - 住在杭州网'):
             with self.subTest(title=title):
                 self.assertFalse(collector.is_hangzhou_housing(title))
         article = collector.parse_feed(self.feed(), self.source, self.now)[0]
         unrelated = dict(article, title='杭州天气降温', category='housing')
         self.assertFalse(collector.merge_articles([unrelated], [], self.now, {'example'}))
+
+    def test_direct_housing_bulletins_use_dated_publisher_rows_and_safe_links(self):
+        source = {'id': 'hz-housing-daily', 'category': 'housing',
+                  'url': 'https://zzhz.zjol.com.cn/hz/bb/'}
+        def row(link, date, title='9月23日，杭州新房2盘预售，3盘报名中'):
+            return f'<li class="news_item"><a href="{link}"><img alt="不要当作标题" />' \
+                   f'<h2>{title}</h2><span class="resource">住在杭州网</span>' \
+                   f'<span class="time">| {date}</span></a></li>'
+        link = '//zzhz.zjol.com.cn/hz/bb/202609/t20260921_1234.shtml'
+        content = '<aside><a href="' + link + '">杭州新房报道</a></aside><ul>'
+        content += row(link, '2026-09-23')
+        for invalid_link, date, title in ((link, '', '杭州楼盘信息'),
+                                         (link, '2026-08-01', '杭州楼盘信息'),
+                                         (link, '2026-09-30', '杭州楼盘信息'),
+                                         (link, '2026-99-01', '杭州楼盘信息'),
+                                         ('javascript:alert(1)', '2026-09-23', '杭州楼盘信息'),
+                                         ('https://example.com/story', '2026-09-23', '杭州楼盘信息'),
+                                         (link, '2026-09-23', '杭州电影预售消息')):
+            content += row(invalid_link, date, title)
+        articles = collector.parse_housing_daily((content + '</ul>').encode(), source, self.now)
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0]['title'], '9月23日，杭州新房2盘预售，3盘报名中')
+        self.assertEqual(articles[0]['publishedAt'], '2026-09-22T16:00:00Z')
+        self.assertEqual(articles[0]['url'], 'https:' + link)
+        self.assertEqual(articles[0]['sourceId'], source['id'])
+
+    def test_housing_history_survives_busy_archive_and_source_failures(self):
+        article = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        housing = dict(article, title='杭州新盘领出预售证', category='housing')
+        source = dict(self.source, category='housing')
+        allowed = {source['id']: source, 'sports': {'id': 'sports', 'category': 'sports'}}
+        busy = [dict(article, sourceId='sports', category='sports', title='比赛结果' + str(i),
+                     url='https://example.com/sport/' + str(i), publishedAt=collector.iso(self.now))
+                for i in range(6000)]
+        archive = collector.merge_articles([housing] + busy, [], self.now, allowed)
+        self.assertEqual(len(archive), 6000)
+        self.assertFalse(any(a['category'] == 'housing' for a in archive))
+        retained = collector.recent_housing_articles([housing] + busy, [], self.now, allowed)
+        self.assertEqual(retained, [housing])
+        self.assertEqual(collector.recent_housing_articles(retained, [], self.now, allowed), retained)
+        self.assertFalse(collector.recent_housing_articles(retained, [], self.now + timedelta(days=31), allowed))
+        self.assertFalse(collector.recent_housing_articles(retained, [], self.now, {}))
 
     def test_model_launches_are_separate_from_ai_and_old_articles_are_migrated(self):
         for title in ('OpenAI 发布 GPT-6.1 Sol', '智谱 GLM-5.3 模型上线',
@@ -207,6 +249,21 @@ class FeedTests(unittest.TestCase):
 
 
 class BuildTests(unittest.TestCase):
+    def test_housing_packet_is_independent_deduplicated_and_small(self):
+        spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        articles = [{'id': 's' + str(i), 'category': 'sports', 'title': '比赛' + str(i),
+                     'publishedAt': '2026-10-10T04:00:00Z'} for i in range(200)]
+        housing = [{'id': 'h' + str(i), 'category': 'housing', 'title': '杭州楼盘' + str(i),
+                    'publishedAt': '2026-10-09T04:00:00Z'} for i in range(70)]
+        duplicate = dict(housing[0], id='copy', title=housing[0]['title'] + ' - 住在杭州网')
+        with tempfile.TemporaryDirectory() as tmp:
+            builder.build_news_pages({'articles': articles, 'housingArticles': [housing[0], duplicate] + housing[1:]}, Path(tmp))
+            latest = json.loads((Path(tmp) / 'data/latest.json').read_text())
+            self.assertEqual(latest['articles'], articles[:150])
+            self.assertEqual(latest['housingArticles'], housing[:60])
+
     def test_brief_packet_includes_low_volume_categories_and_beijing_dates(self):
         spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
         builder = importlib.util.module_from_spec(spec)

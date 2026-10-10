@@ -169,12 +169,6 @@ span[data-icon] {
   white-space: nowrap;
   padding: 10px 5px;
 }
-.guide-link {
-  padding: 9px 10px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--surface);
-}
 .pwa-update {
   position: fixed;
   bottom: calc(16px + env(safe-area-inset-bottom));

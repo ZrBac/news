@@ -72,3 +72,17 @@ test("Published lookup indexes select chapters without requiring truncated entry
   assert.equal(guide.retrieve(index, "公司裁员")[0].id, "19-1");
   assert.deepEqual(guide.retrieve(index, "量子虫洞星际飞船"), []);
 });
+
+test("Full body search updates after a chapter loads into an existing directory entry", () => {
+  const entry = {
+    id: "1-1",
+    title: "普通标题",
+    summary: "普通摘要",
+    chapter: 1,
+    number: 1,
+  };
+  const partial = { entries: [entry] };
+  assert.equal(guide.search(partial, "量子虫洞").length, 0);
+  entry.body = "正文包含量子虫洞，仅用于检验后续加载的检索。";
+  assert.equal(guide.search(partial, "量子虫洞")[0].entry.id, "1-1");
+});

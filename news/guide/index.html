@@ -11,11 +11,7 @@
       name="description"
       content="阅读、搜索和收藏《高性价比人生指南》，按正文查找生活决策依据。"
     />
-    <meta name="guide-book" content="/assets/news/guide-book.json" />
-    <meta
-      name="guide-endpoint"
-      content="https://news-refresh.944052796.workers.dev/api/life-guide"
-    />
+    <meta name="guide-book" content="/assets/news/guide-index.json" />
     <link rel="canonical" href="https://news.zacai.fun/guide/" />
     <link rel="manifest" href="/manifest.webmanifest" />
     <link rel="apple-touch-icon" href="/assets/news/icon-180.png" />
@@ -54,12 +50,15 @@
       </div>
       <nav class="guide-tabs" aria-label="指南功能">
         <a href="#read" data-mode="read" aria-current="page">阅读</a>
-        <a href="#ask" data-mode="ask">问答</a>
         <a href="#saved" data-mode="saved"
           >收藏 <span id="guide-saved-count">0</span></a
         >
       </nav>
       <section id="reader" aria-label="阅读指南">
+        <details class="guide-directory">
+          <summary>按章节阅读</summary>
+          <nav aria-label="指南章节">__GUIDE_DIRECTORY__</nav>
+        </details>
         <form id="guide-search-form" class="guide-search" role="search">
           <label class="sr-only" for="guide-query">搜索正文</label>
           <input
@@ -86,38 +85,23 @@
           >
         </div>
         <p id="guide-result-count" class="guide-muted" role="status">
-          正在加载正文…
+          __GUIDE_INITIAL_STATUS__
         </p>
+        <p
+          id="guide-download-status"
+          class="guide-muted"
+          role="status"
+          hidden
+        ></p>
+        <button id="guide-retry" class="guide-retry" hidden>
+          重新加载目录
+        </button>
         <details id="chapter-intro" class="chapter-intro" hidden>
           <summary>本章说明</summary>
           <div></div>
         </details>
-        <div id="guide-results"></div>
+        <div id="guide-results">__GUIDE_INITIAL_ENTRIES__</div>
         <button id="guide-more" class="guide-more" hidden>查看更多</button>
-      </section>
-      <section id="question-panel" aria-label="按指南问答" hidden>
-        <p class="guide-muted">
-          写清楚你的处境和想解决的事。回答会附章节出处，适用条件以正文为准。
-        </p>
-        <form id="guide-question-form">
-          <label for="guide-question">你想问什么？</label>
-          <textarea
-            id="guide-question"
-            rows="4"
-            maxlength="1000"
-            placeholder="例如：公司要裁员，我工作了三年，离职前应该确认什么？"
-            required
-          ></textarea>
-          <div class="question-actions">
-            <button id="guide-lookup" type="button">查找相关原文</button
-            ><button id="guide-ask" type="submit" disabled>AI 问答</button>
-          </div>
-        </form>
-        <p id="guide-ai-status" class="guide-muted" role="status">
-          正在检查问答服务…
-        </p>
-        <div id="guide-answer" aria-live="polite" hidden></div>
-        <div id="guide-references"></div>
       </section>
       <div id="offline-tools" class="guide-offline">
         <span id="offline-status" role="status">正在检查离线资源…</span>
@@ -129,7 +113,8 @@
       </div>
       <p id="guide-error" role="alert" hidden></p>
       <noscript
-        >阅读和搜索需要开启 JavaScript。也可以<a
+        >可以通过“按章节阅读”查看全部正文。搜索和收藏需要开启
+        JavaScript。也可以<a
           href="https://github.com/eternity4719/HowToLiveBetter"
           >阅读原项目</a
         >。</noscript
@@ -167,5 +152,8 @@
       </div>
       <div id="dialog-content"></div>
     </dialog>
+    <script id="guide-bootstrap" type="application/json">
+      __GUIDE_BOOTSTRAP__
+    </script>
   </body>
 </html>

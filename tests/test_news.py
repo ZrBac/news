@@ -87,7 +87,7 @@ class FeedTests(unittest.TestCase):
         self.assertIsNone(collector.safe_url('https://user:password@example.com/'))
 
     def test_dedicated_categories_survive_ai_keyword_and_archive_merge(self):
-        for category in ('entertainment', 'sports'):
+        for category in ('entertainment', 'gaming', 'sports'):
             with self.subTest(category=category):
                 source = dict(self.source, category=category)
                 items = collector.parse_feed(self.feed(), source, self.now)
@@ -271,7 +271,7 @@ class BuildTests(unittest.TestCase):
         busy = [{'id': 's' + str(i), 'category': 'sports', 'title': '比赛消息' + str(i),
                  'sourceId': 'sports', 'publishedAt': '2026-10-10T04:00:00Z'} for i in range(170)]
         rare = [{'id': c, 'category': c, 'title': c + '今日消息', 'sourceId': c,
-                 'publishedAt': '2026-10-09T16:01:00Z'} for c in ('general', 'tech', 'ai', 'entertainment', 'housing')]
+                 'publishedAt': '2026-10-09T16:01:00Z'} for c in ('general', 'tech', 'ai', 'entertainment', 'gaming', 'housing')]
         model = {'id': 'model', 'category': 'models', 'title': '今日模型发布', 'sourceId': 'official',
                  'publishedAt': '2026-10-09T16:00:00Z'}
         yesterday = dict(model, id='yesterday', title='昨日模型发布', publishedAt='2026-10-09T15:59:00Z')
@@ -283,11 +283,25 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(latest['articles'], busy[:150])
             self.assertEqual(latest['briefDays'], ['2026-10-10', '2026-10-09'])
             self.assertEqual({a['category'] for a in latest['briefArticles']},
-                             {'general', 'tech', 'ai', 'models', 'entertainment', 'sports', 'housing'})
+                             {'general', 'tech', 'ai', 'models', 'entertainment', 'gaming', 'sports', 'housing'})
             self.assertEqual(len([a for a in latest['briefArticles'] if a['category'] == 'sports']), 5)
             self.assertEqual({a['id'] for a in latest['briefArticles'] if a['category'] == 'models'},
                              {'model', 'yesterday'})
-            self.assertLessEqual(len(latest['briefArticles']), 70)
+            self.assertLessEqual(len(latest['briefArticles']), 80)
+    def test_gaming_snapshot_is_available_beyond_the_first_news_page(self):
+        spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        busy = [{'id': 's' + str(i), 'category': 'sports', 'title': '比赛' + str(i),
+                 'publishedAt': '2026-10-10T04:00:00Z'} for i in range(200)]
+        gaming = [{'id': 'g' + str(i), 'category': 'gaming', 'title': '新游' + str(i),
+                   'publishedAt': '2026-10-09T04:00:00Z'} for i in range(70)]
+        with tempfile.TemporaryDirectory() as tmp:
+            builder.build_news_pages({'articles': busy + gaming}, Path(tmp))
+            latest = json.loads((Path(tmp) / 'data/latest.json').read_text())
+            self.assertEqual(latest['articles'], busy[:150])
+            self.assertEqual(latest['gamingArticles'], gaming[:60])
+
     def test_recent_model_releases_are_cached_separately_from_the_first_news_page(self):
         spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
         builder = importlib.util.module_from_spec(spec)
@@ -377,16 +391,29 @@ class BuildTests(unittest.TestCase):
                 self.assertIn('/games/', shell)
                 self.assertIn('/guide/', shell)
                 guide = (output / 'guide/index.html').read_text()
-                guide_data = re.search(r'/assets/news/guide-book\.[0-9a-f]{12}\.json', guide).group(0)
+                guide_data = re.search(r'/assets/news/guide-index\.[0-9a-f]{12}\.json', guide).group(0)
                 self.assertIn(guide_data, shell)
-                self.assertEqual(json.loads((output / guide_data.lstrip('/')).read_text()),
-                                 json.loads((output / 'guide/book.json').read_text()))
-                guide_index = json.loads((output / 'guide/search.json').read_text())
-                self.assertIn('押金', guide_index['lookup'])
-                self.assertTrue(all('body' not in e and 'summary' not in e for e in guide_index['entries']))
-                chapter = json.loads((output / f'guide/chapters/15.{guide_index["revision"][:12]}.json').read_text())
-                self.assertEqual(chapter['revision'], guide_index['revision'])
-                self.assertTrue(all('备注：' in e['body'] for e in chapter['entries']))
+                book = json.loads((output / 'guide/book.json').read_text())
+                index = json.loads((output / guide_data.lstrip('/')).read_text())
+                self.assertEqual(len(index['entries']), len(book['entries']))
+                self.assertTrue(all('body' not in entry for entry in index['entries']))
+                self.assertEqual(index['entries'], [{key: value for key, value in entry.items() if key != 'body'}
+                                                   for entry in book['entries']])
+                self.assertNotIn('guide-book.', ''.join(shell))
+                self.assertNotIn('AI 问答', guide)
+                self.assertNotIn('guide-endpoint', guide)
+                self.assertNotIn('__GUIDE_', guide)
+                self.assertIn('成本：', guide)
+                chapter_files = json.loads(re.search(r'const GUIDE_FILES = (\[.*?\]);', worker, re.S).group(1))
+                self.assertEqual(chapter_files, [chapter['file'] for chapter in index['chapters']])
+                self.assertTrue(all(file not in shell for file in chapter_files))
+                chapter = json.loads((output / index['chapters'][14]['file'].lstrip('/')).read_text())
+                self.assertEqual(chapter['revision'], index['revision'])
+                self.assertTrue(all('备注：' in entry['body'] for entry in chapter['entries']))
+                static = (output / 'guide/read/15/index.html').read_text()
+                self.assertIn('押金', static)
+                self.assertIn('备注：', static)
+                self.assertNotIn('<script', static)
                 for path in shell:
                     self.assertTrue((output / (path.lstrip('/') + 'index.html' if path.endswith('/') else path.lstrip('/'))).is_file())
                 games = (output / 'games/index.html').read_text()

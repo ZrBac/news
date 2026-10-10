@@ -276,6 +276,46 @@
     "color": "#8d443d"
   },
   {
+    "id": "gcores",
+    "name": "机核",
+    "url": "https://www.gcores.com/rss",
+    "home": "https://www.gcores.com/",
+    "category": "gaming",
+    "color": "#77578c"
+  },
+  {
+    "id": "yystv",
+    "name": "游研社",
+    "url": "https://www.yystv.cn/rss/feed",
+    "home": "https://www.yystv.cn/",
+    "category": "gaming",
+    "color": "#54777b"
+  },
+  {
+    "id": "gnews-gamersky",
+    "name": "游民星空",
+    "url": "https://news.google.com/rss/search?q=site%3Agamersky.com%2Fnews%2F+%28%E6%B8%B8%E6%88%8F+OR+Steam+OR+PS5+OR+Xbox+OR+%E4%BB%BB%E5%A4%A9%E5%A0%82%29+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://www.gamersky.com/news/",
+    "category": "gaming",
+    "color": "#88563d"
+  },
+  {
+    "id": "gnews-3dm",
+    "name": "3DM",
+    "url": "https://news.google.com/rss/search?q=site%3A3dmgame.com%2Fnews%2F+%28%E6%B8%B8%E6%88%8F+OR+Steam+OR+PS5+OR+Xbox+OR+%E4%BB%BB%E5%A4%A9%E5%A0%82%29+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://www.3dmgame.com/news/",
+    "category": "gaming",
+    "color": "#815253"
+  },
+  {
+    "id": "eurogamer",
+    "name": "Eurogamer",
+    "url": "https://www.eurogamer.net/feed",
+    "home": "https://www.eurogamer.net/",
+    "category": "gaming",
+    "color": "#48698b"
+  },
+  {
     "id": "chinanews-sports",
     "name": "中新网体育",
     "url": "https://www.chinanews.com.cn/rss/sports.xml",

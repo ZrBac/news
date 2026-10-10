@@ -16,39 +16,66 @@ from xml.sax.saxutils import escape
 ROOT = Path(__file__).resolve().parents[1]
 
 
-def build_guide_search(output):
-    """Workers search a small index, then fetch only selected full chapters."""
+def build_guide_reader(output):
+    """Render a usable first page and split remaining bodies into small chapters."""
     book = json.loads((output / 'guide/book.json').read_text())
-    def terms(text):
-        result = set(re.findall(r'[a-z0-9]{2,}', text.lower()))
-        for part in re.findall(r'[\u4e00-\u9fff]+', text):
-            result.update(part[i:i + 2] for i in range(len(part) - 1))
-        return result
-    vocabulary = set().union(*(terms(e['title']) for e in book['entries']),
-                             *(terms(c['question']) for c in book['chapters']))
-    entries, lookup = [], {}
-    for i, entry in enumerate(book['entries']):
-        record = {key: value for key, value in entry.items() if key not in ('body', 'url', 'summary')}
-        record['searchTitle'] = re.sub(r'\s+', '', entry['title'].lower())
-        entries.append(record)
-        title = terms(entry['title'])
-        for term in sorted(title | (terms(entry['summary']) & vocabulary)):
-            # Pack the row index and weight into one integer to keep the index small.
-            lookup.setdefault(term, []).append(i * 16 + (14 if term in title else 5))
-    index = {key: value for key, value in book.items() if key not in ('entries', 'chapters')}
-    index['chapters'] = [{key: value for key, value in chapter.items() if key != 'intro'}
-                         for chapter in book['chapters']]
-    index['entries'] = entries
-    index['lookup'] = lookup
-    (output / 'guide/search.json').write_text(json.dumps(index, ensure_ascii=False, separators=(',', ':')) + '\n')
+    chapters = [{**chapter, 'file': f'/guide/chapters/{chapter["id"]}.{book["revision"][:12]}.json'}
+                for chapter in book['chapters']]
+    index = {**book, 'chapters': chapters,
+             'entries': [{key: value for key, value in entry.items() if key != 'body'}
+                         for entry in book['entries']]}
+    (output / 'assets/news/guide-index.json').write_text(
+        json.dumps(index, ensure_ascii=False, separators=(',', ':')) + '\n')
     folder = output / 'guide/chapters'
     folder.mkdir(parents=True, exist_ok=True)
-    for chapter in book['chapters']:
+    for chapter in chapters:
         body = {'schema': 1, 'revision': book['revision'],
-                'entries': [e for e in book['entries'] if e['chapter'] == chapter['id']]}
-        (folder / f'{chapter["id"]}.{book["revision"][:12]}.json').write_text(
+                'entries': [entry for entry in book['entries'] if entry['chapter'] == chapter['id']]}
+        (output / chapter['file'].lstrip('/')).write_text(
             json.dumps(body, ensure_ascii=False, separators=(',', ':')) + '\n')
-
+    first = book['entries'][:12]
+    bootstrap = {**book, 'chapters': chapters, 'entries': first, 'totalEntries': len(book['entries'])}
+    template = (output / 'guide/index.html').read_text()
+    directory = ''.join(f'<a href="/guide/read/{chapter["id"]}/" data-read-chapter="{chapter["id"]}">'
+                        f'{chapter["id"]}. {html_escape(chapter["title"])}</a>' for chapter in chapters)
+    def card(entry, controls=False):
+        chapter = next(chapter for chapter in chapters if chapter['id'] == entry['chapter'])
+        save = f'<button class="entry-save" data-save="{entry["id"]}" aria-pressed="false">收藏</button>' if controls else ''
+        return (f'<article class="guide-entry" data-entry="{entry["id"]}">'
+                f'<p class="entry-meta">第 {chapter["id"]} 章 · {html_escape(chapter["title"])} · 第 {entry["number"]} 条 · 证据 {html_escape(entry["grade"] or "未标注")}</p>'
+                f'<div class="entry-head"><h2>{html_escape(entry["title"])}</h2>{save}</div>'
+                f'<p class="entry-summary">{html_escape(entry["summary"])}</p>'
+                f'<details><summary>正文、来源与适用条件</summary><div class="entry-body" data-loaded="true">'
+                f'<div class="entry-plain">{html_escape(entry["body"])}</div></div>'
+                f'<a class="entry-original" href="{html_escape(entry["url"], quote=True)}" target="_blank" rel="noopener noreferrer">查看原项目本章</a>'
+                '</details></article>')
+    template = template.replace('__GUIDE_DIRECTORY__', directory)
+    template = template.replace('__GUIDE_INITIAL_STATUS__', '首屏正文已可阅读，正在加载完整目录…')
+    template = template.replace('__GUIDE_INITIAL_ENTRIES__', ''.join(card(entry, True) for entry in first))
+    template = template.replace('__GUIDE_BOOTSTRAP__', json.dumps(bootstrap, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c'))
+    (output / 'guide/index.html').write_text(template)
+    static_paths = []
+    for chapter in chapters:
+        page_path = f'/guide/read/{chapter["id"]}/'
+        static_paths.append(page_path)
+        page = ('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
+                '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                f'<title>{html_escape(chapter["title"])} · 生活指南</title>'
+                f'<link rel="canonical" href="https://news.zacai.fun{page_path}">'
+                '<link rel="stylesheet" href="/assets/news/style.css">'
+                '<link rel="stylesheet" href="/assets/news/guide.css"></head><body>'
+                '<header class="header"><div class="header-inner"><a class="brand" href="/"><span class="brand-name">资讯</span></a>'
+                '<div class="header-actions"><a class="games-link" href="/guide/">返回指南</a></div></div></header>'
+                f'<main class="guide-page"><div class="guide-heading"><h1>第 {chapter["id"]} 章 · {html_escape(chapter["title"])}</h1></div>'
+                f'<div class="entry-body entry-plain">{html_escape(chapter["intro"])}</div>'
+                + ''.join(card(entry) for entry in book['entries'] if entry['chapter'] == chapter['id'])
+                + '<footer class="guide-attribution">内容来自 <a href="https://github.com/eternity4719/HowToLiveBetter">eternity4719《高性价比人生指南》</a>，'
+                '<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>。本站调整了排版，正文保留原文。'
+                f'<p>正文版本：{book["revision"][:8]} · <a href="/guide/">返回指南</a></p></footer></main></body></html>')
+        folder = output / page_path.lstrip('/')
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / 'index.html').write_text(page)
+    return chapters, static_paths
 
 
 def build_news_pages(data, output):
@@ -98,7 +125,7 @@ def build_news_pages(data, output):
         brief_days = [(today - timedelta(days=n)).isoformat() for n in range(2)]
         candidates = sorted(articles + releases + housing, key=lambda a: a['publishedAt'], reverse=True)
         for day in brief_days:
-            for category in ('general', 'ai', 'models', 'tech', 'entertainment', 'sports', 'housing'):
+            for category in ('general', 'ai', 'models', 'tech', 'entertainment', 'gaming', 'sports', 'housing'):
                 pool, seen = [], set()
                 for article in candidates:
                     if article.get('category') != category:
@@ -118,7 +145,8 @@ def build_news_pages(data, output):
                     else:
                         others.append(article)
                 brief_articles.extend(selected + others[:max(0, 5 - len(selected))])
-    latest = {**data, 'articles': articles[:size], 'modelReleases': releases,
+    gaming = [article for article in articles if article.get('category') == 'gaming'][:60]
+    latest = {**data, 'articles': articles[:size], 'modelReleases': releases, 'gamingArticles': gaming,
               'housingArticles': housing,
               'briefArticles': brief_articles, 'briefDays': brief_days,
               'archive': {'pages': pages, 'loaded': 0, 'total': len(articles),
@@ -145,18 +173,22 @@ def main():
     shutil.copy2(ROOT / 'news/index.html', output / 'index.html')
     shutil.copytree(ROOT / 'news/games', output / 'games')
     shutil.copytree(ROOT / 'news/guide', output / 'guide')
-    build_guide_search(output)
     shutil.copytree(ROOT / 'news/assets', output / 'assets/news', dirs_exist_ok=True)
-    shutil.copy2(ROOT / 'news/guide/book.json', output / 'assets/news/guide-book.json')
+    chapters, static_paths = build_guide_reader(output)
+    # Keep the previous edition available to older installed readers until they update.
+    old_book = (ROOT / 'news/guide/book.json').read_bytes()
+    digest = hashlib.sha256(old_book).hexdigest()[:12]
+    (output / f'assets/news/guide-book.{digest}.json').write_bytes(old_book)
     # New HTML always requests the matching assets, even with cached older releases.
     homepage = (output / 'index.html').read_text()
     homepage = homepage.replace('content="https://zacai.fun/api/news-refresh"',
                                 f'content="{html_escape(refresh_endpoint, quote=True)}"')
     pages = {'/': homepage, '/games/': (output / 'games/index.html').read_text(),
              '/guide/': (output / 'guide/index.html').read_text()}
+    pages.update({path: (output / path.lstrip('/') / 'index.html').read_text() for path in static_paths})
     shell_files = ['/', '/games/', '/guide/', '/manifest.webmanifest', '/assets/news/icon-180.png',
                    '/assets/news/icon-192.png', '/assets/news/icon-512.png']
-    for filename in ('compat.js', 'compat.css', 'exchange-core.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-book.json'):
+    for filename in ('compat.js', 'compat.css', 'exchange-core.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json'):
         asset = output / 'assets/news' / filename
         digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:12]
         versioned = asset.with_name(f'{asset.stem}.{digest}{asset.suffix}')
@@ -173,7 +205,13 @@ def main():
         asset = output / path.lstrip('/')
         shell_digest.update((asset / 'index.html' if path.endswith('/') else asset).read_bytes())
     worker = worker.replace('__BUILD_ID__', shell_digest.hexdigest()[:16])
+    guide_shell = list(dict.fromkeys(['/', '/guide/', '/manifest.webmanifest',
+        '/assets/news/icon-180.png', '/assets/news/icon-192.png', '/assets/news/icon-512.png',
+        *re.findall(r'/assets/news/[\w.-]+\.[a-f0-9]{12}\.(?:json|js|css|svg)\b', pages['/'] + pages['/guide/'])]))
     worker = worker.replace('__SHELL_FILES__', json.dumps(shell_files))
+    worker = worker.replace('__GUIDE_SHELL__', json.dumps(guide_shell))
+    worker = worker.replace('__GUIDE_FILES__', json.dumps([chapter['file'] for chapter in chapters]))
+    worker = worker.replace('__GUIDE_REVISION__', json.dumps(json.loads(old_book)['revision']))
     (output / 'sw.js').write_text(worker)
     shutil.copytree(ROOT / 'news/data', output / 'data', dirs_exist_ok=True)
     (output / '.nojekyll').touch()

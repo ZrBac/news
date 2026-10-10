@@ -99,6 +99,8 @@ def article_category(title, source):
         if source.get('titleFilter') == 'entertainment' and not ENTERTAINMENT_TOPIC.search(title):
             return None
         return category
+    if category == 'gaming':
+        return category
     if category == 'sports':
         return None if SPORTS_PROMOTION.search(title) and not SPORTS_DISCIPLINE.search(title) else category
     if category == 'housing':
@@ -116,7 +118,11 @@ def article_category(title, source):
     # Specialized AI feeds remain useful when the headline omits “AI”.
     if category == 'ai':
         return category
+    if category == 'tech' and GAMING_TOPIC.search(title):
+        return 'gaming'
     return category
+
+GAMING_TOPIC = re.compile(r'游戏|电玩|电竞|\b(?:Steam|Xbox|PlayStation|PS5|PS6)\b|任天堂|育碧|卡普空|塞尔达|黑神话|宝可梦|怪物猎人', re.I)
 
 HOUSING_LOCATION = re.compile(r'杭州|余杭|萧山|临平|钱塘|拱墅|临安|富阳')
 HOUSING_TOPIC = re.compile(r'楼市|房地产|房产|住房|住宅|二手房|新房|购房|买房|卖房|房价|房贷|公积金|土拍|宅地|涉宅|预售|网签|土地出让|地块成交|楼盘|新盘|户型|示范区|样板房|现房|交房')
@@ -326,7 +332,7 @@ def merge_articles(previous, incoming, now, allowed_sources):
         date = parse_date(article.get('publishedAt'))
         if not url or not date or not now - timedelta(days=30) <= date <= now + timedelta(minutes=10):
             continue
-        if article.get('sourceId') not in allowed_sources or article.get('category') not in ('general', 'tech', 'ai', 'models', 'entertainment', 'sports', 'housing'):
+        if article.get('sourceId') not in allowed_sources or article.get('category') not in ('general', 'tech', 'ai', 'models', 'entertainment', 'gaming', 'sports', 'housing'):
             continue
         if article.get('category') == 'housing' and not is_hangzhou_housing(str(article.get('title', ''))):
             continue

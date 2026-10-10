@@ -12,11 +12,12 @@
   const textCache = new WeakMap();
   function indexed(entry) {
     let value = textCache.get(entry);
-    if (!value) {
+    if (!value || value.source !== entry.body) {
       value = {
         title: entry.searchTitle || normalize(entry.title),
         summary: entry.searchSummary || normalize(entry.summary),
         body: normalize(entry.body),
+        source: entry.body,
       };
       textCache.set(entry, value);
     }

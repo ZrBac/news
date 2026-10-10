@@ -44,6 +44,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         "模型发布",
         "科技动态",
         "文娱",
+        "游戏",
         "体育",
       ]),
     );
@@ -80,6 +81,36 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.match(
       await page.locator("#fx-converted").innerText(),
       /约 [\d,.]+ 元/,
+    );
+    const tabs = await page
+      .locator(".filter-categories [data-filter]")
+      .evaluateAll((nodes) => nodes.map((node) => node.dataset.filter));
+    assert.equal(tabs.indexOf("gaming") + 1, tabs.indexOf("sports"));
+    await page.locator('[data-filter="gaming"]').click();
+    assert.equal(await page.locator("#section-title").innerText(), "游戏");
+    assert.deepEqual(
+      new Set(await page.locator(".category-label").allTextContents()),
+      new Set(["游戏"]),
+    );
+    assert.equal(
+      archives.length,
+      0,
+      "game headlines use a small snapshot without loading old archives",
+    );
+    const extraGame = data.gamingArticles.find(
+      (article) => !firstPageIds.has(article.id),
+    );
+    assert(extraGame);
+    await page.fill("#search", extraGame.title);
+    await page.locator(`[data-save="${extraGame.id}"]`).click();
+    assert(
+      await page.evaluate(
+        (id) =>
+          JSON.parse(localStorage.getItem("zrbac-news-saved-v1")).some(
+            (article) => article.id === id,
+          ),
+        extraGame.id,
+      ),
     );
     await page.locator('[data-view="brief"]').click();
     await page.fill("#date-filter", data.briefDays[1]);
@@ -140,7 +171,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.deepEqual(errors, []);
     await context.close();
     console.log(
-      "PASS: default daily brief, seven balanced categories, supplemental saves, yesterday, all-news order, grouped mobile tabs, four widths and offline without archive scans.",
+      "PASS: default daily brief, eight balanced categories, supplemental saves, yesterday, all-news order, grouped mobile tabs, four widths and offline without archive scans.",
     );
   } finally {
     await browser.close();

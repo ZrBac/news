@@ -7,7 +7,19 @@ const source = fs
   .replace(
     "__SHELL_FILES__",
     JSON.stringify(["/", "/games/", "/guide/", "/assets/news/compat.test.js"]),
-  );
+  )
+  .replace(
+    "__GUIDE_SHELL__",
+    JSON.stringify(["/", "/guide/", "/assets/news/compat.test.js"]),
+  )
+  .replace(
+    "__GUIDE_FILES__",
+    JSON.stringify([
+      "/guide/chapters/1.aaaaaaaaaaaa.json",
+      "/guide/chapters/2.aaaaaaaaaaaa.json",
+    ]),
+  )
+  .replace("__GUIDE_REVISION__", JSON.stringify("a".repeat(40)));
 function worker(options = {}) {
   const handlers = {},
     matches = [];
@@ -54,10 +66,10 @@ function worker(options = {}) {
     });
     return response;
   }
-  async function message(type, paths) {
+  async function message(type, paths, page) {
     let result, work;
     handlers.message({
-      data: { type, paths },
+      data: { type, paths, page },
       ports: [{ postMessage: (value) => (result = value) }],
       waitUntil: (value) => (work = value),
     });
@@ -165,4 +177,50 @@ test("Repair never mixes a newer page with the current worker or erases working 
   ]);
   assert.equal(failed.ready, false);
   assert.equal(entries.size, 3);
+});
+
+test("Guide preparation keeps completed chapters and retries only the failed chapter", async () => {
+  const entries = new Map([
+    ["/", new Response("home")],
+    ["/guide/", new Response("guide")],
+    ["/assets/news/compat.test.js", new Response("asset")],
+  ]);
+  const fetched = [];
+  let unavailable = true;
+  const w = worker({
+    entries,
+    fetch: async (request) => {
+      const path = new URL(request.url).pathname;
+      fetched.push(path);
+      if (unavailable && path.includes("/2."))
+        return new Response("failed", { status: 503 });
+      const chapter = Number(/chapters\/(\d+)/.exec(path)[1]);
+      return Response.json({
+        schema: 1,
+        revision: "a".repeat(40),
+        entries: [{ id: chapter + "-1", chapter, body: "正文及备注" }],
+      });
+    },
+  });
+  const failed = await w.message("PREPARE_OFFLINE", ["/guide/"], "guide");
+  assert.equal(failed.ready, false);
+  assert.equal(failed.missing, 1);
+  assert(entries.has("/guide/chapters/1.aaaaaaaaaaaa.json"));
+  unavailable = false;
+  fetched.length = 0;
+  const ready = await w.message("PREPARE_OFFLINE", ["/guide/"], "guide");
+  assert.equal(ready.ready, true);
+  assert.deepEqual(fetched, ["/guide/chapters/2.aaaaaaaaaaaa.json"]);
+  assert(
+    !entries.has("/games/"),
+    "guide readiness must not depend on missing game files",
+  );
+  assert.equal(
+    await (
+      await w.request("/guide/chapters/1.aaaaaaaaaaaa.json", "cors")
+    )
+      .json()
+      .then((data) => data.entries[0].body),
+    "正文及备注",
+  );
 });

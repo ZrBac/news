@@ -34,10 +34,10 @@
     document.querySelector("#dialog-content").innerHTML =
       "<p>安装后可从桌面直接打开资讯，使用独立窗口阅读。</p>" +
       "<h3>电脑 Chrome / Edge</h3><p>点击地址栏的安装图标，或在浏览器菜单中选择“安装资讯”或“将此网站安装为应用”。</p>" +
-      "<h3>iPhone / iPad</h3><p>在 Safari 的普通标签页中打开本站，点击分享按钮，选择“添加到主屏幕”。添加后先保持联网，从桌面图标打开一次，进入小游戏，等显示“已准备好，可离线玩”再断网。Safari 与桌面入口需要分别准备。</p>" +
+      "<h3>iPhone / iPad</h3><p>在 Safari 的普通标签页中打开本站，点击分享按钮，选择“添加到主屏幕”。添加后先保持联网，从桌面图标打开一次，进入生活指南或小游戏，等显示“已准备好，可离线阅读”或“已准备好，可离线玩”再断网。Safari 与桌面入口需要分别准备。</p>" +
       "<h3>Android</h3><p>在浏览器菜单中选择“安装应用”或“添加到主屏幕”。</p>" +
       "<h3>Mac Safari</h3><p>在支持的版本中，选择“文件 → 添加到程序坞”。</p>" +
-      "<p>首次联网准备完成后，可离线阅读已保存的资讯、生活指南、收藏和游玩小游戏。生活指南页面也可检查离线准备。更新资讯、AI 问答、打开原文链接需要联网；清除浏览器数据会移除本地缓存。</p>";
+      "<p>生活指南和小游戏分别在对应页面准备离线资源。完成后，可离线阅读已下载的指南、已保存的资讯和收藏，也可以玩已准备好的小游戏。更新资讯、打开原文链接需要联网；清除浏览器数据会移除本地缓存。</p>";
     document.querySelector("#info-dialog").showModal();
   });
 
@@ -129,19 +129,38 @@
   function askWorker(worker, type, paths) {
     return new Promise((resolve) => {
       const channel = new MessageChannel();
-      const timer = setTimeout(
+      let timer;
+      const overall = setTimeout(
         () => finish({ ready: false, reason: "timeout" }),
-        type === "PREPARE_OFFLINE" ? 90000 : 8000,
+        type === "PREPARE_OFFLINE" ? 300000 : 8000,
       );
+      const heartbeat = () => {
+        clearTimeout(timer);
+        timer = setTimeout(
+          () => finish({ ready: false, reason: "timeout" }),
+          type === "PREPARE_OFFLINE" ? 60000 : 8000,
+        );
+      };
       function finish(value) {
         clearTimeout(timer);
+        clearTimeout(overall);
         channel.port1.close();
         resolve(value);
       }
-      channel.port1.onmessage = (event) =>
+      channel.port1.onmessage = (event) => {
+        if (event.data?.progress) {
+          heartbeat();
+          if (isGuide && offlineStatus)
+            offlineStatus.textContent = `正在保存指南：${event.data.done}/${event.data.total} 章，请保持联网…`;
+          return;
+        }
         finish(event.data || { ready: false, reason: "storage" });
+      };
+      heartbeat();
       try {
-        worker.postMessage({ type, paths }, [channel.port2]);
+        worker.postMessage({ type, paths, page: isGuide ? "guide" : "games" }, [
+          channel.port2,
+        ]);
       } catch {
         finish({ ready: false, reason: "controller" });
       }
@@ -159,8 +178,7 @@
       const paths = [
         ...new Set([
           "/",
-          "/games/",
-          "/guide/",
+          ...(isGuide ? ["/guide/"] : ["/games/", "/guide/"]),
           "/manifest.webmanifest",
           ...Array.from(
             document.querySelectorAll("script[src], link[rel=stylesheet]"),
@@ -196,6 +214,8 @@
           ? "ready"
           : result.reason || (registration?.waiting ? "version" : "missing"),
       );
+      if (result.ready && isGuide)
+        window.dispatchEvent(new Event("guide-offline-ready"));
     })().finally(() => {
       checking = null;
     });
@@ -243,7 +263,13 @@
   prepareButton?.addEventListener("click", async () => {
     if (!support()) return;
     status("downloading");
-    if (!registration) await start();
+    if (
+      !registration ||
+      (!registration.active &&
+        !registration.installing &&
+        !registration.waiting)
+    )
+      await start();
     if (navigator.onLine && registration) {
       try {
         await registration.update();
@@ -265,6 +291,9 @@
     registration.waiting.postMessage({ type: "ACTIVATE_UPDATE" });
   });
   if (support()) {
+    window.addEventListener("guide-index-ready", () => {
+      if (registration) checkOffline();
+    });
     navigator.serviceWorker.addEventListener("controllerchange", () => {
       if (applyingUpdate) window.location.reload();
       else Promise.resolve(checking).then(() => checkOffline());

@@ -57,6 +57,7 @@
     ai: "人工智能",
     models: "模型发布",
     entertainment: "文娱",
+    gaming: "游戏",
     sports: "体育",
     housing: "杭州房市",
   };
@@ -154,6 +155,7 @@
       const article =
         state.data.articles.find((a) => a.id === id) ||
         state.data.housingArticles?.find((a) => a.id === id) ||
+        state.data.gamingArticles?.find((a) => a.id === id) ||
         state.data.briefArticles?.find((a) => a.id === id) ||
         state.data.modelReleases?.find((a) => a.id === id);
       if (!article) return;
@@ -199,6 +201,7 @@
       "models",
       "tech",
       "entertainment",
+      "gaming",
       "sports",
     ].map((category) => articles.filter((a) => a.category === category));
     const selected = [];
@@ -215,6 +218,12 @@
     }
     return selected;
   }
+  function hasSectionSnapshot(data = state.data) {
+    return (
+      (state.view === "models" && Array.isArray(data?.modelReleases)) ||
+      (state.view === "gaming" && Array.isArray(data?.gamingArticles))
+    );
+  }
   function matchingArticles() {
     let articles =
       state.view === "saved"
@@ -223,7 +232,9 @@
           )
         : state.view === "models" && Array.isArray(state.data.modelReleases)
           ? state.data.modelReleases
-          : state.data.articles;
+          : state.view === "gaming" && Array.isArray(state.data.gamingArticles)
+            ? state.data.gamingArticles
+            : state.data.articles;
     if (state.view === "brief")
       articles = [
         ...new Map(
@@ -231,6 +242,7 @@
             ...articles,
             ...(state.data.briefArticles || []),
             ...(state.data.modelReleases || []),
+            ...(state.data.gamingArticles || []),
           ].map((a) => [a.id, a]),
         ).values(),
       ].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
@@ -526,6 +538,7 @@
       ai: "人工智能",
       models: "模型发布",
       entertainment: "文娱",
+      gaming: "游戏",
       sports: "体育",
       housing: "杭州房价",
       exchange: "汇率",
@@ -537,7 +550,7 @@
       hasArchive() &&
       state.view !== "saved" &&
       !hasBriefSnapshot() &&
-      !(state.view === "models" && Array.isArray(state.data.modelReleases));
+      !hasSectionSnapshot();
     $("#result-count").textContent =
       partial && state.view !== "brief"
         ? `已加载 ${articles.length} 条资讯`
@@ -569,7 +582,11 @@
       "ai",
       "entertainment",
       "housing",
+      "gaming",
     ].includes(state.view);
+    if (state.view === "gaming")
+      note.textContent =
+        "新游发布、版本更新、主机与游戏行业动态。展示近30天最新60条，点击标题查看原报道。";
     if (state.view === "housing")
       note.textContent =
         "关注杭州新房、二手房成交、价格变化、购房政策与土拍。按报道发布时间排序，点击标题查看原报道及数据口径。";
@@ -628,6 +645,7 @@
       "ai",
       "models",
       "entertainment",
+      "gaming",
       "sports",
       "housing",
       "exchange",
@@ -642,6 +660,7 @@
       "ai",
       "models",
       "entertainment",
+      "gaming",
       "sports",
       "housing",
       "exchange",
@@ -967,12 +986,16 @@
       data.modelReleases = data.modelReleases
         .filter((a) => validArticle(a) && a.category === "models")
         .slice(0, 60);
+    if (Array.isArray(data.gamingArticles))
+      data.gamingArticles = data.gamingArticles
+        .filter((a) => validArticle(a) && a.category === "gaming")
+        .slice(0, 60);
     if (Array.isArray(data.housingArticles))
       data.housingArticles = data.housingArticles
         .filter((a) => validArticle(a) && a.category === "housing")
         .slice(0, 60);
     if (Array.isArray(data.briefArticles))
-      data.briefArticles = data.briefArticles.filter(validArticle).slice(0, 70);
+      data.briefArticles = data.briefArticles.filter(validArticle).slice(0, 80);
     if (Array.isArray(data.briefDays))
       data.briefDays = data.briefDays
         .filter(
@@ -1054,7 +1077,7 @@
       loading ||
       hasBriefSnapshot() ||
       ["saved", "housing", "exchange"].includes(state.view) ||
-      (state.view === "models" && Array.isArray(state.data?.modelReleases)) ||
+      hasSectionSnapshot() ||
       !hasArchive()
     )
       return;
@@ -1072,7 +1095,7 @@
           state.data === data &&
           !hasBriefSnapshot(data) &&
           !["saved", "housing", "exchange"].includes(state.view) &&
-          !(state.view === "models" && Array.isArray(data.modelReleases)) &&
+          !hasSectionSnapshot(data) &&
           hasArchive(data) &&
           matchingArticles().length < needed()
         ) {

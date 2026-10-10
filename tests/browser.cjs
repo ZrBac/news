@@ -14,7 +14,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     });
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
-    await page.goto(base, { waitUntil: "networkidle" });
+    await page.goto(base + "/#all", { waitUntil: "networkidle" });
     await page.locator(".article").first().waitFor();
     assert.match(
       await page.locator("#update-status").innerText(),

@@ -19,7 +19,27 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 UTC = timezone.utc
-AI_PATTERN = re.compile(r"\b(?:AI|AGI|LLM|GPT[\w.-]*|ChatGPT|OpenAI|Anthropic|Claude|Gemini|Copilot|DeepSeek|Qwen|Llama|Codex|RAG|MCP|agents?)\b|人工智能|大模型|语言模型|生成式|机器学习|智能体|通义|智谱|豆包|具身智能|算力", re.I)
+AI_PATTERN = re.compile(
+    r'(?<![a-z0-9])(?:AI|AGI|LLMs?|GPT[a-z0-9_.-]*|ChatGPT|OpenAI|Anthropic|'
+    r'Claude|Gemini|Copilot|DeepSeek[a-z0-9_.-]*|Qwen[a-z0-9_.-]*|Llama|Codex|'
+    r'GLM[a-z0-9_.-]*|Kimi|MiniMax|Grok|Qoder|Cursor|Windsurf|Kiro|'
+    r'RAG|MCP|agents?)(?![a-z0-9])|人工智能|大模型|语言模型|生成式|机器学习|'
+    r'智能体|通义|千问|智谱|豆包|具身智能', re.I)
+FINANCE_TOPIC = re.compile(r'股价|股票|股市|投资标的|标普|纳斯达克|证券|盈利增长|盈利预计|业绩预测|财报')
+HARDWARE_TOPIC = re.compile(r'芯片|显卡|处理器|服务器|主板|内存|固态硬盘|显示器|电源|工作站|迷你电脑|'
+                            r'(?<![a-z0-9])(?:GPU|CPU|NPU|SSD|RTX|DGX)(?![a-z0-9])', re.I)
+SYSTEM_PRODUCT = re.compile(r'(?<![a-z0-9])(?:Edge|Chrome|Firefox|Windows|Android|HarmonyOS|'
+                            r'iOS|macOS|Linux)(?![a-z])|安卓|鸿蒙|浏览器|操作系统', re.I)
+SYSTEM_UPDATE = re.compile(r'稳定版|测试版|更新|升级|发布|推出|正式版')
+ENTERTAINMENT_TOPIC = re.compile(
+    r'电影|影视|影坛|电视剧|剧集|网剧|短剧|舞台剧|话剧|歌剧|音乐剧|综艺|票房|演员|导演|'
+    r'编剧|艺人|明星|歌手|音乐|乐队|新歌|专辑|演唱会|演出|剧院|艺术节|戏剧|芭蕾|舞蹈|'
+    r'脱口秀|娱乐圈|颁奖|飞天奖|金鸡奖|百花奖|戛纳|奥斯卡|格莱美|文艺|文娱|'
+    r'小说|作家|文学|出版|鲁奖|舞台|博物馆|越剧|京剧|诺贝尔文学奖|'
+    r'\b(?:film|movie|actor|actress|cinema|music|album|singer|concert|theater|theatre|TV)\b', re.I)
+ENTERTAINMENT_NOISE = re.compile(r'^梦见|周公解梦|解梦|星座运势|生肖运势|算命|八字命理')
+SPORTS_PROMOTION = re.compile(r'彩经|竞彩|足彩|赔率|盘口|投注|半全场|亚盘|让球|胜负彩|投注技巧')
+SPORTS_DISCIPLINE = re.compile(r'违规|禁赛|被罚|赌球案|赌博案|投注案|刑事|涉嫌.*(?:赌博|投注)')
 
 MODEL_NAME = re.compile(
     r'GPT[-\s]?\d|gpt-oss|\bo[134](?:\b|-)|Claude\s+(?:Opus|Sonnet|Haiku|Fable|Mythos|\d)|'
@@ -69,14 +89,32 @@ def is_model_release(title, source_id=''):
 
 
 def article_category(title, source):
+    title = title.rsplit(' - ', 1)[0]
     category = source['category']
-    if category in ('entertainment', 'sports', 'housing'):
+    if category == 'entertainment':
+        if ENTERTAINMENT_NOISE.search(title):
+            return None
+        if source.get('titleFilter') == 'entertainment' and not ENTERTAINMENT_TOPIC.search(title):
+            return None
         return category
+    if category == 'sports':
+        return None if SPORTS_PROMOTION.search(title) and not SPORTS_DISCIPLINE.search(title) else category
+    if category == 'housing':
+        return category if is_hangzhou_housing(title) else None
     if is_model_release(title, source['id']):
         return 'models'
     if category == 'models':
         return None
-    return 'ai' if AI_PATTERN.search(title) else category
+    if FINANCE_TOPIC.search(title):
+        return 'general'
+    if HARDWARE_TOPIC.search(title) or (SYSTEM_PRODUCT.search(title) and SYSTEM_UPDATE.search(title)):
+        return 'tech'
+    if AI_PATTERN.search(title):
+        return 'ai'
+    # Specialized AI feeds remain useful when the headline omits “AI”.
+    if category == 'ai':
+        return category
+    return category
 
 HOUSING_LOCATION = re.compile(r'杭州|余杭|萧山|临平|钱塘|拱墅|临安|富阳')
 HOUSING_TOPIC = re.compile(r'楼市|房地产|房产|住房|住宅|二手房|新房|购房|买房|卖房|房价|房贷|公积金|土拍|宅地|涉宅|预售|网签|土地出让|地块成交')
@@ -217,11 +255,12 @@ def merge_articles(previous, incoming, now, allowed_sources):
             continue
         clean = {key: str(article.get(key, '')) for key in ('title', 'sourceId', 'category', 'publishedAt', 'excerpt')}
         clean.update(url=url, id=hashlib.sha256(url.encode()).hexdigest()[:16], title=plain(clean['title'])[:240], excerpt=plain(clean['excerpt'])[:90])
-        if clean['category'] == 'models' and not is_model_release(clean['title'], clean['sourceId']):
+        # Reapply current source rules to the archive as well as new stories.
+        source = allowed_sources[clean['sourceId']] if isinstance(allowed_sources, dict) else {
+            'id': clean['sourceId'], 'category': clean['category']}
+        clean['category'] = article_category(clean['title'], source)
+        if not clean['category']:
             continue
-        # Migrate already collected releases so the new section has history.
-        if clean['category'] in ('general', 'tech', 'ai') and is_model_release(clean['title'], clean['sourceId']):
-            clean['category'] = 'models'
         if clean['title']:
             by_url[url] = clean
     # Exact duplicate titles from the same publisher are revisions, not new stories.
@@ -273,7 +312,7 @@ def main():
         for articles, status in pool.map(lambda source: collect(source, now), sources):
             incoming.extend(articles)
             statuses.append(status)
-    allowed_sources = {s['id'] for s in sources}
+    allowed_sources = {s['id']: s for s in sources}
     articles = merge_articles(previous, incoming, now, allowed_sources)
     models = recent_model_releases(previous + previous_models, incoming, now, allowed_sources)
     previous_urls = {safe_url(a.get('url')) for a in previous if isinstance(a, dict)}

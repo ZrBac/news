@@ -128,6 +128,42 @@ class FeedTests(unittest.TestCase):
         self.assertEqual(models[0]['category'], 'models')
         self.assertFalse(collector.recent_model_releases(models, [], self.now + timedelta(days=31), allowed))
 
+    def test_ai_tools_hardware_finance_and_model_releases_have_distinct_categories(self):
+        cases = [
+            ('阿里Qoder上线Fast模式', 'ai'),
+            ('国产AI工具推出新功能', 'ai'),
+            ('陶哲轩与OpenAI讨论数学研究', 'ai'),
+            ('Cursor发布编程助手更新', 'ai'),
+            ('英伟达发布AI显卡，配备新GPU', 'tech'),
+            ('46999元起，迷你AI工作站发售', 'tech'),
+            ('微软推出Edge155稳定版，增强AI标签整理', 'tech'),
+            ('AI巨头盈利增长，标普股价上涨', 'general'),
+            ('特斯拉布局物理AI，成为投资标的', 'general'),
+            ('OpenAI发布GPT-6.1模型', 'models'),
+            ('AirPods Max推出新颜色', 'tech'),
+            ('AION新车型发布', 'tech'),
+        ]
+        for title, expected in cases:
+            with self.subTest(title=title):
+                self.assertEqual(collector.article_category(title, self.source), expected)
+
+    def test_archive_reclassification_uses_current_source_rules_and_filters(self):
+        article = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        article.update(title='阿里Qoder上线Fast模式', category='tech')
+        allowed = {'example': self.source}
+        self.assertEqual(collector.merge_articles([article], [], self.now, allowed)[0]['category'], 'ai')
+        allowed = {'example': dict(self.source, category='entertainment', titleFilter='entertainment')}
+        for title in ('梦见公主是什么意思', '新任白宫新闻秘书曾在北京工作', '辅助驾驶的技术风险如何兜底'):
+            with self.subTest(title=title):
+                self.assertFalse(collector.merge_articles([dict(article, title=title, category='entertainment')], [], self.now, allowed))
+        for title in ('电影《梦见你》上映', '知名演员获得飞天奖', '诺贝尔文学奖揭晓', '歌手发布新专辑'):
+            self.assertEqual(collector.article_category(title, allowed['example']), 'entertainment')
+        sports = dict(self.source, category='sports')
+        for title in ('彩经前瞻：国米主场占优', '半全场分析：马德里竞技进球', '英超赔率预测'):
+            self.assertIsNone(collector.article_category(title, sports))
+        for title in ('足球赛果：国米2比1获胜', '球员因违规投注被禁赛，联赛公布调查结果'):
+            self.assertEqual(collector.article_category(title, sports), 'sports')
+
     def test_rdf_feed_retains_publisher_date_link_and_excerpt(self):
         feed = b'''<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
             xmlns="http://purl.org/rss/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -146,6 +182,30 @@ class FeedTests(unittest.TestCase):
 
 
 class BuildTests(unittest.TestCase):
+    def test_brief_packet_includes_low_volume_categories_and_beijing_dates(self):
+        spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        busy = [{'id': 's' + str(i), 'category': 'sports', 'title': '比赛消息' + str(i),
+                 'sourceId': 'sports', 'publishedAt': '2026-10-10T04:00:00Z'} for i in range(170)]
+        rare = [{'id': c, 'category': c, 'title': c + '今日消息', 'sourceId': c,
+                 'publishedAt': '2026-10-09T16:01:00Z'} for c in ('general', 'tech', 'ai', 'entertainment', 'housing')]
+        model = {'id': 'model', 'category': 'models', 'title': '今日模型发布', 'sourceId': 'official',
+                 'publishedAt': '2026-10-09T16:00:00Z'}
+        yesterday = dict(model, id='yesterday', title='昨日模型发布', publishedAt='2026-10-09T15:59:00Z')
+        data = {'updatedAt': '2026-10-10T06:00:00Z', 'articles': busy + rare,
+                'modelReleases': [model, yesterday]}
+        with tempfile.TemporaryDirectory() as tmp:
+            builder.build_news_pages(data, Path(tmp))
+            latest = json.loads((Path(tmp) / 'data/latest.json').read_text())
+            self.assertEqual(latest['articles'], busy[:150])
+            self.assertEqual(latest['briefDays'], ['2026-10-10', '2026-10-09'])
+            self.assertEqual({a['category'] for a in latest['briefArticles']},
+                             {'general', 'tech', 'ai', 'models', 'entertainment', 'sports', 'housing'})
+            self.assertEqual(len([a for a in latest['briefArticles'] if a['category'] == 'sports']), 5)
+            self.assertEqual({a['id'] for a in latest['briefArticles'] if a['category'] == 'models'},
+                             {'model', 'yesterday'})
+            self.assertLessEqual(len(latest['briefArticles']), 70)
     def test_recent_model_releases_are_cached_separately_from_the_first_news_page(self):
         spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
         builder = importlib.util.module_from_spec(spec)

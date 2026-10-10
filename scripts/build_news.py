@@ -7,7 +7,7 @@ import os
 import re
 import shutil
 from html import escape as html_escape
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
 from pathlib import Path
 from urllib.parse import urlsplit
@@ -44,7 +44,37 @@ def build_news_pages(data, output):
         releases.append(article)
         if len(releases) == 60:
             break
+    # Include several candidates from each category for today/yesterday. A busy
+    # sports feed must not hide a day's only model or housing story from the brief.
+    brief_days, brief_articles = [], []
+    if data.get('updatedAt'):
+        today = datetime.fromisoformat(data['updatedAt'].replace('Z', '+00:00')).astimezone(
+            timezone(timedelta(hours=8))).date()
+        brief_days = [(today - timedelta(days=n)).isoformat() for n in range(2)]
+        candidates = sorted(articles + releases, key=lambda a: a['publishedAt'], reverse=True)
+        for day in brief_days:
+            for category in ('general', 'ai', 'models', 'tech', 'entertainment', 'sports', 'housing'):
+                pool, seen = [], set()
+                for article in candidates:
+                    if article.get('category') != category:
+                        continue
+                    published = datetime.fromisoformat(article['publishedAt'].replace('Z', '+00:00')).astimezone(
+                        timezone(timedelta(hours=8))).date().isoformat()
+                    key = re.sub(r'\W', '', article['title'].rsplit(' - ', 1)[0]).casefold()
+                    if published == day and key not in seen:
+                        pool.append(article)
+                        seen.add(key)
+                selected, others, counts = [], [], {}
+                for article in pool:
+                    source = article.get('sourceId', '')
+                    if counts.get(source, 0) < 2 and len(selected) < 5:
+                        selected.append(article)
+                        counts[source] = counts.get(source, 0) + 1
+                    else:
+                        others.append(article)
+                brief_articles.extend(selected + others[:max(0, 5 - len(selected))])
     latest = {**data, 'articles': articles[:size], 'modelReleases': releases,
+              'briefArticles': brief_articles, 'briefDays': brief_days,
               'archive': {'pages': pages, 'loaded': 0, 'total': len(articles),
                           'oldest': articles[-1]['publishedAt'] if articles else None}}
     (output / 'data/latest.json').write_text(

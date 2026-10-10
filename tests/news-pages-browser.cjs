@@ -28,7 +28,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         ? route.fulfill({ status: 503, body: "offline" })
         : route.continue();
     });
-    await page.goto(base, { waitUntil: "domcontentloaded" });
+    await page.goto(base + "/#all", { waitUntil: "domcontentloaded" });
     await page.evaluate(() => window.newsInitialLoad);
     assert.equal(await page.locator(".article").count(), 12);
     assert.equal(
@@ -96,7 +96,11 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       latest,
     );
     failArchive = true;
-    await page.goto(base, { waitUntil: "domcontentloaded" });
+    // A fragment-only navigation can reuse the current document and its loaded
+    // archive; use a new document when replacing the persisted test cache.
+    await page.goto(base + "/?archive-reset=1#all", {
+      waitUntil: "domcontentloaded",
+    });
     await page.evaluate(() => window.newsInitialLoad);
     await page.fill("#search", "no_such_headline_982751");
     await page.locator("[data-retry-archive]").waitFor();

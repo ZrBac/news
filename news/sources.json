@@ -200,12 +200,13 @@
     "color": "#8d443d"
   },
   {
-    "id": "gnews-china-ent",
-    "name": "中华网娱乐·聚合",
-    "url": "https://news.google.com/rss/search?q=site%3Aent.china.com+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
-    "home": "https://ent.china.com/",
+    "id": "gnews-cctv-ent",
+    "name": "央视网文娱·聚合",
+    "url": "https://news.google.com/rss/search?q=%28site%3Anews.cctv.com+OR+site%3Aent.cctv.com%29+%28intitle%3A%E7%94%B5%E5%BD%B1+OR+intitle%3A%E7%94%B5%E8%A7%86%E5%89%A7+OR+intitle%3A%E7%BB%BC%E8%89%BA+OR+intitle%3A%E6%BC%94%E5%91%98+OR+intitle%3A%E9%9F%B3%E4%B9%90+OR+intitle%3A%E6%BC%94%E5%87%BA+OR+intitle%3A%E6%AD%8C%E6%89%8B+OR+intitle%3A%E5%AF%BC%E6%BC%94+OR+intitle%3A%E6%88%8F%E5%89%A7+OR+intitle%3A%E6%96%87%E5%AD%A6+OR+intitle%3A%E6%96%87%E8%89%BA%29+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://ent.cctv.com/",
     "category": "entertainment",
-    "color": "#8d443d"
+    "color": "#8d443d",
+    "titleFilter": "entertainment"
   },
   {
     "id": "variety",
@@ -229,15 +230,17 @@
     "url": "https://news.google.com/rss/headlines/section/topic/ENTERTAINMENT?hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
     "home": "https://news.google.com/topics/CAAqKggKIiRDQkFTRlFvSUwyMHZNREpxYW5RU0JYcG9MVU5PR2dKRFRpZ0FQAQ?hl=zh-CN&gl=CN&ceid=CN:zh-Hans",
     "category": "entertainment",
-    "color": "#8d443d"
+    "color": "#8d443d",
+    "titleFilter": "entertainment"
   },
   {
     "id": "gnews-paper-ent",
     "name": "澎湃文娱·聚合",
-    "url": "https://news.google.com/rss/search?q=site%3Athepaper.cn+%28%E7%94%B5%E5%BD%B1+OR+%E7%94%B5%E8%A7%86%E5%89%A7+OR+%E7%BB%BC%E8%89%BA%29+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "url": "https://news.google.com/rss/search?q=site%3Athepaper.cn+%28intitle%3A%E7%94%B5%E5%BD%B1+OR+intitle%3A%E7%94%B5%E8%A7%86%E5%89%A7+OR+intitle%3A%E7%BB%BC%E8%89%BA+OR+intitle%3A%E6%BC%94%E5%91%98+OR+intitle%3A%E9%9F%B3%E4%B9%90+OR+intitle%3A%E6%BC%94%E5%87%BA+OR+intitle%3A%E6%AD%8C%E6%89%8B+OR+intitle%3A%E5%AF%BC%E6%BC%94+OR+intitle%3A%E6%88%8F%E5%89%A7+OR+intitle%3A%E6%96%87%E5%AD%A6+OR+intitle%3A%E6%96%87%E8%89%BA%29+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
     "home": "https://www.thepaper.cn/",
     "category": "entertainment",
-    "color": "#8d443d"
+    "color": "#8d443d",
+    "titleFilter": "entertainment"
   },
   {
     "id": "gnews-cri-ent",
@@ -250,10 +253,11 @@
   {
     "id": "gnews-bjnews-ent",
     "name": "新京报文娱·聚合",
-    "url": "https://news.google.com/rss/search?q=site%3Abjnews.com.cn+%28%E7%94%B5%E5%BD%B1+OR+%E7%94%B5%E8%A7%86%E5%89%A7+OR+%E7%BB%BC%E8%89%BA%29+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "url": "https://news.google.com/rss/search?q=site%3Abjnews.com.cn+%28intitle%3A%E7%94%B5%E5%BD%B1+OR+intitle%3A%E7%94%B5%E8%A7%86%E5%89%A7+OR+intitle%3A%E7%BB%BC%E8%89%BA+OR+intitle%3A%E6%BC%94%E5%91%98+OR+intitle%3A%E9%9F%B3%E4%B9%90+OR+intitle%3A%E6%BC%94%E5%87%BA+OR+intitle%3A%E6%AD%8C%E6%89%8B+OR+intitle%3A%E5%AF%BC%E6%BC%94+OR+intitle%3A%E6%88%8F%E5%89%A7+OR+intitle%3A%E6%96%87%E5%AD%A6+OR+intitle%3A%E6%96%87%E8%89%BA%29+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
     "home": "https://www.bjnews.com.cn/",
     "category": "entertainment",
-    "color": "#8d443d"
+    "color": "#8d443d",
+    "titleFilter": "entertainment"
   },
   {
     "id": "hollywood-reporter",

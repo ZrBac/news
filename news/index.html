@@ -93,25 +93,49 @@
         >
           <div class="section-heading">
             <div>
-              <h1 id="section-title" tabindex="-1">最新资讯</h1>
+              <h1 id="section-title" tabindex="-1">每日速览</h1>
             </div>
             <span id="result-count" class="result-count"></span>
           </div>
-          <div class="filter-tabs" role="group" aria-label="资讯分类">
-            <a href="#brief" data-view="brief">每日速览</a>
-            <button data-filter="all" class="selected" aria-pressed="true">
-              全部
-            </button>
-            <button data-filter="general" aria-pressed="false">综合</button>
-            <button data-filter="tech" aria-pressed="false">科技</button>
-            <button data-filter="ai" aria-pressed="false">AI</button>
-            <button data-filter="models" aria-pressed="false">模型</button>
-            <button data-filter="entertainment" aria-pressed="false">
-              文娱
-            </button>
-            <button data-filter="sports" aria-pressed="false">体育</button>
-            <button data-filter="exchange" aria-pressed="false">汇率</button>
-            <button data-filter="housing" aria-pressed="false">杭州房价</button>
+          <div class="filter-tabs" aria-label="资讯栏目">
+            <div
+              class="filter-group filter-views"
+              role="group"
+              aria-label="阅读方式"
+            >
+              <a
+                href="#brief"
+                data-view="brief"
+                class="active"
+                aria-current="page"
+                >每日速览</a
+              >
+              <button data-filter="all" aria-pressed="false">全部</button>
+            </div>
+            <div
+              class="filter-group filter-categories"
+              role="group"
+              aria-label="新闻分类"
+            >
+              <button data-filter="general" aria-pressed="false">综合</button>
+              <button data-filter="tech" aria-pressed="false">科技</button>
+              <button data-filter="ai" aria-pressed="false">AI</button>
+              <button data-filter="models" aria-pressed="false">模型</button>
+              <button data-filter="entertainment" aria-pressed="false">
+                文娱
+              </button>
+              <button data-filter="sports" aria-pressed="false">体育</button>
+            </div>
+            <div
+              class="filter-group filter-tools"
+              role="group"
+              aria-label="数据与工具"
+            >
+              <button data-filter="exchange" aria-pressed="false">汇率</button>
+              <button data-filter="housing" aria-pressed="false">
+                杭州房价
+              </button>
+            </div>
           </div>
           <div class="filter-row">
             <label class="search-box"

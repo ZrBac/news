@@ -62,7 +62,7 @@
   };
   const state = {
     data: null,
-    view: "all",
+    view: "brief",
     filter: "all",
     query: "",
     source: "all",
@@ -83,6 +83,7 @@
     );
     return `${parts.year}-${parts.month}-${parts.day}`;
   };
+  state.date = dayOf(Date.now());
   const timeFormatter = new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
     month: "2-digit",
@@ -151,6 +152,7 @@
     } else {
       const article =
         state.data.articles.find((a) => a.id === id) ||
+        state.data.briefArticles?.find((a) => a.id === id) ||
         state.data.modelReleases?.find((a) => a.id === id);
       if (!article) return;
       state.saved.set(id, { ...article, sourceName: sourceFor(article).name });
@@ -178,6 +180,16 @@
       </div><button class="save-button${saved ? " saved" : ""}" data-save="${escape(article.id)}" aria-label="${saved ? "取消收藏" : "收藏"}：${escape(article.title)}" aria-pressed="${saved}" title="${saved ? "取消收藏" : "收藏文章"}">${icon("bookmark")}</button></article>`;
   }
   function selectBrief(articles) {
+    const seen = new Set();
+    articles = articles.filter((a) => {
+      const title = a.title
+        .replace(/ - [^-]+$/, "")
+        .replace(/[\s\p{P}]/gu, "")
+        .toLowerCase();
+      if (seen.has(title)) return false;
+      seen.add(title);
+      return true;
+    });
     const queues = [
       "general",
       "housing",
@@ -210,6 +222,16 @@
         : state.view === "models" && Array.isArray(state.data.modelReleases)
           ? state.data.modelReleases
           : state.data.articles;
+    if (state.view === "brief")
+      articles = [
+        ...new Map(
+          [
+            ...articles,
+            ...(state.data.briefArticles || []),
+            ...(state.data.modelReleases || []),
+          ].map((a) => [a.id, a]),
+        ).values(),
+      ].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
     if (state.filter !== "all")
       articles = articles.filter((a) => a.category === state.filter);
     if (state.source !== "all")
@@ -486,6 +508,7 @@
     const partial =
       hasArchive() &&
       state.view !== "saved" &&
+      !hasBriefSnapshot() &&
       !(state.view === "models" && Array.isArray(state.data.modelReleases));
     $("#result-count").textContent =
       partial && state.view !== "brief"
@@ -514,6 +537,8 @@
       "saved",
       "brief",
       "models",
+      "tech",
+      "ai",
       "entertainment",
       "housing",
     ].includes(state.view);
@@ -526,12 +551,18 @@
     if (state.view === "models")
       note.textContent =
         "国内外 AI 模型发布、版本升级与开放使用消息，按发布时间排序。汇集官方公告与中文报道，展示近30天最新60条，点击标题阅读原文。";
+    if (state.view === "tech")
+      note.textContent =
+        "手机、电脑、硬件、系统与通用软件动态。AI 工具和模型发布分别收录在对应栏目。";
+    if (state.view === "ai")
+      note.textContent =
+        "AI 工具、应用、研究、行业与监管动态。新模型发布和版本升级可在「模型」查看。";
     if (state.view === "saved")
       note.textContent =
         "收藏保存在当前浏览器，可保留已超出资讯归档期限的条目。清除浏览器数据会移除收藏，不会自动跨设备同步。";
     if (state.view === "brief")
       note.textContent =
-        "从所选日期的资讯中，按综合、杭州房市、AI、模型、科技、文娱、体育轮流选取最多 10 条，兼顾不同来源。摘要来自资讯源，并非 AI 撰写或人工排名。";
+        "按不同分类和来源选取当天最多10条消息，可切换日期回看。";
     $("#date-trigger").classList.toggle("active", !!state.date);
     $("#date-trigger span:last-child").textContent = state.date
       ? state.date.slice(5).replace("-", "/")
@@ -544,8 +575,9 @@
         .join("");
     } else {
       const emptySaved = state.view === "saved" && !state.saved.size;
+      const emptyBrief = state.view === "brief" && state.date && !partial;
       $("#articles").innerHTML =
-        `<div class="empty-state">${icon(emptySaved ? "bookmark" : "search")}<h3>${emptySaved ? "还没有收藏" : partial ? "已加载的资讯中暂无匹配" : "暂时没有匹配的资讯"}</h3><p>${emptySaved ? "点击新闻右侧的书签即可收藏。" : partial ? "正在查找较早资讯；也可调整关键词、来源或日期。" : "试试其他关键词、来源或日期。"}</p><button data-reset>浏览全部资讯</button></div>`;
+        `<div class="empty-state">${icon(emptySaved ? "bookmark" : "search")}<h3>${emptySaved ? "还没有收藏" : emptyBrief ? "这一天暂无匹配的资讯" : partial ? "已加载的资讯中暂无匹配" : "暂时没有匹配的资讯"}</h3><p>${emptySaved ? "点击新闻右侧的书签即可收藏。" : emptyBrief ? "可选择其他日期，或查看全部资讯。" : partial ? "正在查找较早资讯；也可调整关键词、来源或日期。" : "试试其他关键词、来源或日期。"}</p><button data-reset>浏览全部资讯</button></div>`;
     }
     $("#load-more").hidden =
       articles.length <= state.limit &&
@@ -575,7 +607,7 @@
       "saved",
     ].includes(hash)
       ? hash
-      : "all";
+      : "brief";
     state.filter = [
       "general",
       "tech",
@@ -806,7 +838,11 @@
       return;
     }
     const filter = e.target.closest("[data-filter]");
-    if (filter && state.view === "brief") {
+    if (
+      filter &&
+      (state.view === "brief" ||
+        ["exchange", "housing"].includes(filter.dataset.filter))
+    ) {
       history.replaceState(null, "", "#" + filter.dataset.filter);
       route();
       return;
@@ -892,6 +928,14 @@
       data.modelReleases = data.modelReleases
         .filter((a) => validArticle(a) && a.category === "models")
         .slice(0, 60);
+    if (Array.isArray(data.briefArticles))
+      data.briefArticles = data.briefArticles.filter(validArticle).slice(0, 70);
+    if (Array.isArray(data.briefDays))
+      data.briefDays = data.briefDays
+        .filter(
+          (day) => typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day),
+        )
+        .slice(0, 2);
     return data;
   }
   async function requestJSON(url, options = {}, timeout = 30000) {
@@ -932,6 +976,18 @@
   function hasArchive(data = state.data) {
     return !!data?.archive && data.archive.loaded < data.archive.pages.length;
   }
+  function hasBriefSnapshot(data = state.data) {
+    return (
+      state.view === "brief" &&
+      state.date &&
+      !state.query &&
+      state.source === "all" &&
+      Array.isArray(data?.briefArticles) &&
+      Array.isArray(data.briefDays) &&
+      data.briefDays.length &&
+      (data.briefDays.includes(state.date) || state.date > data.briefDays[0])
+    );
+  }
   function persistData(data) {
     try {
       localStorage.setItem(cacheKey, JSON.stringify(data));
@@ -953,6 +1009,7 @@
   function ensureArticles(fresh = false) {
     if (
       loading ||
+      hasBriefSnapshot() ||
       ["saved", "housing", "exchange"].includes(state.view) ||
       (state.view === "models" && Array.isArray(state.data?.modelReleases)) ||
       !hasArchive()
@@ -970,6 +1027,7 @@
       try {
         while (
           state.data === data &&
+          !hasBriefSnapshot(data) &&
           !["saved", "housing", "exchange"].includes(state.view) &&
           !(state.view === "models" && Array.isArray(data.modelReleases)) &&
           hasArchive(data) &&

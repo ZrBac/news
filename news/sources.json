@@ -144,6 +144,46 @@
     "color": "#65774a"
   },
   {
+    "id": "openai-models",
+    "name": "OpenAI·模型公告",
+    "url": "https://openai.com/news/rss.xml",
+    "home": "https://openai.com/news/",
+    "category": "models",
+    "color": "#65774a"
+  },
+  {
+    "id": "gnews-models-cn",
+    "name": "国内模型·中文报道·聚合",
+    "url": "https://news.google.com/rss/search?q=%28site%3Aithome.com+OR+site%3Aqbitai.com+OR+site%3Ajiqizhixin.com+OR+site%3Aleiphone.com%29+%28intitle%3ADeepSeek+OR+intitle%3A%E9%80%9A%E4%B9%89+OR+intitle%3AQwen+OR+intitle%3A%E6%99%BA%E8%B0%B1+OR+intitle%3AGLM+OR+intitle%3AKimi+OR+intitle%3AMiniMax+OR+intitle%3A%E8%B1%86%E5%8C%85+OR+intitle%3A%E6%B7%B7%E5%85%83+OR+intitle%3A%E6%96%87%E5%BF%83%29+%28intitle%3A%E5%8F%91%E5%B8%83+OR+intitle%3A%E6%8E%A8%E5%87%BA+OR+intitle%3A%E4%B8%8A%E7%BA%BF+OR+intitle%3A%E5%BC%80%E6%BA%90+OR+intitle%3A%E5%8D%87%E7%BA%A7%29+when%3A30d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://news.google.com/",
+    "category": "models",
+    "color": "#65774a"
+  },
+  {
+    "id": "gnews-models-global",
+    "name": "海外模型·中文报道·聚合",
+    "url": "https://news.google.com/rss/search?q=%28site%3Aithome.com+OR+site%3Aqbitai.com+OR+site%3Ajiqizhixin.com+OR+site%3Aleiphone.com%29+%28intitle%3AGPT+OR+intitle%3AClaude+OR+intitle%3AGemini+OR+intitle%3AGrok+OR+intitle%3ALlama+OR+intitle%3AMistral+OR+intitle%3ASora+OR+intitle%3AVeo%29+%28intitle%3A%E5%8F%91%E5%B8%83+OR+intitle%3A%E6%8E%A8%E5%87%BA+OR+intitle%3A%E4%B8%8A%E7%BA%BF+OR+intitle%3A%E5%BC%80%E6%BA%90+OR+intitle%3A%E5%8D%87%E7%BA%A7%29+when%3A30d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://news.google.com/",
+    "category": "models",
+    "color": "#65774a"
+  },
+  {
+    "id": "gnews-anthropic-models",
+    "name": "Anthropic·官方公告·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3Aanthropic.com+%28Claude+OR+Sonnet+OR+Opus+OR+Haiku%29+%28Introducing+OR+launch+OR+release+OR+available%29+when%3A30d&hl=en-US&gl=US&ceid=US%3Aen",
+    "home": "https://www.anthropic.com/news",
+    "category": "models",
+    "color": "#65774a"
+  },
+  {
+    "id": "gnews-qwen-models",
+    "name": "通义千问·官方公告·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3Aqwen.ai+%28model+OR+%E6%A8%A1%E5%9E%8B%29+when%3A30d&hl=en-US&gl=US&ceid=US%3Aen",
+    "home": "https://qwen.ai/blog",
+    "category": "models",
+    "color": "#65774a"
+  },
+  {
     "id": "chinanews-culture",
     "name": "中新网文娱",
     "url": "https://www.chinanews.com.cn/rss/culture.xml",

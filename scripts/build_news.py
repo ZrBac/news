@@ -4,6 +4,7 @@ import argparse
 import hashlib
 import json
 import os
+import re
 import shutil
 from html import escape as html_escape
 from datetime import datetime
@@ -29,7 +30,21 @@ def build_news_pages(data, output):
         name = hashlib.sha256(body).hexdigest()[:16] + '.json'
         (folder / name).write_bytes(body)
         pages.append('/data/archive/' + name)
-    latest = {**data, 'articles': articles[:size],
+    # Model releases are less frequent than general news. Include a compact
+    # reading list so opening this section never scans the news archive.
+    releases, seen = [], set()
+    for article in data.get('modelReleases', articles):
+        if article.get('category') != 'models':
+            continue
+        title = article['title'].rsplit(' - ', 1)[0]
+        key = re.sub(r'\W', '', title).casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        releases.append(article)
+        if len(releases) == 60:
+            break
+    latest = {**data, 'articles': articles[:size], 'modelReleases': releases,
               'archive': {'pages': pages, 'loaded': 0, 'total': len(articles),
                           'oldest': articles[-1]['publishedAt'] if articles else None}}
     (output / 'data/latest.json').write_text(

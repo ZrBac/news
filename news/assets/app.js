@@ -55,6 +55,7 @@
     general: "综合热点",
     tech: "科技动态",
     ai: "人工智能",
+    models: "模型发布",
     entertainment: "文娱",
     sports: "体育",
     housing: "杭州房市",
@@ -148,7 +149,9 @@
       state.saved.delete(id);
       toast("已移出收藏");
     } else {
-      const article = state.data.articles.find((a) => a.id === id);
+      const article =
+        state.data.articles.find((a) => a.id === id) ||
+        state.data.modelReleases?.find((a) => a.id === id);
       if (!article) return;
       state.saved.set(id, { ...article, sourceName: sourceFor(article).name });
       toast("已收藏，可在「我的收藏」中查看");
@@ -179,6 +182,7 @@
       "general",
       "housing",
       "ai",
+      "models",
       "tech",
       "entertainment",
       "sports",
@@ -203,7 +207,9 @@
         ? [...state.saved.values()].sort((a, b) =>
             b.publishedAt.localeCompare(a.publishedAt),
           )
-        : state.data.articles;
+        : state.view === "models" && Array.isArray(state.data.modelReleases)
+          ? state.data.modelReleases
+          : state.data.articles;
     if (state.filter !== "all")
       articles = articles.filter((a) => a.category === state.filter);
     if (state.source !== "all")
@@ -468,6 +474,7 @@
       general: "综合热点",
       tech: "科技动态",
       ai: "人工智能",
+      models: "模型发布",
       entertainment: "文娱",
       sports: "体育",
       housing: "杭州房价",
@@ -476,7 +483,10 @@
       saved: "我的收藏",
     };
     $("#section-title").textContent = titles[state.view] || titles.all;
-    const partial = hasArchive() && state.view !== "saved";
+    const partial =
+      hasArchive() &&
+      state.view !== "saved" &&
+      !(state.view === "models" && Array.isArray(state.data.modelReleases));
     $("#result-count").textContent =
       partial && state.view !== "brief"
         ? `已加载 ${articles.length} 条资讯`
@@ -500,21 +510,28 @@
       el.setAttribute("aria-pressed", active);
     });
     const note = $("#view-note");
-    note.hidden = !["saved", "brief", "entertainment", "housing"].includes(
-      state.view,
-    );
+    note.hidden = ![
+      "saved",
+      "brief",
+      "models",
+      "entertainment",
+      "housing",
+    ].includes(state.view);
     if (state.view === "housing")
       note.textContent =
         "关注杭州新房、二手房成交、价格变化、购房政策与土拍。按报道发布时间排序，点击标题查看原报道及数据口径。";
     if (state.view === "entertainment")
       note.textContent =
         "娱乐圈、影视和综艺消息，按发布时间更新。点击标题查看原报道。";
+    if (state.view === "models")
+      note.textContent =
+        "国内外 AI 模型发布、版本升级与开放使用消息，按发布时间排序。汇集官方公告与中文报道，展示近30天最新60条，点击标题阅读原文。";
     if (state.view === "saved")
       note.textContent =
         "收藏保存在当前浏览器，可保留已超出资讯归档期限的条目。清除浏览器数据会移除收藏，不会自动跨设备同步。";
     if (state.view === "brief")
       note.textContent =
-        "从所选日期的资讯中，按综合、杭州房市、AI、科技、文娱、体育轮流选取最多 10 条，兼顾不同来源。摘要来自资讯源，并非 AI 撰写或人工排名。";
+        "从所选日期的资讯中，按综合、杭州房市、AI、模型、科技、文娱、体育轮流选取最多 10 条，兼顾不同来源。摘要来自资讯源，并非 AI 撰写或人工排名。";
     $("#date-trigger").classList.toggle("active", !!state.date);
     $("#date-trigger span:last-child").textContent = state.date
       ? state.date.slice(5).replace("-", "/")
@@ -549,6 +566,7 @@
       "general",
       "tech",
       "ai",
+      "models",
       "entertainment",
       "sports",
       "housing",
@@ -562,6 +580,7 @@
       "general",
       "tech",
       "ai",
+      "models",
       "entertainment",
       "sports",
       "housing",
@@ -657,7 +676,7 @@
   function showAbout() {
     $("#dialog-title").textContent = "关于本站";
     $("#dialog-content").innerHTML =
-      '<p>个人新闻订阅页，汇总综合新闻、杭州房市、科技、AI、文娱和体育资讯，计划每小时检查更新。</p><h3>排序与分类</h3><p>新闻按来源标注的发布时间排列，AI 分类依据标题关键词及来源。每日速览从不同分类与来源中选取最多 10 条，不代表热度排名。</p><h3>内容与收藏</h3><p>标题及短摘要来自对应资讯源，点击标题阅读原文。收藏仅保存在当前浏览器，不会跨设备同步。</p><p><a href="https://github.com/ZrBac/news/issues" target="_blank" rel="noopener noreferrer">问题反馈</a></p>';
+      '<p>个人新闻订阅页，汇总综合新闻、杭州房市、科技、AI、模型发布、文娱和体育资讯，计划每小时检查更新。</p><h3>排序与分类</h3><p>新闻按来源标注的发布时间排列，AI 分类依据标题关键词及来源。模型栏目筛选模型发布、升级与开放消息，标题识别可能遗漏；普通产品功能更新与发布传闻不收录到该栏目。每日速览从不同分类与来源中选取最多 10 条，不代表热度排名。</p><h3>内容与收藏</h3><p>标题及短摘要来自对应资讯源，点击标题阅读原文。收藏仅保存在当前浏览器，不会跨设备同步。</p><p><a href="https://github.com/ZrBac/news/issues" target="_blank" rel="noopener noreferrer">问题反馈</a></p>';
     $("#info-dialog").showModal();
   }
   function theme(value) {
@@ -869,6 +888,10 @@
         name: "DataError",
       });
     data.articles = data.articles.filter(validArticle);
+    if (Array.isArray(data.modelReleases))
+      data.modelReleases = data.modelReleases
+        .filter((a) => validArticle(a) && a.category === "models")
+        .slice(0, 60);
     return data;
   }
   async function requestJSON(url, options = {}, timeout = 30000) {
@@ -931,6 +954,7 @@
     if (
       loading ||
       ["saved", "housing", "exchange"].includes(state.view) ||
+      (state.view === "models" && Array.isArray(state.data?.modelReleases)) ||
       !hasArchive()
     )
       return;
@@ -947,6 +971,7 @@
         while (
           state.data === data &&
           !["saved", "housing", "exchange"].includes(state.view) &&
+          !(state.view === "models" && Array.isArray(data.modelReleases)) &&
           hasArchive(data) &&
           matchingArticles().length < needed()
         ) {

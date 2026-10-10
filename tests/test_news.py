@@ -85,6 +85,49 @@ class FeedTests(unittest.TestCase):
         unrelated = dict(article, title='杭州天气降温', category='housing')
         self.assertFalse(collector.merge_articles([unrelated], [], self.now, {'example'}))
 
+    def test_model_launches_are_separate_from_ai_and_old_articles_are_migrated(self):
+        for title in ('OpenAI 发布 GPT-6.1 Sol', '智谱 GLM-5.3 模型上线',
+                      '阿里千问开源 Qwen-Image-2.1 图像模型', 'Introducing Claude Haiku 5.5',
+                      '谷歌推出 EmbeddingGemma 2', '智谱一口气开源6款模型'):
+            with self.subTest(title=title):
+                feed = self.feed().replace(b'AI &amp; \xe7\xa7\x91\xe6\x8a\x80 <script>alert(1)</script>', title.encode())
+                article = collector.parse_feed(feed, self.source, self.now)[0]
+                self.assertEqual(article['category'], 'models')
+                old = dict(article, category='ai')
+                self.assertEqual(collector.merge_articles([old], [], self.now, {'example'})[0]['category'], 'models')
+                for category in ('sports', 'entertainment'):
+                    self.assertEqual(collector.article_category(title, dict(self.source, category=category)), category)
+
+    def test_model_only_sources_reject_rumors_apps_and_unrelated_same_names(self):
+        source = dict(self.source, category='models')
+        for title in ('消息称 Gemini 4 即将发布', 'OpenAI 推出 ChatGPT 插件',
+                      '谷歌云发布 Gemini Agent 智能体', 'DeepSeek官方开源昇腾基础组件',
+                      '智谱计划开源代码库', '丰田推出新款 Sora 氢燃料电池巴士',
+                      'DeepSeek终于丢了开源第一王座', '如何使用 Qwen3',
+                      'Claude Fable 5 额度重新上线', 'OpenAI 投资新闻',
+                      '英伟达发布 DGX Station：本地运行 AI 模型',
+                      '辛顿提议 AI 模型推出前需通过审核',
+                      'Ecosia 押注中国开源 AI 模型，取代 Mistral Large',
+                      '派早报：Anthropic 发布 Claude Haiku 5.5 模型等'):
+            with self.subTest(title=title):
+                self.assertIsNone(collector.article_category(title, source))
+        self.assertTrue(collector.is_model_release('Gemini 4 Argon: our next era of frontier intelligence', 'deepmind'))
+        self.assertTrue(collector.is_model_release('Qwen-Image-2.1: Compact Image Creation - Qwen', 'gnews-qwen-models'))
+        self.assertFalse(collector.is_model_release('Qwen3.8: a review of existing models', 'example'))
+
+    def test_model_history_is_independent_of_the_busy_news_archive(self):
+        release = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        release.update(title='通义发布 Qwen3.8 模型', category='ai', publishedAt='2026-09-15T03:00:00Z')
+        busy = [dict(release, title='综合资讯', category='general', url=f'https://example.com/news/{i}',
+                     publishedAt='2026-09-23T03:00:00Z', sourceId='source' + str(i)) for i in range(6001)]
+        allowed = {a['sourceId'] for a in busy} | {'example'}
+        shared = collector.merge_articles([release], busy, self.now, allowed)
+        self.assertFalse(any(a['sourceId'] == 'example' for a in shared))
+        models = collector.recent_model_releases([release], busy, self.now, allowed)
+        self.assertEqual(len(models), 1)
+        self.assertEqual(models[0]['category'], 'models')
+        self.assertFalse(collector.recent_model_releases(models, [], self.now + timedelta(days=31), allowed))
+
     def test_rdf_feed_retains_publisher_date_link_and_excerpt(self):
         feed = b'''<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
             xmlns="http://purl.org/rss/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -103,6 +146,26 @@ class FeedTests(unittest.TestCase):
 
 
 class BuildTests(unittest.TestCase):
+    def test_recent_model_releases_are_cached_separately_from_the_first_news_page(self):
+        spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        articles = [{'id': str(i), 'category': 'general', 'title': '综合' + str(i),
+                     'publishedAt': '2026-10-08T04:00:00Z'} for i in range(160)]
+        releases = [{'id': 'm' + str(i), 'category': 'models', 'title': '模型发布' + str(i),
+                     'publishedAt': '2026-10-07T04:00:00Z'} for i in range(70)]
+        duplicate = dict(releases[0], id='copy', title=releases[0]['title'] + ' - 聚合来源')
+        with tempfile.TemporaryDirectory() as tmp:
+            builder.build_news_pages({'articles': articles + [releases[0], duplicate] + releases[1:]}, Path(tmp))
+            latest = json.loads((Path(tmp) / 'data/latest.json').read_text())
+            self.assertEqual(latest['articles'], articles[:150])
+            self.assertEqual(latest['modelReleases'], releases[:60])
+            builder.build_news_pages({'articles': articles,
+                                      'modelReleases': [releases[0], duplicate] + releases[1:]}, Path(tmp))
+            latest = json.loads((Path(tmp) / 'data/latest.json').read_text())
+            self.assertEqual(latest['modelReleases'], releases[:60])
+            self.assertEqual(latest['archive']['total'], len(articles))
+
     def test_small_news_pages_preserve_all_articles_and_stable_chunks(self):
         spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
         builder = importlib.util.module_from_spec(spec)

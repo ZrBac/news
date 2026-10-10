@@ -21,6 +21,63 @@ ROOT = Path(__file__).resolve().parents[1]
 UTC = timezone.utc
 AI_PATTERN = re.compile(r"\b(?:AI|AGI|LLM|GPT[\w.-]*|ChatGPT|OpenAI|Anthropic|Claude|Gemini|Copilot|DeepSeek|Qwen|Llama|Codex|RAG|MCP|agents?)\b|人工智能|大模型|语言模型|生成式|机器学习|智能体|通义|智谱|豆包|具身智能|算力", re.I)
 
+MODEL_NAME = re.compile(
+    r'GPT[-\s]?\d|gpt-oss|\bo[134](?:\b|-)|Claude\s+(?:Opus|Sonnet|Haiku|Fable|Mythos|\d)|'
+    r'Gemini\s*\d|(?:Embedding)?Gemma|DeepSeek|Qwen[-\w.]*|Llama\s*\d|Grok[-\s]*\d|'
+    r'Mistral[-\s]*(?:Large|Small|Medium|Nemo)|GLM[-\s]?\d|Kimi|MiniMax|'
+    r'Sora|Veo[-\s]*\d|Imagen[-\s]*\d|Seedream|Seedance|Hunyuan|Wan[-\s]*\d|'
+    r'通义|智谱|豆包|混元|文心|千问', re.I)
+MODEL_TOPIC = re.compile(r'模型|\b(?:models?|LLMs?)\b', re.I)
+MODEL_VERSION = re.compile(r'GPT[-\s]?\d|gpt-oss|\bo[134](?:\b|-)|'
+                           r'Claude\s+(?:Opus|Sonnet|Haiku|Fable|Mythos)\s*\d|Gemini\s*\d|'
+                           r'(?:Embedding)?Gemma|DeepSeek[-\s]?(?:V|R|Math|Coder|OCR)\d|'
+                           r'Qwen[-\w.]*\d|Llama\s*\d|Grok[-\s]*\d|GLM[-\s]?\d|'
+                           r'Kimi[-\s]?K\d|MiniMax[-\s]?M\d|Mistral[-\s]*(?:Large|Small|Medium)|'
+                           r'Seedream|Seedance|Veo[-\s]*\d|Imagen[-\s]*\d', re.I)
+MODEL_RELEASE = re.compile(r'发布|推出|上线|开源|升级|开放|正式商用|亮相|'
+                           r'\b(?:introducing|announc\w*|launch\w*|releas\w*|unveil\w*|debut\w*|'
+                           r'upgrad\w*|available|open[- ](?:source|weight))\b', re.I)
+MODEL_RUMOR = re.compile(r'即将|或将|有望|预计|传闻|据传|消息称|爆料|泄露|曝光|不等|提议|计划|'
+                         r'\b(?:rumou?rs?|leaked?|reportedly|upcoming|expected)\b', re.I)
+MODEL_PRODUCT = re.compile(r'智能体|\bagent\b|插件|画布|登陆|登录|客户端|应用商店|'
+                           r'Claude Code|ChatGPT|\b(?:canvas|extension|app)\b', re.I)
+MODEL_OTHER_NEWS = re.compile(r'巴士|汽车|氢燃料|基础组件|芯片软件|代码库|开源.*王座|额度|对话服务|'
+                              r'早报|午报|新品一览|审批机制|\b(?:DGX|RTX|GPU)\b', re.I)
+OFFICIAL_MODEL_SOURCES = {'openai-models', 'gnews-anthropic-models', 'gnews-qwen-models', 'deepmind'}
+
+
+def is_model_release(title, source_id=''):
+    title = title.rsplit(' - ', 1)[0]
+    if MODEL_RUMOR.search(title) or MODEL_OTHER_NEWS.search(title):
+        return False
+    named = MODEL_NAME.search(title)
+    topic = MODEL_TOPIC.search(title)
+    if not named and not (topic and AI_PATTERN.search(title)):
+        return False
+    if not topic and not MODEL_VERSION.search(title):
+        return False
+    # A branded app or agent receiving a feature is not a model launch.
+    if MODEL_PRODUCT.search(title):
+        return False
+    if re.search(r'押注|采用|评测|如何|教程', title) and not re.search(r'发布|推出|上线|升级|开放|亮相', title):
+        return False
+    if MODEL_RELEASE.search(title):
+        return True
+    # Official model posts often use “Qwen-X: ...” or “Gemini X: ...”.
+    return bool(source_id in OFFICIAL_MODEL_SOURCES and named and named.start() <= 5
+                and (':' in title or '：' in title))
+
+
+def article_category(title, source):
+    category = source['category']
+    if category in ('entertainment', 'sports', 'housing'):
+        return category
+    if is_model_release(title, source['id']):
+        return 'models'
+    if category == 'models':
+        return None
+    return 'ai' if AI_PATTERN.search(title) else category
+
 HOUSING_LOCATION = re.compile(r'杭州|余杭|萧山|临平|钱塘|拱墅|临安|富阳')
 HOUSING_TOPIC = re.compile(r'楼市|房地产|房产|住房|住宅|二手房|新房|购房|买房|卖房|房价|房贷|公积金|土拍|宅地|涉宅|预售|网签|土地出让|地块成交')
 
@@ -113,12 +170,13 @@ def parse_feed(data, source, now):
             continue
         if source['category'] == 'housing' and not is_hangzhou_housing(title):
             continue
+        category = article_category(title, source)
+        if not category:
+            continue
         # Keep only a short publisher-provided excerpt; do not republish feed bodies.
         excerpt = plain(field('description'))
         excerpt = re.sub(r'^(?:IT之家|爱范儿)\s*\d+\s*月\s*\d+\s*日(?:消息|讯)[，,：:\s]*', '', excerpt)
         excerpt = excerpt[:89].rstrip() + '…' if len(excerpt) > 90 else excerpt
-        # Dedicated sections stay separate even when a story mentions AI.
-        category = source['category'] if source['category'] in ('entertainment', 'sports', 'housing') else ('ai' if AI_PATTERN.search(title) else source['category'])
         articles.append({
             'id': hashlib.sha256(url.encode()).hexdigest()[:16], 'title': title,
             'url': url, 'sourceId': source['id'], 'category': category,
@@ -153,12 +211,17 @@ def merge_articles(previous, incoming, now, allowed_sources):
         date = parse_date(article.get('publishedAt'))
         if not url or not date or not now - timedelta(days=30) <= date <= now + timedelta(minutes=10):
             continue
-        if article.get('sourceId') not in allowed_sources or article.get('category') not in ('general', 'tech', 'ai', 'entertainment', 'sports', 'housing'):
+        if article.get('sourceId') not in allowed_sources or article.get('category') not in ('general', 'tech', 'ai', 'models', 'entertainment', 'sports', 'housing'):
             continue
         if article.get('category') == 'housing' and not is_hangzhou_housing(str(article.get('title', ''))):
             continue
         clean = {key: str(article.get(key, '')) for key in ('title', 'sourceId', 'category', 'publishedAt', 'excerpt')}
         clean.update(url=url, id=hashlib.sha256(url.encode()).hexdigest()[:16], title=plain(clean['title'])[:240], excerpt=plain(clean['excerpt'])[:90])
+        if clean['category'] == 'models' and not is_model_release(clean['title'], clean['sourceId']):
+            continue
+        # Migrate already collected releases so the new section has history.
+        if clean['category'] in ('general', 'tech', 'ai') and is_model_release(clean['title'], clean['sourceId']):
+            clean['category'] = 'models'
         if clean['title']:
             by_url[url] = clean
     # Exact duplicate titles from the same publisher are revisions, not new stories.
@@ -172,18 +235,32 @@ def merge_articles(previous, incoming, now, allowed_sources):
     return result[:6000]
 
 
+def recent_model_releases(previous, incoming, now, allowed_sources):
+    def candidates(articles):
+        return [a for a in articles if isinstance(a, dict)
+                and a.get('category') in ('general', 'tech', 'ai', 'models')
+                and is_model_release(str(a.get('title', '')), a.get('sourceId', ''))]
+    # Separate retention keeps less-frequent model announcements from being
+    # pushed out by the shared 6,000-story archive. The builder removes copies.
+    return merge_articles(candidates(previous), candidates(incoming), now, allowed_sources)[:120]
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', type=Path, default=ROOT / 'news/data/news.json')
     parser.add_argument('--previous-url')
     args = parser.parse_args()
     sources = json.loads((ROOT / 'news/sources.json').read_text())
-    previous = []
+    previous, previous_models = [], []
     if args.output.exists():
-        previous = json.loads(args.output.read_text()).get('articles', [])
+        old = json.loads(args.output.read_text())
+        previous = old.get('articles', [])
+        previous_models = old.get('modelReleases', [])
     if args.previous_url:
         try:
-            previous += json.loads(fetch(args.previous_url, 15_000_000)).get('articles', [])
+            old = json.loads(fetch(args.previous_url, 15_000_000))
+            previous += old.get('articles', [])
+            previous_models += old.get('modelReleases', [])
         except urllib.error.HTTPError as exc:
             if exc.code != 404:
                 raise SystemExit(f'Cannot safely read previous archive; aborting to preserve history: {exc}')
@@ -196,7 +273,9 @@ def main():
         for articles, status in pool.map(lambda source: collect(source, now), sources):
             incoming.extend(articles)
             statuses.append(status)
-    articles = merge_articles(previous, incoming, now, {s['id'] for s in sources})
+    allowed_sources = {s['id'] for s in sources}
+    articles = merge_articles(previous, incoming, now, allowed_sources)
+    models = recent_model_releases(previous + previous_models, incoming, now, allowed_sources)
     previous_urls = {safe_url(a.get('url')) for a in previous if isinstance(a, dict)}
     for status in statuses:
         status['newCount'] = sum(a['sourceId'] == status['id'] and a['url'] not in previous_urls for a in articles)
@@ -204,7 +283,8 @@ def main():
               ('id', 'checkedAt', 'status', 'fetchedCount', 'newCount', 'durationMs')}))
     if not incoming:
         raise SystemExit('All feeds unavailable. Keep the last successful deployment; do not publish an empty site.')
-    result = {'version': 1, 'updatedAt': iso(now), 'retentionDays': 30, 'sources': statuses, 'articles': articles}
+    result = {'version': 1, 'updatedAt': iso(now), 'retentionDays': 30, 'sources': statuses,
+              'articles': articles, 'modelReleases': models}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, ensure_ascii=False, separators=(',', ':')) + '\n')
     print(f'Collected {len(incoming)} items; retained {len(articles)} unique items; {sum(s["status"] == "ok" for s in statuses)}/{len(sources)} sources available.')

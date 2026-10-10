@@ -288,7 +288,27 @@
   }
   let exchangePoints = [];
   let exchangeCurrency = "USD";
+  let exchangeAmount = "";
+  let exchangeRate = null;
   const exchangeNames = { USD: "美元", JPY: "日元", THB: "泰铢" };
+  function updateExchangeConversion() {
+    const input = $("#fx-amount"),
+      output = $("#fx-converted");
+    if (!input || !output) return;
+    const result = window.NewsExchange.convertAmount(
+      exchangeAmount,
+      exchangeRate,
+    );
+    const invalid = exchangeAmount.trim() !== "" && result === null;
+    input.setAttribute("aria-invalid", String(invalid));
+    $("#fx-amount-error").textContent = invalid
+      ? "请输入非负金额，最多9位整数、2位小数。"
+      : "";
+    output.textContent =
+      result === null
+        ? "—"
+        : `约 ${result.replace(/\B(?=(\d{3})+\.)/g, ",")} 元`;
+  }
   function renderExchangeRates() {
     const panel = $("#exchange-rates");
     const active = state.view === "exchange";
@@ -310,6 +330,7 @@
       )
       .join("")}</div>`;
     const info = window.NewsExchange.analyze(data, dayOf(Date.now()));
+    exchangeRate = info ? info.latest.rate : null;
     if (!info) {
       panel.innerHTML = `${tabs}<p class="view-note">${name}兑人民币数据暂未获取成功，后续更新会自动重试。</p>`;
       exchangePoints = [];
@@ -360,6 +381,19 @@
       <p class="fx-unit">1 ${name}兑人民币</p><p class="fx-value">${rateText(info.latest.rate)} <small>元</small></p>
       <p class="price-published">报价日期 ${escape(info.latest.date)} · 每日参考汇率</p><p class="fx-status">${status}</p>
       ${info.complete ? `<p class="price-published">30天区间最低 ${rateText(info.min)} · ${escape(info.windowStart)} 至 ${escape(info.windowEnd)} · ${info.samples} 个报价日</p>` : ""}</section>
+      <section class="fx-converter" aria-labelledby="fx-converter-title">
+        <h2 id="fx-converter-title">金额换算</h2>
+        <div class="fx-converter-fields">
+          <div><label for="fx-amount">${name}金额（${exchangeCurrency}）</label>
+            <input id="fx-amount" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="输入金额" value="${escape(exchangeAmount)}" aria-describedby="fx-amount-error fx-conversion-note"/>
+          </div>
+          <div><label for="fx-converted">折合人民币（CNY）</label>
+            <output id="fx-converted" for="fx-amount" aria-live="polite">—</output>
+          </div>
+        </div>
+        <p id="fx-amount-error" class="fx-amount-error" aria-live="polite"></p>
+        <p id="fx-conversion-note" class="price-published">按${escape(info.latest.date)}参考汇率换算，实际兑换以银行或支付平台为准。</p>
+      </section>
       <section class="fx-history"><h2>近一个月走势</h2><p class="price-published">${escape(info.periodStart)} 至 ${escape(info.periodEnd)} · 最近30个自然日</p>${graph}</section>
       <details class="fx-records"><summary>每日记录（${info.points.length} 个报价日）</summary><table class="housing-table"><thead><tr><th scope="col">日期</th><th scope="col">1${name}兑人民币</th></tr></thead><tbody>${[
         ...info.points,
@@ -374,6 +408,7 @@
       <p>随网站自动检查更新，来源通常在欧洲工作日每日发布一次。周末及休市日不新增报价，图表只连接已公布的数据点。</p>
       <p>提醒比较截至最新报价日期的30个自然日（含当天），达到或并列最低均高亮；按六位小数比较，历史不足、获取失败或报价超过4天时暂停提醒。</p>
       ${data.checkedAt ? `<p>最近检查 ${escape(formatTime(data.checkedAt))}（北京时间）；检查时间不代表新报价。</p>` : ""}</div>`;
+    updateExchangeConversion();
   }
   function renderHousingPrices() {
     const panel = $("#housing-prices");
@@ -707,6 +742,11 @@
     ensureArticles();
   });
   document.addEventListener("input", (e) => {
+    if (e.target.id === "fx-amount") {
+      exchangeAmount = e.target.value;
+      updateExchangeConversion();
+      return;
+    }
     if (e.target.id !== "fx-day") return;
     const index = Number(e.target.value),
       point = exchangePoints[index];

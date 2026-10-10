@@ -1,6 +1,35 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { analyze } = require("../news/assets/exchange-core.js");
+const { analyze, convertAmount } = require("../news/assets/exchange-core.js");
+test("currency amounts round to cents, including exact half cents and large values", () => {
+  assert.equal(convertAmount("100", 6.702306), "670.23");
+  assert.equal(convertAmount("10000", 0.042345), "423.45");
+  assert.equal(convertAmount("123.45", 0.19897), "24.56");
+  assert.equal(convertAmount("1", 1.005), "1.01");
+  assert.equal(convertAmount("999999999.99", 99.999999), "99999998999.00");
+  assert.equal(convertAmount("0", 6.7), "0.00");
+  assert.equal(convertAmount(" .5 ", 6.7), "3.35");
+  assert.equal(convertAmount("10.", 6.7), "67.00");
+});
+test("invalid amounts or unavailable rates cannot produce a conversion", () => {
+  for (const amount of [
+    "",
+    " ",
+    "-1",
+    "abc",
+    "1.234",
+    "1e3",
+    "Infinity",
+    "1000000000",
+    "1,000",
+    "<img>",
+  ]) {
+    assert.equal(convertAmount(amount, 6.7), null, amount);
+  }
+  for (const rate of [null, undefined, NaN, Infinity, 0, -1, 100]) {
+    assert.equal(convertAmount("100", rate), null);
+  }
+});
 const TODAY = "2026-10-09";
 function fixture() {
   const points = [];

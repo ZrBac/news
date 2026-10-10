@@ -1119,6 +1119,64 @@ dialog::backdrop {
   flex-wrap: wrap;
   margin-top: 20px;
 }
+.fx-converter {
+  margin: 24px 0;
+  padding: 20px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+}
+.fx-converter h2 {
+  margin: 0 0 16px;
+  font-size: 18px;
+}
+.fx-converter-fields {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: 20px;
+}
+.fx-converter label {
+  display: block;
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: var(--secondary);
+}
+#fx-amount {
+  box-sizing: border-box;
+  width: 100%;
+  min-height: 48px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--paper);
+  color: var(--ink);
+  font-size: 18px;
+}
+#fx-amount[aria-invalid="true"] {
+  border-color: var(--accent);
+}
+#fx-converted {
+  display: block;
+  padding: 10px 0;
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+.fx-amount-error {
+  color: var(--accent);
+  font-size: 12px;
+}
+.fx-amount-error:empty {
+  display: none;
+}
+@media (max-width: 540px) {
+  .fx-converter {
+    padding: 16px;
+  }
+  .fx-converter-fields {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+  }
+}
 .fx-currencies button {
   border: 1px solid var(--line);
   padding: 10px 14px;

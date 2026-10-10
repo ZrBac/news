@@ -89,5 +89,22 @@
       samples: window.length,
     };
   }
-  return { analyze };
+  // Integer arithmetic keeps half-cent rounding exact for six-decimal quotes.
+  function convertAmount(value, rate) {
+    const amount = String(value).trim();
+    if (
+      !/^(?:\d{1,9}(?:\.\d{0,2})?|\.\d{1,2})$/.test(amount) ||
+      !Number.isFinite(rate) ||
+      rate <= 0 ||
+      rate >= 100
+    )
+      return null;
+    const parts = amount.split(".");
+    const cents =
+      BigInt(parts[0] || "0") * 100n + BigInt((parts[1] || "").padEnd(2, "0"));
+    const converted =
+      (cents * BigInt(Math.round(rate * 1000000)) + 500000n) / 1000000n;
+    return `${converted / 100n}.${String(converted % 100n).padStart(2, "0")}`;
+  }
+  return { analyze, convertAmount };
 });

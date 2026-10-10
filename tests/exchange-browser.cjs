@@ -28,11 +28,39 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.equal(await page.locator("#articles").isVisible(), false);
     assert.equal(await page.locator("#housing-prices").isVisible(), false);
     assert.match(await page.locator(".fx-notes").innerText(), /30个自然日/);
+    const amount = page.locator("#fx-amount"),
+      converted = page.locator("#fx-converted");
+    const checkConversion = async () => {
+      const rate = Number(
+        (await page.locator(".fx-value").innerText()).split(" ")[0],
+      );
+      assert.equal(
+        (await converted.innerText()).replace(/,/g, ""),
+        `约 ${(123.45 * rate).toFixed(2)} 元`,
+      );
+    };
+    assert.equal(await converted.innerText(), "—");
+    await amount.fill("-1");
+    assert.equal(await amount.getAttribute("aria-invalid"), "true");
+    assert.equal(await converted.innerText(), "—");
+    await amount.fill("0");
+    assert.equal(await converted.innerText(), "约 0.00 元");
+    await amount.fill("");
+    assert.equal(await converted.innerText(), "—");
+    assert.equal(await amount.getAttribute("aria-invalid"), "false");
+    await amount.fill("123.45");
+    await checkConversion();
     for (const [code, name] of [
       ["JPY", "日元"],
       ["THB", "泰铢"],
     ]) {
       await page.locator(`[data-fx-currency="${code}"]`).click();
+      assert.equal(await amount.inputValue(), "123.45");
+      assert.match(
+        await page.locator('label[for="fx-amount"]').innerText(),
+        new RegExp(code),
+      );
+      await checkConversion();
       assert.match(
         await page.locator(".fx-unit").innerText(),
         new RegExp(`1 ${name}`),
@@ -54,6 +82,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator("#fx-day").fill("0");
     const first = await page.locator("#fx-readout").innerText();
     assert.notEqual(first, before);
+    await checkConversion(); // History selection must not change the latest conversion rate.
     assert.equal(await page.locator(".fx-point.selected").count(), 1);
     await page.locator(".fx-records summary").click();
     assert((await page.locator(".fx-records tbody tr").count()) >= 15);
@@ -77,10 +106,13 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.reload();
     await page.locator(".fx-value").waitFor();
     assert.equal(await page.locator(".fx-value").innerText(), prices);
+    await amount.fill("123.45");
+    await checkConversion();
     await page.locator("#fx-day").fill("0");
     assert.equal(await page.locator("#fx-readout").innerText(), first);
     for (const code of ["JPY", "THB"]) {
       await page.locator(`[data-fx-currency="${code}"]`).click();
+      await checkConversion();
       assert(await page.locator(".fx-chart").isVisible());
       await page.locator("#fx-day").fill("0");
     }

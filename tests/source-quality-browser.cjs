@@ -12,6 +12,9 @@ const legacy = require("./legacy-safari.cjs");
     ).json();
     await request.close();
     const sources = structuredClone(latest.sources);
+    // Only the three controlled conditions below should affect this fixture;
+    // a real publisher's temporary outage must not change its expected rows.
+    for (const source of sources) source.status = "ok";
     const [busy, quiet, failed] = sources.slice(0, 3);
     failed.status = "unavailable";
     const updatedAt = latest.updatedAt;

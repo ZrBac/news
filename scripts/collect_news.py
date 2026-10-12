@@ -10,6 +10,7 @@ import json
 import re
 import sys
 import time
+import unicodedata
 import urllib.parse
 import urllib.error
 import urllib.request
@@ -44,6 +45,35 @@ ENTERTAINMENT_TOPIC = re.compile(
 ENTERTAINMENT_NOISE = re.compile(r'^梦见|周公解梦|解梦|星座运势|生肖运势|算命|八字命理')
 SPORTS_PROMOTION = re.compile(r'彩经|竞彩|足彩|赔率|盘口|投注|半全场|亚盘|让球|胜负彩|投注技巧')
 SPORTS_DISCIPLINE = re.compile(r'违规|禁赛|被罚|赌球案|赌博案|投注案|刑事|涉嫌.*(?:赌博|投注)')
+DOMESTIC_SPORTS_LEAGUE = re.compile(
+    r'(?<![a-z0-9])(?:CBA|WCBA)(?![a-z0-9])|中超|中甲|中乙|足协杯|中国足协|中国篮协|'
+    r'国乒|国羽|全运会|省运会|乒超|羽超|排超|中国网球公开赛|全国.*(?:联赛|锦标赛|冠军赛)', re.I)
+CHINESE_SPORTS_PEOPLE = re.compile(
+    r'杨瀚森|崔永熙|周琦|赵继伟|张镇麟|郭艾伦|徐杰|胡明轩|孙铭徽|王哲林|丁彦雨航|'
+    r'韩旭|李月汝|武磊|王霜|韦世豪|张玉宁|孙颖莎|王楚钦|樊振东|陈梦|王曼昱|'
+    r'林诗栋|梁靖崑|林高远|陈幸同|郑钦文|张之臻|王欣瑜|商竣程|吴易昺|苏炳添|'
+    r'潘展乐|张雨霏|汪顺|全红婵|陈芋汐|石宇奇|陈雨菲|陈清晨|贾一凡|梁伟铿|王昶')
+CHINESE_SPORTS_TEAM = re.compile(r'中国.*(?:队|选手|运动员|球员|足球|篮球|排球|男足|女足|男篮|女篮|男排|女排|体育|网球|羽毛球|乒乓球|联赛)|国内.*(?:联赛|赛事|体育)|中国足协|中国篮协')
+DOMESTIC_SPORTS_LOCATION = re.compile(
+    r'北京|上海|天津|重庆|杭州|浙江|江苏|南京|广东|广州|深圳|东莞|佛山|福建|辽宁|吉林|'
+    r'黑龙江|山东|青岛|四川|成都|湖北|湖南|河南|河北|安徽|合肥|山西|陕西|西安|广西|'
+    r'云南|贵州|江西|南昌|海南|新疆|内蒙古|宁夏|甘肃|青海|西藏|香港|澳门|台湾')
+SPORTS_EVENT_TOPIC = re.compile(r'马拉松|网球|足球|篮球|男篮|女篮|男排|女排|乒乓|羽毛球|泳|'
+                                r'跳水|田径|举重|体操|滑雪|滑冰|锦标赛|冠军赛|体育|联赛|球员|赛季|阵容|'
+                                r'亚冠|亚运|全运|(?<![a-z0-9])NBL(?![a-z0-9])', re.I)
+
+
+def is_domestic_sports(title):
+    title = unicodedata.normalize('NFKC', title.rsplit(' - ', 1)[0])
+    if (DOMESTIC_SPORTS_LEAGUE.search(title) or CHINESE_SPORTS_PEOPLE.search(title)
+            or CHINESE_SPORTS_TEAM.search(title)):
+        return True
+    # A foreign association/international title is not domestic just because
+    # Google appends a Chinese publisher name. Chinese athletes abroad qualify.
+    national = re.sub(r'(?:日本|韩国|朝鲜|美国|英国|英格兰|德国|法国|西班牙|葡萄牙|巴西|阿根廷|澳大利亚)'
+                      r'(?:国足|国青|国少)', '', title)
+    return bool(re.search(r'(?<![外英美法德韩日])(?:国足(?!球)|国青|国少)', national)
+                or (DOMESTIC_SPORTS_LOCATION.search(title) and SPORTS_EVENT_TOPIC.search(title)))
 
 MODEL_NAME = re.compile(
     r'GPT[-\s]?\d|gpt-oss|\bo[134](?:\b|-)|Claude\s+(?:Opus|Sonnet|Haiku|Fable|Mythos|\d)|'
@@ -93,6 +123,7 @@ def is_model_release(title, source_id=''):
 
 
 def article_category(title, source):
+    original_title = title
     title = title.rsplit(' - ', 1)[0]
     category = source['category']
     if category == 'entertainment':
@@ -104,7 +135,11 @@ def article_category(title, source):
     if category == 'gaming':
         return category
     if category == 'sports':
-        return None if SPORTS_PROMOTION.search(title) and not SPORTS_DISCIPLINE.search(title) else category
+        if SPORTS_PROMOTION.search(title) and not SPORTS_DISCIPLINE.search(title):
+            return None
+        if source.get('titleFilter') == 'domestic-sports' and not is_domestic_sports(original_title):
+            return None
+        return category
     if category == 'housing':
         return category if is_hangzhou_housing(title) else None
     if is_model_release(title, source['id']):
@@ -598,7 +633,7 @@ def main():
         raise SystemExit('All feeds unavailable. Keep the last successful deployment; do not publish an empty site.')
     old_quality = max(quality_states, key=lambda state: state['updatedAt']) if quality_states else None
     quality_state, quality = update_source_quality(old_quality, sources, statuses, incoming,
-                                                   previous + previous_models + previous_housing, now)
+                                                   articles + models + housing, now)
     for status in statuses:
         print('SOURCE_METRIC ' + json.dumps({k: status[k] for k in
               ('id', 'checkedAt', 'status', 'fetchedCount', 'newCount', 'durationMs')}))

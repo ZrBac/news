@@ -249,6 +249,34 @@ class FeedTests(unittest.TestCase):
         for title in ('足球赛果：国米2比1获胜', '球员因违规投注被禁赛，联赛公布调查结果'):
             self.assertEqual(collector.article_category(title, sports), 'sports')
 
+    def test_domestic_sports_filter_keeps_chinese_interest_and_rechecks_history(self):
+        source = dict(self.source, category='sports', titleFilter='domestic-sports')
+        domestic = ('CBA新赛季阵容公布', 'ＣＢＡ新赛季赛程公布', '中超成都蓉城取得三连胜',
+                    '国足对阵日本队', '中国U18女篮亚洲杯获得季军', '郑钦文获WTA赛事冠军',
+                    '杨瀚森完成NBA季前赛首秀', '香港金牛夺得NBL冠军',
+                    '杭州马拉松报名启动', '青岛新赛季阵容实力稳中有升',
+                    '中国队卫冕羽毛球世青赛混合团体冠军', '中国足协发布处罚决定',
+                    '备战新赛季 - CBA联赛新变化 - 体育媒体')
+        foreign = ('NBA掘金击败湖人', '英超利物浦客场获胜', '葡萄牙足协主席向C罗示好',
+                   '日本国脚收获德甲处子球', '韩国国足公布名单', '澳大利亚NBL球队公布赛程',
+                   'F1新加坡站维斯塔潘夺冠', '卡尔·马龙的NBA职业生涯',
+                   '女神大赛四强出炉', '北京金融政策公布',
+                   '海外足球联赛揭幕 - 中国体育新闻网')
+        article = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        for title in domestic:
+            with self.subTest(title=title):
+                self.assertEqual(collector.article_category(title, source), 'sports')
+                old = dict(article, title=title, category='sports')
+                self.assertEqual(len(collector.merge_articles([old], [], self.now, {'example': source})), 1)
+        for title in foreign:
+            with self.subTest(title=title):
+                self.assertIsNone(collector.article_category(title, source))
+                old = dict(article, title=title, category='sports')
+                self.assertFalse(collector.merge_articles([old], [], self.now, {'example': source}))
+        self.assertIsNone(collector.article_category('CBA竞彩投注推荐', source))
+        self.assertEqual(collector.article_category('CBA球员因违规投注被禁赛', source), 'sports')
+        self.assertEqual(collector.article_category('NBA掘金击败湖人', dict(source, titleFilter=None)), 'sports')
+
     def test_rdf_feed_retains_publisher_date_link_and_excerpt(self):
         feed = b'''<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
             xmlns="http://purl.org/rss/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/">

@@ -209,20 +209,21 @@
     "titleFilter": "entertainment"
   },
   {
-    "id": "variety",
-    "name": "Variety",
-    "url": "https://variety.com/feed/",
-    "home": "https://variety.com/",
+    "id": "gnews-ifeng-ent",
+    "name": "凤凰娱乐·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3Aent.ifeng.com+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://ent.ifeng.com/",
     "category": "entertainment",
     "color": "#8d443d"
   },
   {
-    "id": "deadline",
-    "name": "Deadline",
-    "url": "https://deadline.com/feed/",
-    "home": "https://deadline.com/",
+    "id": "gnews-bjd-ent",
+    "name": "北京日报文娱·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3Abjd.com.cn+%28intitle%3A%E7%94%B5%E5%BD%B1+OR+intitle%3A%E7%94%B5%E8%A7%86%E5%89%A7+OR+intitle%3A%E5%89%A7%E9%9B%86+OR+intitle%3A%E7%BB%BC%E8%89%BA+OR+intitle%3A%E6%BC%94%E5%91%98+OR+intitle%3A%E9%9F%B3%E4%B9%90+OR+intitle%3A%E6%AD%8C%E6%89%8B+OR+intitle%3A%E5%AF%BC%E6%BC%94+OR+intitle%3A%E6%BC%94%E5%94%B1%E4%BC%9A+OR+intitle%3A%E6%BC%94%E5%87%BA+OR+intitle%3A%E6%88%8F%E5%89%A7+OR+intitle%3A%E6%96%87%E5%A8%B1%29+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://www.bjd.com.cn/",
     "category": "entertainment",
-    "color": "#8d443d"
+    "color": "#8d443d",
+    "titleFilter": "entertainment"
   },
   {
     "id": "google-ent",
@@ -260,18 +261,19 @@
     "titleFilter": "entertainment"
   },
   {
-    "id": "hollywood-reporter",
-    "name": "The Hollywood Reporter",
-    "url": "https://www.hollywoodreporter.com/feed/",
-    "home": "https://www.hollywoodreporter.com/",
+    "id": "gnews-people-ent",
+    "name": "人民网文娱·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3Apeople.com.cn+%28intitle%3A%E7%94%B5%E5%BD%B1+OR+intitle%3A%E7%94%B5%E8%A7%86%E5%89%A7+OR+intitle%3A%E5%89%A7%E9%9B%86+OR+intitle%3A%E7%BB%BC%E8%89%BA+OR+intitle%3A%E6%BC%94%E5%91%98+OR+intitle%3A%E9%9F%B3%E4%B9%90+OR+intitle%3A%E6%AD%8C%E6%89%8B+OR+intitle%3A%E5%AF%BC%E6%BC%94+OR+intitle%3A%E6%BC%94%E5%94%B1%E4%BC%9A+OR+intitle%3A%E6%BC%94%E5%87%BA+OR+intitle%3A%E6%88%8F%E5%89%A7+OR+intitle%3A%E6%96%87%E5%A8%B1%29+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://ent.people.com.cn/",
     "category": "entertainment",
-    "color": "#8d443d"
+    "color": "#8d443d",
+    "titleFilter": "entertainment"
   },
   {
-    "id": "billboard",
-    "name": "Billboard",
-    "url": "https://www.billboard.com/feed/",
-    "home": "https://www.billboard.com/",
+    "id": "gnews-xinhua-ent",
+    "name": "新华网娱乐·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3Anews.cn%2Fent%2F+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://www.news.cn/ent/",
     "category": "entertainment",
     "color": "#8d443d"
   },

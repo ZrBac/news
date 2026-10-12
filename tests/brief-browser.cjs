@@ -122,11 +122,17 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         extraGame.id,
       ),
     );
+    // Historical keyword search can consult the category index. Returning to
+    // today's/yesterday's brief must not trigger any additional archive reads.
+    await page.waitForFunction(
+      () => document.querySelector("#archive-notice").hidden,
+    );
+    const readsAfterSearch = archives.length;
     await page.locator('[data-view="brief"]').click();
     await page.fill("#date-filter", data.briefDays[1]);
     assert((await page.locator(".article").count()) > 0);
     assert((await page.locator(".article").count()) <= 10);
-    assert.equal(archives.length, 0);
+    assert.equal(archives.length, readsAfterSearch);
     await page.locator('[data-view="brief"]').click();
     assert.equal(await page.inputValue("#date-filter"), today);
     assert.deepEqual(
@@ -177,7 +183,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       await page.locator(".article h3").allTextContents(),
       titles,
     );
-    assert.equal(archives.length, 0);
+    assert.equal(archives.length, readsAfterSearch);
     assert.deepEqual(errors, []);
     await context.close();
     console.log(

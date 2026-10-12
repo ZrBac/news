@@ -24,6 +24,9 @@ ROOT = Path(__file__).resolve().parents[1]
 UTC = timezone.utc
 BEIJING = timezone(timedelta(hours=8))
 QUALITY_WINDOW_DAYS = 7
+NEWS_CATEGORIES = ('general', 'local', 'livelihood', 'tech', 'ai', 'models',
+                   'entertainment', 'gaming', 'sports', 'housing')
+ARCHIVE_LIMIT = 6000
 AI_PATTERN = re.compile(
     r'(?<![a-z0-9])(?:AI|AGI|LLMs?|GPT[a-z0-9_.-]*|ChatGPT|OpenAI|Anthropic|'
     r'Claude|Gemini|Copilot|DeepSeek[a-z0-9_.-]*|Qwen[a-z0-9_.-]*|Llama|Codex|'
@@ -146,6 +149,23 @@ def article_category(title, source):
         return 'models'
     if category == 'models':
         return None
+    if category in ('general', 'local', 'livelihood') and source['id'] not in INTERNATIONAL_SOURCES:
+        # Local housing stays with prices; local public services take precedence
+        # over the nationwide livelihood section. Publisher names are not clues.
+        if source.get('titleFilter') == 'public-rumors' and not is_public_rumor(original_title):
+            return None
+        if is_hangzhou_housing(original_title):
+            return 'housing'
+        if is_hangzhou_local(original_title):
+            return 'local'
+        if category == 'local':
+            return None
+        if source.get('titleFilter') == 'public-rumors':
+            return 'livelihood'
+        if is_livelihood(original_title):
+            return 'livelihood'
+        if category == 'livelihood':
+            return None
     if FINANCE_TOPIC.search(title):
         return 'general'
     if HARDWARE_TOPIC.search(title) or (SYSTEM_PRODUCT.search(title) and SYSTEM_UPDATE.search(title)):
@@ -161,7 +181,7 @@ def article_category(title, source):
 
 GAMING_TOPIC = re.compile(r'游戏|电玩|电竞|\b(?:Steam|Xbox|PlayStation|PS5|PS6)\b|任天堂|育碧|卡普空|塞尔达|黑神话|宝可梦|怪物猎人', re.I)
 
-HOUSING_LOCATION = re.compile(r'杭州|余杭|萧山|临平|钱塘|拱墅|临安|富阳')
+HOUSING_LOCATION = re.compile(r'杭州|余杭|萧山|临平|钱塘|拱墅|临安|富阳|滨江区|上城区|西湖区|建德|淳安|桐庐')
 HOUSING_TOPIC = re.compile(r'楼市|房地产|房产|住房|住宅|二手房|新房|购房|买房|卖房|房价|房贷|公积金|土拍|宅地|涉宅|预售|网签|土地出让|地块成交|楼盘|新盘|户型|示范区|样板房|现房|交房')
 HOUSING_NOISE = re.compile(r'票房|电影|演唱会|门票|股市|股指|美股|港股|股债|彩票')
 
@@ -170,6 +190,44 @@ def is_hangzhou_housing(title):
     # Google News appends the publisher name; “杭州网” is not story location evidence.
     title = title.rsplit(' - ', 1)[0]
     return bool(HOUSING_LOCATION.search(title) and HOUSING_TOPIC.search(title) and not HOUSING_NOISE.search(title))
+
+
+HANGZHOU_LOCATION = re.compile(r'杭州|杭城|余杭|萧山|临平|钱塘|拱墅|临安|富阳|滨江区|上城区|西湖区|建德|淳安|桐庐')
+LOCAL_SERVICE_TOPIC = re.compile(
+    r'地铁|公交|交通|铁路|高铁|快速路|道路|通行|通车|路网|开通|出行|机场|口岸|通关|'
+    r'城市建设|公园|开园|绿道|亮灯|灯光秀|音乐喷泉|展览|展出|博物馆|文旅|活动|生活周|'
+    r'露营|赏花|赏桂|赏秋|花海|桂花|美食|市场|消费|食品安全|售价|招聘|就业|社保|医保|养老|入学|招生|'
+    r'教育|春秋假|放假|假期|办事|政务|公共服务|天气|气温|气象|降温|冷空气|停电|停水|开放|综合体|竣工|投用')
+LOCAL_NOISE = re.compile(r'散文|随笔|诗歌|抒怀|股价|股票|股市|财报|控股股东|学术活动|学术年会|举行纪念|揭牌|签约|主题党日|党支部')
+LIVELIHOOD_TOPIC = re.compile(
+    r'社保|社会保险|社会保障|养老金?|医保|医疗保险|报销|生育津贴|育儿|托育|补贴|低保|救助|'
+    r'就业|失业|招聘|招工|最低工资|劳动者|劳动权益|权益保障|消费者|消费维权|消费提醒|消费提示|'
+    r'食品安全|食安|产品召回|退费|退款|以旧换新|国补|入学|招生政策|学费|助学|学生资助|'
+    r'春秋假|教育惩戒|教育收费|义务教育|民生实事|便民服务|公共服务|接诉即办|12345')
+LIVELIHOOD_NOISE = re.compile(r'民生银行|国联民生|证券|股价|股票|股市|财报|控股股东|外交|反制措施|论坛|博览会|主题党日|党支部')
+FOREIGN_SERVICE_LOCATION = re.compile(r'美国|日本|韩国|英国|英格兰|德国|法国|加拿大|澳大利亚|新加坡|印度|俄罗斯')
+PUBLIC_RUMOR_TOPIC = re.compile(r'辟谣|谣言|网传|不实|假的|真相|诈骗|虚假')
+PUBLIC_RUMOR_NOISE = re.compile(r'宣传活动|宣传周|知识竞赛|共筑清朗|培训|流动课堂|辟谣号|扎实开展')
+INTERNATIONAL_SOURCES = {'chinanews-world', 'dw', 'rfi'}
+
+
+def is_hangzhou_local(title):
+    title = unicodedata.normalize('NFKC', title.rsplit(' - ', 1)[0])
+    return bool(len(title) <= 100 and HANGZHOU_LOCATION.search(title) and LOCAL_SERVICE_TOPIC.search(title)
+                and not LOCAL_NOISE.search(title))
+
+
+def is_livelihood(title):
+    title = unicodedata.normalize('NFKC', title.rsplit(' - ', 1)[0])
+    if (LIVELIHOOD_NOISE.search(title) or
+            (FOREIGN_SERVICE_LOCATION.search(title) and not re.search(r'我国|中国|国内|全国', title))):
+        return False
+    return bool(LIVELIHOOD_TOPIC.search(title))
+
+
+def is_public_rumor(title):
+    title = title.rsplit(' - ', 1)[0]
+    return bool(PUBLIC_RUMOR_TOPIC.search(title) and not PUBLIC_RUMOR_NOISE.search(title))
 
 
 class PlainText(HTMLParser):
@@ -369,7 +427,7 @@ def merge_articles(previous, incoming, now, allowed_sources):
         date = parse_date(article.get('publishedAt'))
         if not url or not date or not now - timedelta(days=30) <= date <= now + timedelta(minutes=10):
             continue
-        if article.get('sourceId') not in allowed_sources or article.get('category') not in ('general', 'tech', 'ai', 'models', 'entertainment', 'gaming', 'sports', 'housing'):
+        if article.get('sourceId') not in allowed_sources or article.get('category') not in NEWS_CATEGORIES:
             continue
         if article.get('category') == 'housing' and not is_hangzhou_housing(str(article.get('title', ''))):
             continue
@@ -391,16 +449,16 @@ def merge_articles(previous, incoming, now, allowed_sources):
         if key not in seen:
             seen.add(key)
             result.append(article)
-    if len(result) <= 6000:
+    if len(result) <= ARCHIVE_LIMIT:
         return result
     # Reserve part of the archive for every category and distribute that reserve
     # among its sources. Unused places go to the newest remaining stories.
     protected = set()
-    for category in ('general', 'tech', 'ai', 'models', 'entertainment', 'gaming', 'sports', 'housing'):
+    for category in NEWS_CATEGORIES:
         pool = [article for article in result if article['category'] == category]
         if not pool:
             continue
-        budget = min(750, len(pool))
+        budget = min(ARCHIVE_LIMIT // len(NEWS_CATEGORIES), len(pool))
         share = max(1, budget // len({article['sourceId'] for article in pool}))
         chosen, counts = [], {}
         for article in pool:
@@ -416,7 +474,7 @@ def merge_articles(previous, incoming, now, allowed_sources):
         protected.update(selected)
     selected = set(protected)
     for article in result:
-        if len(selected) >= 6000:
+        if len(selected) >= ARCHIVE_LIMIT:
             break
         selected.add(article['id'])
     return [article for article in result if article['id'] in selected]
@@ -628,7 +686,7 @@ def main():
     allowed_sources = {s['id']: s for s in sources}
     articles = merge_articles(previous, incoming, now, allowed_sources)
     models = recent_model_releases(previous + previous_models, incoming, now, allowed_sources)
-    housing = recent_housing_articles(previous + previous_housing, incoming, now, allowed_sources)
+    housing = recent_housing_articles(articles + previous_housing, incoming, now, allowed_sources)
     if not incoming:
         raise SystemExit('All feeds unavailable. Keep the last successful deployment; do not publish an empty site.')
     old_quality = max(quality_states, key=lambda state: state['updatedAt']) if quality_states else None

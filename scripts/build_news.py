@@ -161,7 +161,8 @@ def build_news_pages(data, output):
         brief_days = [(today - timedelta(days=n)).isoformat() for n in range(2)]
         candidates = sorted(articles + releases + housing, key=lambda a: a['publishedAt'], reverse=True)
         for day in brief_days:
-            for category in ('general', 'ai', 'models', 'tech', 'entertainment', 'gaming', 'sports', 'housing'):
+            for category in ('general', 'local', 'livelihood', 'tech', 'ai', 'models',
+                             'entertainment', 'gaming', 'sports', 'housing'):
                 pool, seen = [], set()
                 for article in candidates:
                     if article.get('category') != category:

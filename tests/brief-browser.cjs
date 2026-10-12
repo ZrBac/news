@@ -34,20 +34,30 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const today = await page.inputValue("#date-filter");
     assert(data.briefDays.includes(today));
     const categories = await page.locator(".category-label").allTextContents();
-    assert.equal(categories.length, 10);
-    assert.deepEqual(
-      new Set(categories),
-      new Set([
-        "综合热点",
-        "杭州房市",
-        "人工智能",
-        "模型发布",
-        "科技动态",
-        "文娱",
-        "游戏",
-        "体育",
-      ]),
+    const categoryNames = {
+      general: "综合热点",
+      local: "杭州资讯",
+      livelihood: "民生服务",
+      housing: "杭州房市",
+      ai: "人工智能",
+      models: "模型发布",
+      tech: "科技动态",
+      entertainment: "文娱",
+      gaming: "游戏",
+      sports: "体育",
+    };
+    const eligible = new Set(
+      data.briefArticles
+        .filter((article) => {
+          const day = new Date(Date.parse(article.publishedAt) + 8 * 3600000)
+            .toISOString()
+            .slice(0, 10);
+          return day === today;
+        })
+        .map((article) => categoryNames[article.category]),
     );
+    assert(categories.length <= 10);
+    assert.deepEqual(new Set(categories), eligible);
     assert(categories.filter((c) => c === "文娱" || c === "体育").length <= 4);
     assert.equal(
       archives.length,
@@ -171,7 +181,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.deepEqual(errors, []);
     await context.close();
     console.log(
-      "PASS: default daily brief, eight balanced categories, supplemental saves, yesterday, all-news order, grouped mobile tabs, four widths and offline without archive scans.",
+      "PASS: default daily brief, balanced available categories, supplemental saves, yesterday, all-news order, grouped mobile tabs, four widths and offline without archive scans.",
     );
   } finally {
     await browser.close();

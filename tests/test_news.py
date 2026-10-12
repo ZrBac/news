@@ -104,6 +104,74 @@ class FeedTests(unittest.TestCase):
         self.assertEqual(len(collector.merge_articles([item], [same_title], self.now, {'example'})), 1)
         self.assertIsNone(collector.safe_url('https://user:password@example.com/'))
 
+    def test_local_and_livelihood_routing_keeps_housing_and_specialized_news_separate(self):
+        general = dict(self.source, category='general')
+        local = dict(self.source, category='local', titleFilter='hangzhou-local')
+        livelihood = dict(self.source, category='livelihood', titleFilter='livelihood')
+        examples = (
+            ('杭州地铁12号线迎来新进展 - 杭州网', 'local'),
+            ('杭州市区天气预报 - 杭州网', 'local'),
+            ('余杭招聘会发布5000个岗位', 'local'),
+            ('桐庐公园正式开放', 'local'),
+            ('杭州居民医保补贴申领启动', 'local'),
+            ('杭州二手房成交209套', 'housing'),
+            ('西湖区新房预售政策公布', 'housing'),
+            ('上城区住房补贴申领启动', 'housing'),
+            ('社会保险关系转移接续办理指南', 'livelihood'),
+            ('湖南医保新政11月起施行', 'livelihood'),
+            ('消费者权益保护典型案例公布', 'livelihood'),
+            ('新就业形态劳动者权益保障迎新规', 'livelihood'),
+            ('多地公布中小学春秋假安排', 'livelihood'),
+            ('国联民生控股股东增持承诺触发', 'general'),
+            ('民生银行财报公布', 'general'),
+            ('日本医保缴费调整', 'general'),
+            ('杭州企业股价上涨', 'general'),
+            ('巴黎地铁延长运营时间 - 杭州网', 'general'),
+        )
+        base = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        for title, category in examples:
+            with self.subTest(title=title):
+                self.assertEqual(collector.article_category(title, general), category)
+                old = dict(base, title=title, category='general')
+                merged = collector.merge_articles([old], [], self.now, {'example': general})
+                self.assertEqual(merged[0]['category'], category)
+        for title in ('杭州地铁开通', '临平就业补贴申领启动'):
+            self.assertEqual(collector.article_category(title, local), 'local')
+        for title in ('北京公交开通', '杭州企业财报公布', '散文随笔：杭州秋日生活与公园',
+                      '杭州假期活动' + '漫游心情' * 40):
+            self.assertIsNone(collector.article_category(title, local))
+        self.assertIsNone(collector.article_category('养老行业论坛开幕', livelihood))
+        self.assertIsNone(collector.article_category('国联民生股价上涨', livelihood))
+        self.assertEqual(collector.article_category('医保新规发布', livelihood), 'livelihood')
+        self.assertEqual(collector.article_category('杭州演唱会开票', dict(general, category='entertainment')), 'entertainment')
+        self.assertEqual(collector.article_category('杭州电竞比赛开幕', dict(general, category='gaming')), 'gaming')
+        self.assertEqual(collector.article_category('日本医保新规发布', dict(general, id='chinanews-world')), 'general')
+        housing = dict(base, title='杭州二手房成交209套', category='housing')
+        self.assertEqual(collector.recent_housing_articles([housing], [], self.now, {'example': general})[0]['category'], 'housing')
+
+    def test_public_rumors_require_actual_corrections_and_reject_promotion(self):
+        source = dict(self.source, category='livelihood', titleFilter='public-rumors')
+        for title in ('网传成都小区楼顶现坟堆系谣言', '今日辟谣（2026年10月12日）',
+                      '办社保金卡可以多领补贴？警惕诈骗', '高铁座椅传播疾病？真相来了'):
+            self.assertEqual(collector.article_category(title, source), 'livelihood')
+        for title in ('网络辟谣宣传活动开展', '杭州开展网络辟谣宣传活动',
+                      '抵制谣言共筑清朗空间', '举报辟谣号流动课堂', '科技展览即将开幕'):
+            self.assertIsNone(collector.article_category(title, source))
+
+    def test_archive_limit_still_holds_with_ten_populated_categories(self):
+        base = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        titles = {'general': '综合消息', 'local': '杭州公交开通', 'livelihood': '医保新政公布',
+                  'tech': '电脑硬件更新', 'ai': 'AI工具更新', 'models': 'Qwen3模型发布',
+                  'entertainment': '电影上映', 'gaming': '游戏发行', 'sports': '体育赛事',
+                  'housing': '杭州新盘预售'}
+        sources = {category: {'id': category, 'category': category} for category in titles}
+        articles = [dict(base, title=title + str(i), sourceId=category, category=category,
+                         url=f'https://example.com/{category}/{i}')
+                    for category, title in titles.items() for i in range(751)]
+        archive = collector.merge_articles(articles, [], self.now, sources)
+        self.assertEqual(len(archive), 6000)
+        self.assertEqual({article['category'] for article in archive}, set(titles))
+
     def test_dedicated_categories_survive_ai_keyword_and_archive_merge(self):
         for category in ('entertainment', 'gaming', 'sports'):
             with self.subTest(category=category):
@@ -317,7 +385,7 @@ class BuildTests(unittest.TestCase):
         busy = [{'id': 's' + str(i), 'category': 'sports', 'title': '比赛消息' + str(i),
                  'sourceId': 'sports', 'publishedAt': '2026-10-10T04:00:00Z'} for i in range(170)]
         rare = [{'id': c, 'category': c, 'title': c + '今日消息', 'sourceId': c,
-                 'publishedAt': '2026-10-09T16:01:00Z'} for c in ('general', 'tech', 'ai', 'entertainment', 'gaming', 'housing')]
+                 'publishedAt': '2026-10-09T16:01:00Z'} for c in ('general', 'local', 'livelihood', 'tech', 'ai', 'entertainment', 'gaming', 'housing')]
         model = {'id': 'model', 'category': 'models', 'title': '今日模型发布', 'sourceId': 'official',
                  'publishedAt': '2026-10-09T16:00:00Z'}
         yesterday = dict(model, id='yesterday', title='昨日模型发布', publishedAt='2026-10-09T15:59:00Z')
@@ -329,11 +397,11 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(latest['articles'], busy[:150])
             self.assertEqual(latest['briefDays'], ['2026-10-10', '2026-10-09'])
             self.assertEqual({a['category'] for a in latest['briefArticles']},
-                             {'general', 'tech', 'ai', 'models', 'entertainment', 'gaming', 'sports', 'housing'})
+                             {'general', 'local', 'livelihood', 'tech', 'ai', 'models', 'entertainment', 'gaming', 'sports', 'housing'})
             self.assertEqual(len([a for a in latest['briefArticles'] if a['category'] == 'sports']), 5)
             self.assertEqual({a['id'] for a in latest['briefArticles'] if a['category'] == 'models'},
                              {'model', 'yesterday'})
-            self.assertLessEqual(len(latest['briefArticles']), 80)
+            self.assertLessEqual(len(latest['briefArticles']), 100)
     def test_gaming_snapshot_is_available_beyond_the_first_news_page(self):
         spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
         builder = importlib.util.module_from_spec(spec)

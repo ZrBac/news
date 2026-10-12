@@ -972,9 +972,15 @@ dialog::backdrop {
     grid-row: 1;
   }
   .filter-categories {
+    display: grid;
     grid-column: 1 / -1;
     grid-row: 2;
-    justify-content: space-between;
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+    gap: 0 12px;
+  }
+  .filter-categories button {
+    min-height: 40px;
+    text-align: left;
   }
   .filter-tabs button,
   .filter-tabs a {

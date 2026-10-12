@@ -59,6 +59,8 @@
   };
   const categoryNames = {
     general: "综合热点",
+    local: "杭州资讯",
+    livelihood: "民生服务",
     tech: "科技动态",
     ai: "人工智能",
     models: "模型发布",
@@ -204,13 +206,15 @@
     });
     const queues = [
       "general",
-      "housing",
+      "local",
+      "livelihood",
+      "tech",
       "ai",
       "models",
-      "tech",
       "entertainment",
       "gaming",
       "sports",
+      "housing",
     ].map((category) => articles.filter((a) => a.category === category));
     const selected = [];
     const counts = {};
@@ -558,6 +562,8 @@
     const titles = {
       all: "最新资讯",
       general: "综合热点",
+      local: "杭州资讯",
+      livelihood: "民生服务",
       tech: "科技动态",
       ai: "人工智能",
       models: "模型发布",
@@ -588,6 +594,8 @@
     note.hidden = ![
       "saved",
       "brief",
+      "local",
+      "livelihood",
       "models",
       "tech",
       "ai",
@@ -595,6 +603,12 @@
       "housing",
       "gaming",
     ].includes(state.view);
+    if (state.view === "local")
+      note.textContent =
+        "杭州交通、城市建设、本地活动与公共服务。房市报道和成交数据可在「杭州房价」查看。";
+    if (state.view === "livelihood")
+      note.textContent =
+        "社保医保、补贴、就业与消费提醒，附官方辟谣消息。各地政策的适用范围和办理时间见原报道。";
     if (state.view === "gaming")
       note.textContent =
         "新游发布、版本更新、主机与游戏行业动态。可按来源、日期回看已收录报道。";
@@ -672,6 +686,8 @@
     state.view = [
       "all",
       "general",
+      "local",
+      "livelihood",
       "tech",
       "ai",
       "models",
@@ -687,6 +703,8 @@
       : "brief";
     state.filter = [
       "general",
+      "local",
+      "livelihood",
       "tech",
       "ai",
       "models",

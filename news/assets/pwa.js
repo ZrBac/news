@@ -113,7 +113,14 @@
     return true;
   }
   function showUpdate() {
-    if (registration?.waiting) notice.hidden = false;
+    // The first install briefly enters "waiting" before activating. Only an
+    // existing controller being replaced is an update, and clear stale notices
+    // when that waiting worker has activated (including in another tab).
+    notice.hidden = !(
+      registration?.waiting?.state === "installed" &&
+      registration.active &&
+      navigator.serviceWorker.controller
+    );
   }
   function watch(worker) {
     if (!worker) return;
@@ -295,6 +302,7 @@
       if (registration) checkOffline();
     });
     navigator.serviceWorker.addEventListener("controllerchange", () => {
+      showUpdate();
       if (applyingUpdate) window.location.reload();
       else Promise.resolve(checking).then(() => checkOffline());
     });

@@ -80,6 +80,10 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     await page.locator(".article").first().waitFor();
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+    assert(
+      await page.locator("#pwa-update").isHidden(),
+      "first offline installation must not be reported as an application update",
+    );
     const cdp = await context.newCDPSession(page);
     const manifest = await cdp.send("Page.getAppManifest");
     assert.deepEqual(manifest.errors, []);
@@ -141,6 +145,10 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
       await page.locator(".article h3").first().innerText(),
       savedTitle,
     );
+    assert(
+      await page.locator("#pwa-update").isHidden(),
+      "offline reopening must not prompt for an application update",
+    );
     await page.fill("#search", savedTitle.slice(0, 4));
     assert.equal(await page.locator(".article").count(), 1);
     await page.click("#refresh-news");
@@ -161,6 +169,10 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
       dataTime,
     );
     assert(await page.locator("#load-notice").isHidden());
+    assert(
+      await page.locator("#pwa-update").isHidden(),
+      "refreshing news data must not prompt for an application update",
+    );
     assert.equal(
       await page.locator(".article h3").first().innerText(),
       savedTitle,
@@ -195,6 +207,39 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     );
     assert(keys.includes("unrelated-test-cache"));
     assert(await page.locator("#pwa-update").isHidden());
+    await page.reload({ waitUntil: "networkidle" });
+    assert(
+      await page.locator("#pwa-update").isHidden(),
+      "reopening the current application version must not repeat the update prompt",
+    );
+    const other = await context.newPage();
+    await other.goto(base, { waitUntil: "networkidle" });
+    await page.evaluate(() => {
+      window.openReaderMarker = "keep-reading";
+    });
+    revision = 3;
+    await page.evaluate(async () =>
+      (await navigator.serviceWorker.getRegistration()).update(),
+    );
+    await page
+      .locator("#pwa-update")
+      .waitFor({ state: "visible", timeout: 15000 });
+    await other
+      .locator("#pwa-update")
+      .waitFor({ state: "visible", timeout: 15000 });
+    await Promise.all([
+      other.waitForNavigation({ waitUntil: "networkidle" }),
+      other.click("#apply-update"),
+    ]);
+    await page
+      .locator("#pwa-update")
+      .waitFor({ state: "hidden", timeout: 15000 });
+    assert.equal(
+      await page.evaluate(() => window.openReaderMarker),
+      "keep-reading",
+      "an update accepted in another tab clears the notice without reloading the reader",
+    );
+    await other.close();
     for (const path of [
       "/blog/",
       "/2020/09/25/Java-8-HashMap/",

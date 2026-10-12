@@ -2,6 +2,7 @@ const { chromium, devices } = require(
   process.env.PLAYWRIGHT_MODULE || "playwright",
 );
 const assert = require("node:assert/strict");
+const fs = require("node:fs/promises");
 const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
 (async () => {
   const browser = await chromium.launch({ args: ["--no-sandbox"] });
@@ -29,11 +30,37 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const today = await page.inputValue("#date-filter");
     const dayOf = (value) =>
       new Date(Date.parse(value) + 8 * 3600000).toISOString().slice(0, 10);
+    const eligibleCategories = new Set(
+      latest.briefArticles
+        .filter((article) => dayOf(article.publishedAt) === today)
+        .map((article) => article.category),
+    );
+    assert(
+      await page.locator("#date-panel").isHidden(),
+      "mobile date controls stay collapsed until requested",
+    );
+    assert(
+      await page
+        .locator(".article")
+        .first()
+        .evaluate((node) => node.getBoundingClientRect().top < 420),
+      "mobile readers reach the news in the first half of the screen",
+    );
+    assert(
+      await page
+        .locator("#search")
+        .evaluate((node) => parseFloat(getComputedStyle(node).fontSize) >= 16),
+      "typing must not trigger Safari's small-font zoom",
+    );
+    await page.locator("#date-trigger").click();
+    assert(await page.locator("#date-filter").isVisible());
+    await page.locator("#date-trigger").click();
     for (const [category, label] of [
       ["local", "杭州资讯"],
       ["livelihood", "民生服务"],
     ]) {
       if (
+        eligibleCategories.size <= 10 &&
         latest.briefArticles.some(
           (article) =>
             article.category === category &&
@@ -51,6 +78,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       .evaluateAll((nodes) => nodes.map((node) => node.dataset.filter));
     assert.deepEqual(tabs, [
       "general",
+      "finance",
       "local",
       "livelihood",
       "tech",
@@ -85,13 +113,23 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
           ]);
         assert.equal(
           rows.length,
-          2,
-          "news categories have two orderly mobile rows",
+          1,
+          "mobile categories use a single scrollable row",
         );
       }
     }
     await page.setViewportSize({ width: 390, height: 844 });
+    await page.goto(base + "/#sports");
+    await page.waitForFunction(() => {
+      const selected = document.querySelector(".filter-categories .selected");
+      if (!selected || selected.dataset.filter !== "sports") return false;
+      const item = selected.getBoundingClientRect(),
+        group = selected.parentElement.getBoundingClientRect();
+      return item.left >= group.left - 1 && item.right <= group.right + 1;
+    });
+    await page.locator('[data-view="brief"]').click();
     for (const [category, label] of [
+      ["finance", "财经"],
       ["local", "杭州资讯"],
       ["livelihood", "民生服务"],
     ]) {
@@ -161,6 +199,35 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         label,
       );
     }
+    await page.locator(".reading-options > summary").click();
+    const download = page.waitForEvent("download");
+    await page.locator("#export-bookmarks").click();
+    const backup = JSON.parse(
+      await fs.readFile(await (await download).path(), "utf8"),
+    );
+    assert.deepEqual(
+      new Set(backup.newsSaved.map((article) => article.category)),
+      new Set(["finance", "local", "livelihood"]),
+    );
+    await page.evaluate(() => localStorage.removeItem("zrbac-news-saved-v1"));
+    await page.reload();
+    await page.evaluate(() => window.newsInitialLoad);
+    await page.locator(".reading-options > summary").click();
+    await page
+      .locator("#bookmarks-file")
+      .setInputFiles({
+        name: "bookmarks.json",
+        mimeType: "application/json",
+        buffer: Buffer.from(JSON.stringify(backup)),
+      });
+    await page.waitForFunction(
+      () =>
+        JSON.parse(localStorage.getItem("zrbac-news-saved-v1") || "[]")
+          .length === 3,
+    );
+    await page.locator(".saved-link").click();
+    assert.equal(await page.locator(".article").count(), 3);
+    await page.locator(".reading-options > summary").click();
     await page.goto(base + "/#local");
     await page.evaluate(() => window.newsInitialLoad);
     await page.evaluate(() => navigator.serviceWorker.ready);
@@ -201,7 +268,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.deepEqual(errors, []);
     await context.close();
     console.log(
-      "PASS: local and livelihood brief entries, navigation at four widths, historical search, sources, favorites and cached offline reading.",
+      "PASS: compact mobile navigation and date controls, finance/local/livelihood search, sources, bookmark backup/import and cached offline reading.",
     );
   } finally {
     await browser.close();

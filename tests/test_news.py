@@ -122,10 +122,10 @@ class FeedTests(unittest.TestCase):
             ('消费者权益保护典型案例公布', 'livelihood'),
             ('新就业形态劳动者权益保障迎新规', 'livelihood'),
             ('多地公布中小学春秋假安排', 'livelihood'),
-            ('国联民生控股股东增持承诺触发', 'general'),
-            ('民生银行财报公布', 'general'),
+            ('国联民生控股股东增持承诺触发', 'finance'),
+            ('民生银行财报公布', 'finance'),
             ('日本医保缴费调整', 'general'),
-            ('杭州企业股价上涨', 'general'),
+            ('杭州企业股价上涨', 'finance'),
             ('巴黎地铁延长运营时间 - 杭州网', 'general'),
         )
         base = collector.parse_feed(self.feed(), self.source, self.now)[0]
@@ -158,9 +158,9 @@ class FeedTests(unittest.TestCase):
                       '抵制谣言共筑清朗空间', '举报辟谣号流动课堂', '科技展览即将开幕'):
             self.assertIsNone(collector.article_category(title, source))
 
-    def test_archive_limit_still_holds_with_ten_populated_categories(self):
+    def test_archive_limit_still_holds_with_eleven_populated_categories(self):
         base = collector.parse_feed(self.feed(), self.source, self.now)[0]
-        titles = {'general': '综合消息', 'local': '杭州公交开通', 'livelihood': '医保新政公布',
+        titles = {'general': '综合消息', 'finance': '央行利率调整', 'local': '杭州公交开通', 'livelihood': '医保新政公布',
                   'tech': '电脑硬件更新', 'ai': 'AI工具更新', 'models': 'Qwen3模型发布',
                   'entertainment': '电影上映', 'gaming': '游戏发行', 'sports': '体育赛事',
                   'housing': '杭州新盘预售'}
@@ -179,6 +179,27 @@ class FeedTests(unittest.TestCase):
                 items = collector.parse_feed(self.feed(), source, self.now)
                 self.assertEqual(items[0]['category'], category)
                 self.assertEqual(collector.merge_articles(items, [], self.now, {'example'}), items)
+
+    def test_finance_filters_market_news_and_preserves_public_service_boundaries(self):
+        general = dict(self.source, category='general')
+        finance = dict(self.source, category='finance', titleFilter='finance')
+        for title in ('央行发布人民币汇率政策', 'GDP和CPI数据即将公布', '银行利率调整',
+                      '公司营收和净利润增长', '债券ETF规模扩大', 'A股午盘指数下跌',
+                      'OpenAI完成新一轮融资', 'NVIDIA quarterly earnings rise'):
+            self.assertEqual(collector.article_category(title, general), 'finance')
+            self.assertEqual(collector.article_category(title, finance), 'finance')
+        self.assertEqual(collector.article_category('杭州二手房成交统计公布', finance), 'housing')
+        self.assertEqual(collector.article_category('杭州地铁新线开通', finance), 'local')
+        self.assertEqual(collector.article_category('金融消费者合法权益保护案例公布', finance), 'livelihood')
+        self.assertEqual(collector.article_category('医保补贴申领启动', finance), 'livelihood')
+        self.assertIsNone(collector.article_category('巴拿马发生强震', finance))
+        self.assertIsNone(collector.article_category('稳赚！股票荐股群开户送红包', finance))
+        self.assertEqual(collector.article_category('警惕稳赚荐股群股票诈骗', finance), 'finance')
+        self.assertEqual(collector.article_category('苹果新款电脑上市', self.source), 'tech')
+        self.assertEqual(collector.article_category('OpenAI发布GPT-6.1模型', finance), 'models')
+        old = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        old.update(title='央行发布人民币汇率政策', category='general')
+        self.assertEqual(collector.merge_articles([old], [], self.now, {'example': general})[0]['category'], 'finance')
 
     def test_hangzhou_housing_requires_location_and_housing_topic(self):
         source = dict(self.source, category='housing')
@@ -290,8 +311,8 @@ class FeedTests(unittest.TestCase):
             ('英伟达发布AI显卡，配备新GPU', 'tech'),
             ('46999元起，迷你AI工作站发售', 'tech'),
             ('微软推出Edge155稳定版，增强AI标签整理', 'tech'),
-            ('AI巨头盈利增长，标普股价上涨', 'general'),
-            ('特斯拉布局物理AI，成为投资标的', 'general'),
+            ('AI巨头盈利增长，标普股价上涨', 'finance'),
+            ('特斯拉布局物理AI，成为投资标的', 'finance'),
             ('OpenAI发布GPT-6.1模型', 'models'),
             ('AirPods Max推出新颜色', 'tech'),
             ('AION新车型发布', 'tech'),
@@ -385,7 +406,7 @@ class BuildTests(unittest.TestCase):
         busy = [{'id': 's' + str(i), 'category': 'sports', 'title': '比赛消息' + str(i),
                  'sourceId': 'sports', 'publishedAt': '2026-10-10T04:00:00Z'} for i in range(170)]
         rare = [{'id': c, 'category': c, 'title': c + '今日消息', 'sourceId': c,
-                 'publishedAt': '2026-10-09T16:01:00Z'} for c in ('general', 'local', 'livelihood', 'tech', 'ai', 'entertainment', 'gaming', 'housing')]
+                 'publishedAt': '2026-10-09T16:01:00Z'} for c in ('general', 'finance', 'local', 'livelihood', 'tech', 'ai', 'entertainment', 'gaming', 'housing')]
         model = {'id': 'model', 'category': 'models', 'title': '今日模型发布', 'sourceId': 'official',
                  'publishedAt': '2026-10-09T16:00:00Z'}
         yesterday = dict(model, id='yesterday', title='昨日模型发布', publishedAt='2026-10-09T15:59:00Z')
@@ -397,11 +418,11 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(latest['articles'], busy[:150])
             self.assertEqual(latest['briefDays'], ['2026-10-10', '2026-10-09'])
             self.assertEqual({a['category'] for a in latest['briefArticles']},
-                             {'general', 'local', 'livelihood', 'tech', 'ai', 'models', 'entertainment', 'gaming', 'sports', 'housing'})
+                             {'general', 'finance', 'local', 'livelihood', 'tech', 'ai', 'models', 'entertainment', 'gaming', 'sports', 'housing'})
             self.assertEqual(len([a for a in latest['briefArticles'] if a['category'] == 'sports']), 5)
             self.assertEqual({a['id'] for a in latest['briefArticles'] if a['category'] == 'models'},
                              {'model', 'yesterday'})
-            self.assertLessEqual(len(latest['briefArticles']), 100)
+            self.assertLessEqual(len(latest['briefArticles']), 110)
     def test_gaming_snapshot_is_available_beyond_the_first_news_page(self):
         spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
         builder = importlib.util.module_from_spec(spec)

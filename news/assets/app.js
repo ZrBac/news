@@ -59,6 +59,7 @@
   };
   const categoryNames = {
     general: "综合热点",
+    finance: "财经",
     local: "杭州资讯",
     livelihood: "民生服务",
     tech: "科技动态",
@@ -185,10 +186,34 @@
     const saved = state.saved.has(article.id);
     const source = sourceFor(article);
     const read = window.NewsPersonal?.isRead(article.id);
+    const aggregated = /^https?:\/\/news\.google\.com\//.test(article.url);
+    let suffix = aggregated ? article.title.lastIndexOf(" - ") : -1;
+    if (suffix > 0) {
+      const publisher = article.title.slice(suffix + 3).trim();
+      let prefix = article.title.slice(0, suffix);
+      // Some feeds repeat the publisher in both the page title and RSS suffix.
+      while (publisher && prefix.endsWith(publisher)) {
+        const before = prefix.slice(0, -publisher.length).trimEnd();
+        if (!before.endsWith("-")) break;
+        prefix = before.slice(0, -1).trimEnd();
+        suffix = prefix.length;
+      }
+    }
+    const headline =
+      suffix > 0
+        ? escape(article.title.slice(0, suffix)) +
+          `<span class="article-publisher-suffix">${escape(article.title.slice(suffix))}</span>`
+        : escape(article.title);
+    const textKey = (value) => value.replace(/[\s\p{P}]/gu, "").toLowerCase();
+    const excerptKey = textKey(article.excerpt || "");
+    const repeatsTitle =
+      aggregated &&
+      excerptKey.length >= 8 &&
+      textKey(article.title).startsWith(excerptKey);
     return `<article class="article${read ? " read" : ""}" data-article-id="${escape(article.id)}"><div class="article-body">
       ${state.view === "brief" ? `<span class="article-number">${String(index + 1).padStart(2, "0")}</span>` : ""}
-      <h3><a href="${escape(safeUrl(article.url))}" target="_blank" rel="noopener noreferrer">${escape(article.title)}</a></h3>
-      ${article.excerpt ? `<p>${escape(article.excerpt)}</p>` : ""}
+      <h3><a href="${escape(safeUrl(article.url))}" aria-label="${escape(article.title)}" target="_blank" rel="noopener noreferrer">${headline}</a></h3>
+      ${article.excerpt ? `<p${repeatsTitle ? ' class="repeated-excerpt"' : ""}>${escape(article.excerpt)}</p>` : ""}
       <div class="article-meta"><span>${escape(source.name)}</span><time datetime="${escape(article.publishedAt)}" title="北京时间 ${escape(formatTime(article.publishedAt))}">${escape(relativeTime(article.publishedAt))}</time><span class="category-label ${escape(article.category)}">${categoryNames[article.category]}</span>${read ? '<span class="read-label">已读</span>' : ""}</div>
       ${article.reports?.length ? `<details class="article-reports"><summary>其他 ${article.reports.length} 篇报道</summary>${article.reports.map((a) => `<a href="${escape(safeUrl(a.url))}" target="_blank" rel="noopener noreferrer">${escape(sourceFor(a).name)} · ${escape(a.title)}</a>`).join("")}</details>` : ""}
       </div><button class="save-button${saved ? " saved" : ""}" data-save="${escape(article.id)}" aria-label="${saved ? "取消收藏" : "收藏"}：${escape(article.title)}" aria-pressed="${saved}" title="${saved ? "取消收藏" : "收藏文章"}">${icon("bookmark")}</button></article>`;
@@ -206,6 +231,7 @@
     });
     const queues = [
       "general",
+      "finance",
       "local",
       "livelihood",
       "tech",
@@ -215,7 +241,19 @@
       "gaming",
       "sports",
       "housing",
-    ].map((category) => articles.filter((a) => a.category === category));
+    ]
+      .map((category) => articles.filter((a) => a.category === category))
+      .filter((queue) => queue.length);
+    // If more than ten categories have news, rotate the starting category by
+    // calendar date so the last section is not permanently left out.
+    if (queues.length > 10) {
+      const offset =
+        Math.floor(
+          Date.parse((state.date || dayOf(Date.now())) + "T00:00:00Z") /
+            86400000,
+        ) % queues.length;
+      queues.push(...queues.splice(0, offset));
+    }
     const selected = [];
     const counts = {};
     // Rotate categories and sources. This is a transparent reading selection, not a popularity score.
@@ -558,10 +596,28 @@
       <p class="price-explanation">这里展示已公开的成交、网签统计；暂未接入全市实时逐套成交库。不同周期和成交房源构成的均价不能直接比较。</p>${housingMarket(data)}${housingNews()}`;
   }
 
+  let revealedCategory = null;
+  let revealedWidth = 0;
+  function revealCategory() {
+    if (!window.matchMedia("(max-width: 760px)").matches) return;
+    const group = $(".filter-categories");
+    const selected = group.querySelector(".selected");
+    if (selected === revealedCategory && group.clientWidth === revealedWidth)
+      return;
+    revealedCategory = selected;
+    revealedWidth = group.clientWidth;
+    if (selected)
+      group.scrollLeft = Math.max(
+        0,
+        selected.offsetLeft - (group.clientWidth - selected.offsetWidth) / 2,
+      );
+  }
+  window.addEventListener("resize", revealCategory);
   function render() {
     const titles = {
       all: "最新资讯",
       general: "综合热点",
+      finance: "财经",
       local: "杭州资讯",
       livelihood: "民生服务",
       tech: "科技动态",
@@ -590,10 +646,12 @@
       el.classList.toggle("selected", active);
       el.setAttribute("aria-pressed", active);
     });
+    revealCategory();
     const note = $("#view-note");
     note.hidden = ![
       "saved",
       "brief",
+      "finance",
       "local",
       "livelihood",
       "models",
@@ -603,6 +661,9 @@
       "housing",
       "gaming",
     ].includes(state.view);
+    if (state.view === "finance")
+      note.textContent =
+        "经济政策、金融市场与企业经营消息，按报道发布时间更新。";
     if (state.view === "local")
       note.textContent =
         "杭州交通、城市建设、本地活动与公共服务。房市报道和成交数据可在「杭州房价」查看。";
@@ -631,8 +692,7 @@
       note.textContent =
         "收藏保存在当前浏览器，可保留已超出资讯归档期限的条目。清除浏览器数据会移除收藏，不会自动跨设备同步。";
     if (state.view === "brief")
-      note.textContent =
-        "按不同分类和来源选取当天最多10条消息，可切换日期回看。";
+      note.textContent = "按分类和来源选取，可切换日期回看。";
     $("#date-trigger").classList.toggle("active", !!state.date);
     $("#date-trigger span:last-child").textContent = state.date
       ? state.date.slice(5).replace("-", "/")
@@ -686,6 +746,7 @@
     state.view = [
       "all",
       "general",
+      "finance",
       "local",
       "livelihood",
       "tech",
@@ -703,6 +764,7 @@
       : "brief";
     state.filter = [
       "general",
+      "finance",
       "local",
       "livelihood",
       "tech",
@@ -724,8 +786,11 @@
     $("#search").value = "";
     $("#source-filter").value = "all";
     $("#date-filter").value = state.date;
-    $("#date-panel").hidden = state.view !== "brief";
-    $("#date-trigger").setAttribute("aria-expanded", state.view === "brief");
+    const showDate =
+      state.view === "brief" &&
+      !window.matchMedia("(max-width: 760px)").matches;
+    $("#date-panel").hidden = !showDate;
+    $("#date-trigger").setAttribute("aria-expanded", showDate);
     render();
     ensureArticles();
     if (scroll)
@@ -768,8 +833,11 @@
       (date, a) => Math.max(date, Date.parse(a.publishedAt)),
       0,
     );
-    $("#update-status").textContent =
-      `${stale ? "检查已延迟 · " : ""}最近检查 ${formatTime(state.data.updatedAt)} · 最新文章 ${latestPublished ? formatTime(latestPublished) : "暂无"} · ${ok}/${state.data.sources.length} 个来源可用`;
+    const checked = `${stale ? "检查已延迟 · " : ""}最近检查 ${formatTime(state.data.updatedAt)}`;
+    const detail = ` · 最新文章 ${latestPublished ? formatTime(latestPublished) : "暂无"} · ${ok}/${state.data.sources.length} 个来源可用`;
+    $("#update-status").innerHTML =
+      `${escape(checked)}<span class="update-detail">${escape(detail)}</span>`;
+    $("#update-status").setAttribute("aria-label", checked + detail);
     $("#update-status").title =
       "最近检查为资讯源抓取时间，最新文章为已收录文章的发布时间。计划每小时检查，可能延迟；时间均为北京时间。";
     const dates = state.data.articles.map((a) => dayOf(a.publishedAt)).sort();
@@ -1071,7 +1139,7 @@
     sourceDialogToken++;
     $("#dialog-title").textContent = "关于本站";
     $("#dialog-content").innerHTML =
-      '<p>个人新闻订阅页，汇总综合新闻、杭州房市、科技、AI、模型发布、文娱和体育资讯，计划每小时检查更新。</p><h3>排序与分类</h3><p>新闻按来源标注的发布时间排列，AI 分类依据标题关键词及来源。模型栏目筛选模型发布、升级与开放消息，标题识别可能遗漏；普通产品功能更新与发布传闻不收录到该栏目。每日速览从不同分类与来源中选取最多 10 条，不代表热度排名。</p><h3>内容与收藏</h3><p>标题及短摘要来自对应资讯源，点击标题阅读原文。收藏仅保存在当前浏览器，不会跨设备同步。</p><p><a href="https://github.com/ZrBac/news/issues" target="_blank" rel="noopener noreferrer">问题反馈</a></p>';
+      '<p>个人新闻订阅页，汇总综合、财经、杭州、民生、科技、AI、模型、文娱、游戏和体育资讯，计划每小时检查更新。</p><h3>排序与分类</h3><p>新闻按来源标注的发布时间排列，AI 分类依据标题关键词及来源。模型栏目筛选模型发布、升级与开放消息，标题识别可能遗漏；普通产品功能更新与发布传闻不收录到该栏目。每日速览从不同分类与来源中选取最多 10 条，不代表热度排名。</p><h3>内容与收藏</h3><p>标题及短摘要来自对应资讯源，点击标题阅读原文。收藏仅保存在当前浏览器，不会跨设备同步。</p><p><a href="https://github.com/ZrBac/news/issues" target="_blank" rel="noopener noreferrer">问题反馈</a></p>';
     $("#info-dialog").showModal();
   }
   function theme(value) {

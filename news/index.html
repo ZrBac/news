@@ -140,6 +140,7 @@
               aria-label="新闻分类"
             >
               <button data-filter="general" aria-pressed="false">综合</button>
+              <button data-filter="finance" aria-pressed="false">财经</button>
               <button data-filter="local" aria-pressed="false">杭州</button>
               <button data-filter="livelihood" aria-pressed="false">
                 民生
@@ -170,7 +171,7 @@
               ><input
                 id="search"
                 type="search"
-                placeholder="搜索标题、关键词…"
+                placeholder="搜索资讯"
                 aria-label="搜索资讯标题和摘要"
               /><kbd>/</kbd></label
             >
@@ -189,7 +190,7 @@
               <span data-icon="calendar"></span><span>日期</span>
             </button>
           </div>
-          <div id="date-panel" class="date-panel">
+          <div id="date-panel" class="date-panel" hidden>
             <label for="date-filter">按发布日期查看（北京时间）</label
             ><input type="date" id="date-filter" /><button
               id="clear-date"
@@ -226,7 +227,7 @@
             <p id="reading-status" class="reading-status" role="status"></p>
           </details>
           <p id="view-note" class="view-note">
-            按不同分类和来源选取当天最多10条消息，可切换日期回看。
+            按分类和来源选取，可切换日期回看。
           </p>
           <p id="refresh-notice" class="view-note" role="status" hidden></p>
           <p id="pwa-update" class="pwa-update" role="status" hidden>

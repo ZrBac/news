@@ -24,7 +24,7 @@ ROOT = Path(__file__).resolve().parents[1]
 UTC = timezone.utc
 BEIJING = timezone(timedelta(hours=8))
 QUALITY_WINDOW_DAYS = 7
-NEWS_CATEGORIES = ('general', 'local', 'livelihood', 'tech', 'ai', 'models',
+NEWS_CATEGORIES = ('general', 'finance', 'local', 'livelihood', 'tech', 'ai', 'models',
                    'entertainment', 'gaming', 'sports', 'housing')
 ARCHIVE_LIMIT = 6000
 AI_PATTERN = re.compile(
@@ -33,7 +33,14 @@ AI_PATTERN = re.compile(
     r'GLM[a-z0-9_.-]*|Kimi|MiniMax|Grok|Qoder|Cursor|Windsurf|Kiro|'
     r'RAG|MCP|agents?)(?![a-z0-9])|人工智能|大模型|语言模型|生成式|机器学习|'
     r'智能体|通义|千问|智谱|豆包|具身智能', re.I)
-FINANCE_TOPIC = re.compile(r'股价|股票|股市|投资标的|标普|纳斯达克|证券|盈利增长|盈利预计|业绩预测|财报')
+FINANCE_TOPIC = re.compile(
+    r'财经|经济|金融|股价|股票|股市|投资标的|标普|纳斯达克|证券|盈利|业绩|财报|营收|净利润|'
+    r'银行|央行|货币|财政|利率|降息|加息|债券|国债|期货|基金|私募|公募|人民币|外汇|黄金|金价|油价|'
+    r'通胀|物价|融资|上市公司|挂牌上市|进出口|出口额|进口额|贸易额|关税|资产管理|资产证券|不良资产|国联民生|'
+    r'(?<![a-z0-9])(?:GDP|CPI|PPI|LPR|IPO|ETF|A股|港股|美股|earnings|revenue|'
+    r'stocks?|bonds?|inflation|interest rates?)(?![a-z0-9])', re.I)
+FINANCE_PROMOTION = re.compile(r'开户送|开户.*领红包|稳赚|荐股群|加群.*(?:股票|荐股)')
+FINANCE_DISCIPLINE = re.compile(r'诈骗|骗局|警惕|查处|被罚|违规|揭露')
 HARDWARE_TOPIC = re.compile(r'芯片|显卡|处理器|服务器|主板|内存|固态硬盘|显示器|电源|工作站|迷你电脑|'
                             r'(?<![a-z0-9])(?:GPU|CPU|NPU|SSD|RTX|DGX)(?![a-z0-9])', re.I)
 SYSTEM_PRODUCT = re.compile(r'(?<![a-z0-9])(?:Edge|Chrome|Firefox|Windows|Android|HarmonyOS|'
@@ -149,7 +156,7 @@ def article_category(title, source):
         return 'models'
     if category == 'models':
         return None
-    if category in ('general', 'local', 'livelihood') and source['id'] not in INTERNATIONAL_SOURCES:
+    if category in ('general', 'finance', 'local', 'livelihood') and source['id'] not in INTERNATIONAL_SOURCES:
         # Local housing stays with prices; local public services take precedence
         # over the nationwide livelihood section. Publisher names are not clues.
         if source.get('titleFilter') == 'public-rumors' and not is_public_rumor(original_title):
@@ -166,8 +173,12 @@ def article_category(title, source):
             return 'livelihood'
         if category == 'livelihood':
             return None
+    if category == 'finance' and FINANCE_PROMOTION.search(title) and not FINANCE_DISCIPLINE.search(title):
+        return None
     if FINANCE_TOPIC.search(title):
-        return 'general'
+        return 'finance'
+    if category == 'finance' and source.get('titleFilter') == 'finance':
+        return None
     if HARDWARE_TOPIC.search(title) or (SYSTEM_PRODUCT.search(title) and SYSTEM_UPDATE.search(title)):
         return 'tech'
     if AI_PATTERN.search(title):
@@ -483,7 +494,7 @@ def merge_articles(previous, incoming, now, allowed_sources):
 def recent_model_releases(previous, incoming, now, allowed_sources):
     def candidates(articles):
         return [a for a in articles if isinstance(a, dict)
-                and a.get('category') in ('general', 'tech', 'ai', 'models')
+                and a.get('category') in ('general', 'finance', 'tech', 'ai', 'models')
                 and is_model_release(str(a.get('title', '')), a.get('sourceId', ''))]
     # Separate retention keeps less-frequent model announcements from being
     # pushed out by the shared 6,000-story archive. The builder removes copies.

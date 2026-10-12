@@ -94,6 +94,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert(briefCount > 0 && briefCount <= 10);
     const selectedDate = await page.inputValue("#date-filter");
     assert(selectedDate.length === 10);
+    if (await page.locator("#date-panel").isHidden())
+      await page.click("#date-trigger");
     await page.fill("#date-filter", "2020-01-01");
     assert.equal(await page.locator(".article").count(), 0);
     // Clicking the selected tab must reset an empty date/search without requiring a hash change.

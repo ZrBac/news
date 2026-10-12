@@ -36,6 +36,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const categories = await page.locator(".category-label").allTextContents();
     const categoryNames = {
       general: "综合热点",
+      finance: "财经",
       local: "杭州资讯",
       livelihood: "民生服务",
       housing: "杭州房市",
@@ -57,7 +58,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         .map((article) => categoryNames[article.category]),
     );
     assert(categories.length <= 10);
-    assert.deepEqual(new Set(categories), eligible);
+    assert.equal(new Set(categories).size, Math.min(10, eligible.size));
+    assert(categories.every((category) => eligible.has(category)));
     assert(categories.filter((c) => c === "文娱" || c === "体育").length <= 4);
     assert.equal(
       archives.length,
@@ -129,6 +131,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     const readsAfterSearch = archives.length;
     await page.locator('[data-view="brief"]').click();
+    if (await page.locator("#date-panel").isHidden())
+      await page.locator("#date-trigger").click();
     await page.fill("#date-filter", data.briefDays[1]);
     assert((await page.locator(".article").count()) > 0);
     assert((await page.locator(".article").count()) <= 10);

@@ -865,7 +865,7 @@ dialog::backdrop {
   }
   .header-inner {
     gap: 16px;
-    min-height: 60px;
+    min-height: 56px;
   }
   .brand-name {
     font-size: 23px;
@@ -884,7 +884,7 @@ dialog::backdrop {
     display: grid;
     grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 4px 12px;
-    padding: 10px 0;
+    padding: 8px 0;
     line-height: 18px;
   }
   #edition-date {
@@ -894,20 +894,23 @@ dialog::backdrop {
   .connection-status {
     grid-column: 1 / -1;
     grid-row: 2;
-    min-height: 36px;
+    min-height: 18px;
     margin-left: 0;
   }
   .update-bar button {
     grid-row: 1;
   }
+  .update-detail {
+    display: none;
+  }
   .main-layout {
-    margin-top: 20px;
+    margin-top: 14px;
   }
   .section-heading h1 {
-    font-size: 19px;
+    font-size: 18px;
   }
   .section-heading {
-    margin-bottom: 15px;
+    margin-bottom: 10px;
   }
   .article,
   .article-placeholder {
@@ -917,7 +920,117 @@ dialog::backdrop {
     -webkit-line-clamp: 2;
   }
   .filter-tabs {
-    gap: 25px;
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 4px 8px;
+    border-bottom: 0;
+  }
+  .filter-group {
+    gap: 16px;
+  }
+  .filter-group + .filter-group {
+    padding-left: 0;
+    border-left: 0;
+  }
+  .filter-views {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .filter-tools {
+    grid-column: 2;
+    grid-row: 1;
+  }
+  .filter-tabs button,
+  .filter-tabs a {
+    font-size: 13px;
+    padding-bottom: 7px;
+  }
+  .filter-categories {
+    position: relative;
+    grid-column: 1 / -1;
+    grid-row: 2;
+    min-width: 0;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    overflow-x: auto;
+    scrollbar-width: none;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior-x: contain;
+    border-bottom: 1px solid var(--line);
+  }
+  .filter-categories::-webkit-scrollbar {
+    display: none;
+  }
+  .filter-categories button {
+    position: relative;
+    flex: 0 0 auto;
+    min-width: 44px;
+    min-height: 38px;
+    padding: 7px 8px;
+    margin: 0;
+    border-bottom: 0;
+    text-align: center;
+    outline-offset: -2px;
+  }
+  .filter-categories button.selected::after {
+    content: "";
+    position: absolute;
+    width: 18px;
+    height: 2px;
+    bottom: 0;
+    left: 50%;
+    transform: translateX(-50%);
+    border-radius: 1px;
+    background: var(--accent);
+  }
+  .filter-row {
+    padding: 8px 0;
+    gap: 8px;
+    border-bottom: 0;
+  }
+  .search-box {
+    height: 36px;
+    max-width: none;
+    border-color: transparent;
+    background: var(--surface);
+    border-radius: 5px;
+  }
+  .search-box input,
+  .source-select select,
+  .date-panel input {
+    font-size: 16px;
+  }
+  .search-box input::placeholder {
+    font-size: 13px;
+  }
+  .search-box kbd {
+    display: none;
+  }
+  .source-select select {
+    max-width: 92px;
+  }
+  .date-button {
+    font-size: 12px;
+  }
+  .reading-options {
+    margin-top: 3px;
+    font-size: 11px;
+  }
+  .reading-options > summary {
+    padding: 6px 0;
+  }
+  #view-note {
+    background: none;
+    color: var(--muted);
+    margin-top: 4px;
+    padding: 0;
+    font-size: 11px;
+    line-height: 1.7;
+  }
+  .article-publisher-suffix,
+  .article .repeated-excerpt {
+    display: none;
   }
   .footer {
     font-size: 10px;
@@ -951,57 +1064,19 @@ dialog::backdrop {
   .header-actions {
     gap: 6px;
   }
-  .filter-tabs {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 12px 8px;
-  }
-  .filter-group {
-    gap: 14px;
-  }
-  .filter-group + .filter-group {
-    padding-left: 0;
-    border-left: 0;
-  }
-  .filter-views {
-    grid-column: 1;
-    grid-row: 1;
-  }
-  .filter-tools {
-    grid-column: 2;
-    grid-row: 1;
-  }
-  .filter-categories {
-    display: grid;
-    grid-column: 1 / -1;
-    grid-row: 2;
-    grid-template-columns: repeat(5, minmax(0, 1fr));
-    gap: 0 12px;
-  }
-  .filter-categories button {
-    min-height: 40px;
-    text-align: left;
-  }
-  .filter-tabs button,
-  .filter-tabs a {
-    font-size: 12px;
-  }
-  .filter-row {
-    gap: 9px;
-  }
   .search-box {
     padding: 0 7px;
     gap: 5px;
   }
   .search-box input {
-    font-size: 11px;
+    font-size: 16px;
   }
   .search-box kbd {
     display: none;
   }
   .source-select select {
-    max-width: 84px;
-    font-size: 11px;
+    max-width: 92px;
+    font-size: 16px;
   }
   .date-button {
     font-size: 11px;

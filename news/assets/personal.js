@@ -88,6 +88,9 @@
       !Number.isFinite(Date.parse(value.publishedAt)) ||
       ![
         "general",
+        "finance",
+        "local",
+        "livelihood",
         "tech",
         "ai",
         "models",

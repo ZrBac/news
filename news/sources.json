@@ -76,7 +76,7 @@
     "name": "中新网财经",
     "url": "https://www.chinanews.com.cn/rss/finance.xml",
     "home": "https://www.chinanews.com.cn/finance/",
-    "category": "general",
+    "category": "finance",
     "color": "#8d443d"
   },
   {
@@ -437,5 +437,23 @@
     "category": "livelihood",
     "color": "#846a48",
     "titleFilter": "public-rumors"
+  },
+  {
+    "id": "gnews-yicai-finance",
+    "name": "第一财经·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3Ayicai.com%2Fnews%2F+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://www.yicai.com/",
+    "category": "finance",
+    "color": "#74634f",
+    "titleFilter": "finance"
+  },
+  {
+    "id": "gnews-cnfin-finance",
+    "name": "新华财经·聚合",
+    "url": "https://news.google.com/rss/search?q=site%3Acnfin.com+%28intitle%3A%E9%87%91%E8%9E%8D+OR+intitle%3A%E5%A4%AE%E8%A1%8C+OR+intitle%3A%E5%80%BA%E5%88%B8+OR+intitle%3A%E9%93%B6%E8%A1%8C+OR+intitle%3A%E6%B1%87%E7%8E%87+OR+intitle%3A%E8%AF%81%E5%88%B8+OR+intitle%3A%E8%B4%A2%E6%8A%A5+OR+intitle%3A%E7%BB%8F%E6%B5%8E+OR+intitle%3A%E5%9F%BA%E9%87%91+OR+intitle%3A%E8%B4%A2%E6%94%BF+OR+intitle%3A%E6%8A%95%E8%B5%84%29+when%3A7d&hl=zh-CN&gl=CN&ceid=CN%3Azh-Hans",
+    "home": "https://www.cnfin.com/",
+    "category": "finance",
+    "color": "#74634f",
+    "titleFilter": "finance"
   }
 ]

@@ -103,6 +103,15 @@
       return false;
     try {
       const url = new URL(value.url);
+      if (value.originalUrl !== undefined) {
+        const original = new URL(value.originalUrl);
+        if (
+          !["http:", "https:"].includes(original.protocol) ||
+          original.username ||
+          original.password
+        )
+          return false;
+      }
       return (
         ["http:", "https:"].includes(url.protocol) &&
         !url.username &&
@@ -185,6 +194,7 @@
                     "id",
                     "title",
                     "url",
+                    "originalUrl",
                     "publishedAt",
                     "sourceId",
                     "sourceName",

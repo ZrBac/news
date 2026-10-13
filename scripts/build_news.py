@@ -256,10 +256,18 @@ def main():
     shutil.copy2(ROOT / 'news/manifest.webmanifest', output / 'manifest.webmanifest')
     worker = (ROOT / 'news/sw.js').read_text()
     shell_digest = hashlib.sha256(pages['/'].encode() + worker.encode())
+    # The guide's upstream content can change many times between UI releases.
+    # Keep a separate UI version so those publications do not notify news readers.
+    app_digest = hashlib.sha256(pages['/'].encode() + worker.encode()
+                                + (ROOT / 'news/guide/index.html').read_bytes())
     for path in shell_files[1:]:
         asset = output / path.lstrip('/')
-        shell_digest.update((asset / 'index.html' if path.endswith('/') else asset).read_bytes())
+        body = (asset / 'index.html' if path.endswith('/') else asset).read_bytes()
+        shell_digest.update(body)
+        if path != '/guide/' and not re.search(r'/guide-index\.[a-f0-9]{12}\.json$', path):
+            app_digest.update(body)
     worker = worker.replace('__BUILD_ID__', shell_digest.hexdigest()[:16])
+    worker = worker.replace('__APP_BUILD_ID__', app_digest.hexdigest()[:16])
     news_shell = list(dict.fromkeys(['/', '/manifest.webmanifest',
         '/assets/news/icon-180.png', '/assets/news/icon-192.png', '/assets/news/icon-512.png',
         *re.findall(r'/assets/news/[\w.-]+\.[a-f0-9]{12}\.(?:json|js|css|svg)\b', pages['/'])]))

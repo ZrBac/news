@@ -54,6 +54,8 @@
     checking,
     starting,
     automaticRepair = false;
+  let updateCheck = 0;
+  const workerVersions = new WeakMap();
   const notice = document.querySelector("#pwa-update");
   const messages = {
     ready: isGuide ? "已准备好，可离线阅读" : "已准备好，可离线玩",
@@ -112,15 +114,62 @@
     }
     return true;
   }
-  function showUpdate() {
+  function versionOf(worker) {
+    if (!workerVersions.has(worker))
+      workerVersions.set(worker, askWorker(worker, "GET_VERSION"));
+    return workerVersions.get(worker);
+  }
+  async function showUpdate() {
     // The first install briefly enters "waiting" before activating. Only an
     // existing controller being replaced is an update, and clear stale notices
     // when that waiting worker has activated (including in another tab).
-    notice.hidden = !(
-      registration?.waiting?.state === "installed" &&
-      registration.active &&
-      navigator.serviceWorker.controller
-    );
+    const check = ++updateCheck;
+    const waiting = registration?.waiting;
+    const controller = navigator.serviceWorker.controller;
+    notice.hidden = true;
+    if (waiting?.state !== "installed" || !registration.active || !controller)
+      return;
+    const current = await versionOf(controller);
+    let contentOnly = false;
+    try {
+      if (current.appVersion && current.cacheName) {
+        const editions = await Promise.all(
+          (await caches.keys())
+            .filter(
+              (name) =>
+                name.startsWith("news-shell-") && name !== current.cacheName,
+            )
+            .map(async (name) => {
+              const response = await (
+                await caches.open(name)
+              ).match("/__news_shell_version__");
+              return response ? response.json() : null;
+            }),
+        );
+        const complete = editions.filter(Boolean);
+        contentOnly =
+          complete.length > 0 &&
+          complete.every(
+            (edition) => edition.appVersion === current.appVersion,
+          );
+      }
+    } catch {
+      // Unknown older editions and unavailable cache metadata keep the update
+      // visible. Do not wake a waiting worker just to inspect its version.
+    }
+    if (
+      check !== updateCheck ||
+      registration.waiting !== waiting ||
+      waiting.state !== "installed"
+    )
+      return;
+    notice.querySelector("[data-update-text]").textContent = contentOnly
+      ? "生活指南内容有更新。"
+      : "网站有新版本。";
+    // A waiting guide edition activates normally when existing tabs close.
+    // Readers can also apply it immediately from the guide, without interrupting
+    // news browsing or a game in progress elsewhere.
+    notice.hidden = contentOnly && !isGuide;
   }
   function watch(worker) {
     if (!worker) return;
@@ -205,6 +254,11 @@
       // Older installed workers understand CHECK_OFFLINE only. Always negotiate
       // through that message before asking a capable worker to repair its cache.
       let result = await askWorker(controller, "CHECK_OFFLINE", paths);
+      if (isGuide && !result.ready && registration?.waiting) {
+        await showUpdate();
+        status("version");
+        return;
+      }
       if (
         !result.ready &&
         result.reason === "missing" &&
@@ -285,18 +339,38 @@
       }
     }
     if (registration?.waiting) {
-      showUpdate();
-      status("version");
-      return;
+      await showUpdate();
+      if (!notice.hidden) {
+        status("version");
+        return;
+      }
     }
     await checkOffline(true);
     showUpdate();
   });
-  document.querySelector("#apply-update").addEventListener("click", () => {
-    if (!registration?.waiting) return;
-    applyingUpdate = true;
-    registration.waiting.postMessage({ type: "ACTIVATE_UPDATE" });
-  });
+  document
+    .querySelector("#apply-update")
+    .addEventListener("click", async (event) => {
+      if (!registration?.waiting || applyingUpdate) return;
+      applyingUpdate = true;
+      event.currentTarget.disabled = true;
+      event.currentTarget.textContent = "正在更新…";
+      // Complete cache preparation before switching away from that worker.
+      await Promise.resolve(checking).catch(() => {});
+      const waiting = registration.waiting;
+      if (!waiting) return;
+      try {
+        await registration.update();
+      } catch {}
+      let attempts = 0;
+      const activate = () => {
+        if (registration.waiting !== waiting || waiting.state !== "installed")
+          return;
+        waiting.postMessage({ type: "SKIP_WAITING" });
+        if (++attempts < 10) setTimeout(activate, 750);
+      };
+      activate();
+    });
   if (support()) {
     window.addEventListener("guide-index-ready", () => {
       if (registration) checkOffline();

@@ -8,6 +8,7 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
 
 (async () => {
   let revision = 1;
+  let appRevision = 1;
   let dataTime;
   const server = http.createServer(async (request, response) => {
     const pathname = new URL(request.url, "http://localhost").pathname;
@@ -23,7 +24,8 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
         body = Buffer.from(
           body
             .toString()
-            .replace(/news-shell-([a-f0-9]+)/, "news-shell-$1-test" + revision),
+            .replace(/news-shell-([a-f0-9]+)/, "news-shell-$1-test" + revision)
+            .replace(/news-app-([a-f0-9]+)/, "news-app-$1-test" + appRevision),
         );
       if (pathname === "/sw.js" && process.env.NEWS_LEGACY_SAFARI)
         body = Buffer.from("Object.hasOwn = undefined;\n" + body.toString());
@@ -51,6 +53,7 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
           "Content-Type":
             types[path.extname(target)] || "application/octet-stream",
           "Cache-Control": "no-cache",
+          "Content-Length": body.length,
         })
         .end(body);
     } catch {
@@ -186,7 +189,44 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     assert(!cachedUrls.some((url) => /news\.json|news-refresh/.test(url)));
 
     await page.evaluate(() => caches.open("unrelated-test-cache"));
+    // A new guide edition changes the offline cache, but not the website UI.
+    // Keep a tab open to exercise a pending content update across reopenings.
     revision = 2;
+    await page.evaluate(async () =>
+      (await navigator.serviceWorker.getRegistration()).update(),
+    );
+    await page.waitForFunction(
+      async () =>
+        (await navigator.serviceWorker.getRegistration()).waiting?.state ===
+        "installed",
+    );
+    for (const width of [390, 1440]) {
+      await page.setViewportSize({ width, height: 844 });
+      await page.reload({ waitUntil: "networkidle" });
+      assert(
+        await page.locator("#pwa-update").isHidden(),
+        "guide content updates must not prompt news readers on mobile or desktop",
+      );
+    }
+    const guide = await context.newPage();
+    await guide.goto(base + "/guide/", { waitUntil: "networkidle" });
+    await guide.locator("#pwa-update").waitFor({ state: "visible" });
+    assert.match(
+      await guide.locator("#pwa-update").innerText(),
+      /生活指南内容有更新/,
+    );
+    assert(await page.locator("#pwa-update").isHidden());
+    await Promise.all([
+      guide.waitForNavigation({ waitUntil: "networkidle" }),
+      guide.click("#apply-update"),
+    ]);
+    await guide.close();
+    await page.reload({ waitUntil: "networkidle" });
+    assert(await page.locator("#pwa-update").isHidden());
+
+    // Actual UI updates still notify readers and apply atomically.
+    revision = 3;
+    appRevision = 2;
     await page.evaluate(async () =>
       (await navigator.serviceWorker.getRegistration()).update(),
     );
@@ -202,7 +242,7 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     assert.deepEqual(
       keys
         .filter((k) => k.startsWith("news-shell-"))
-        .map((k) => k.endsWith("test2")),
+        .map((k) => k.endsWith("test3")),
       [true],
     );
     assert(keys.includes("unrelated-test-cache"));
@@ -217,7 +257,8 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     await page.evaluate(() => {
       window.openReaderMarker = "keep-reading";
     });
-    revision = 3;
+    revision = 4;
+    appRevision = 3;
     await page.evaluate(async () =>
       (await navigator.serviceWorker.getRegistration()).update(),
     );
@@ -276,7 +317,7 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
       fullPage: true,
     });
     console.log(
-      "PASS: installability, manual install guide, offline reopening/search/bookmarks, online recovery, fresh data, atomic update, cache cleanup, scoped routing, responsive layout.",
+      "PASS: installability, offline reopening/search/bookmarks, guide-only updates stay silent on mobile/desktop news, actual UI updates apply once, multi-tab updates, cache cleanup, scoped routing, responsive layout.",
     );
     await context.close();
   } finally {

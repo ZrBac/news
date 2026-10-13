@@ -298,6 +298,89 @@ def safe_url(value):
         return None
 
 
+GOOGLE_ARTICLE = re.compile(r'https://news\.google\.com/(?:rss/)?articles/([A-Za-z0-9_-]+)(?:\?[^#]*)?$')
+
+
+def publisher_url(value):
+    if not isinstance(value, str):
+        return None
+    url = safe_url(value)
+    if url and urllib.parse.urlsplit(url).hostname not in ('news.google.com', 'consent.google.com'):
+        return url
+    return None
+
+
+def google_original_url(url, timeout=6):
+    """Resolve Google's public article redirect without changing the RSS identity."""
+    match = GOOGLE_ARTICLE.fullmatch(url)
+    if not match:
+        return None
+    headers = {'User-Agent': 'ZrBacNews/1.0 (+https://news.zacai.fun/)'}
+    with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as response:
+        page = response.read(1_000_001)
+    if len(page) > 1_000_000:
+        raise ValueError('Article redirect page exceeds size limit')
+    text = page.decode('utf-8')
+    timestamp = re.search(r'data-n-a-ts="(\d+)"', text)
+    signature = re.search(r'data-n-a-sg="([^"]+)"', text)
+    if not timestamp or not signature:
+        return None
+    # Google's redirect protocol may change. Failure always keeps the RSS link
+    # and must not make a healthy news source unavailable.
+    context = [['en-US', 'US', ['FINANCE_TOP_INDICES', 'WEB_TEST_1_0_0'], None, None,
+                1, 1, 'US:en', None, 180, None, None, None, None, None, 0, None, None,
+                [1608992183, 723341000]], 'en-US', 'US', 1, [2, 3, 4, 8], 1, 0,
+               '655000234', 0, 0, None, 0]
+    message = ['garturlreq', context, match[1], int(timestamp[1]), html.unescape(signature[1])]
+    body = urllib.parse.urlencode({'f.req': json.dumps(
+        [[['Fbv4je', json.dumps(message, separators=(',', ':')), None, 'generic']]],
+        separators=(',', ':'))}).encode()
+    request = urllib.request.Request('https://news.google.com/_/DotsSplashUi/data/batchexecute?rpcids=Fbv4je',
+                                     data=body, headers={**headers, 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        result = response.read(1_000_001)
+    if len(result) > 1_000_000:
+        raise ValueError('Article redirect response exceeds size limit')
+    for line in result.decode('utf-8').splitlines():
+        if not line.startswith('['):
+            continue
+        try:
+            rows = json.loads(line)
+            for row in rows:
+                if isinstance(row, list) and len(row) > 2 and row[:2] == ['wrb.fr', 'Fbv4je']:
+                    decoded = json.loads(row[2])
+                    if isinstance(decoded, list) and len(decoded) > 1 and decoded[0] == 'garturlres':
+                        return publisher_url(decoded[1]) if isinstance(decoded[1], str) else None
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
+def resolve_original_links(articles, previous, limit=100, budget=35):
+    """Reuse verified links and resolve only a bounded batch of the newest stories."""
+    known = {a['url']: publisher_url(a.get('originalUrl')) for a in previous + articles
+             if isinstance(a, dict) and GOOGLE_ARTICLE.fullmatch(str(a.get('url', '')))
+             and publisher_url(a.get('originalUrl'))}
+    urls = list(dict.fromkeys(a['url'] for a in sorted(articles, key=lambda a: a['publishedAt'], reverse=True)
+                             if GOOGLE_ARTICLE.fullmatch(a['url']) and a['url'] not in known))[:limit]
+    deadline = time.monotonic() + budget
+    def resolve(url):
+        if time.monotonic() >= deadline:
+            return url, None
+        try:
+            return url, publisher_url(google_original_url(url, min(6, max(1, deadline - time.monotonic()))))
+        except Exception:
+            return url, None
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        for url, original in pool.map(resolve, urls):
+            if original:
+                known[url] = original
+    for article in articles:
+        if article['url'] in known:
+            article['originalUrl'] = known[article['url']]
+    return sum(bool(a.get('originalUrl')) for a in articles)
+
+
 def fetch(url, max_bytes=5_000_000):
     request = urllib.request.Request(url, headers={'User-Agent': 'ZrBacNews/1.0 (+https://news.zacai.fun/)', 'Accept': 'application/rss+xml, application/xml, application/json, text/xml;q=0.9, */*;q=0.5'})
     with urllib.request.urlopen(request, timeout=25) as response:
@@ -444,6 +527,9 @@ def merge_articles(previous, incoming, now, allowed_sources):
             continue
         clean = {key: str(article.get(key, '')) for key in ('title', 'sourceId', 'category', 'publishedAt', 'excerpt')}
         clean.update(url=url, id=hashlib.sha256(url.encode()).hexdigest()[:16], title=plain(clean['title'])[:240], excerpt=plain(clean['excerpt'])[:90])
+        original = publisher_url(article.get('originalUrl'))
+        if GOOGLE_ARTICLE.fullmatch(url) and original:
+            clean['originalUrl'] = original
         # Reapply current source rules to the archive as well as new stories.
         source = allowed_sources[clean['sourceId']] if isinstance(allowed_sources, dict) else {
             'id': clean['sourceId'], 'category': clean['category']}
@@ -700,6 +786,8 @@ def main():
     housing = recent_housing_articles(articles + previous_housing, incoming, now, allowed_sources)
     if not incoming:
         raise SystemExit('All feeds unavailable. Keep the last successful deployment; do not publish an empty site.')
+    resolved = resolve_original_links(articles + models + housing, previous + previous_models + previous_housing)
+    print(f'Publisher links available for {resolved} retained story records; unresolved stories keep their feed links.')
     old_quality = max(quality_states, key=lambda state: state['updatedAt']) if quality_states else None
     quality_state, quality = update_source_quality(old_quality, sources, statuses, incoming,
                                                    articles + models + housing, now)

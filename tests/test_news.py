@@ -37,6 +37,59 @@ class FeedTests(unittest.TestCase):
         self.assertEqual(items[0]['url'], 'https://example.com/story')
         self.assertEqual(items[0]['category'], 'ai')
 
+    def test_google_redirect_uses_publisher_url_and_rejects_unsafe_responses(self):
+        url = 'https://news.google.com/rss/articles/CBMiExample?oc=5'
+        page = b'<c-wiz data-n-a-ts="1791858350" data-n-a-sg="public-signature">'
+        for destination, expected in (
+            ('https://publisher.example/story?utm_source=google', 'https://publisher.example/story'),
+            ('javascript:alert(1)', None),
+            ('https://user:password@publisher.example/story', None),
+            ('https://consent.google.com/', None),
+            (url, None),
+            ({'unexpected': 'object'}, None),
+        ):
+            reply = ")]}'\n\n" + json.dumps([['wrb.fr', 'Fbv4je', json.dumps(['garturlres', destination, 1])]])
+            with self.subTest(destination=destination), patch.object(collector.urllib.request, 'urlopen',
+                    side_effect=[io.BytesIO(page), io.BytesIO(reply.encode())]):
+                self.assertEqual(collector.google_original_url(url), expected)
+        with patch.object(collector.urllib.request, 'urlopen', return_value=io.BytesIO(b'consent page')):
+            self.assertIsNone(collector.google_original_url(url))
+
+    def test_original_links_survive_feed_refresh_and_failed_resolution_without_changing_ids(self):
+        url = 'https://news.google.com/rss/articles/CBMiCached'
+        old = collector.parse_feed(self.feed(link=url), self.source, self.now)[0]
+        old['originalUrl'] = 'https://publisher.example/cached'
+        fresh = dict(old)
+        fresh.pop('originalUrl')
+        other = collector.parse_feed(self.feed(link='https://news.google.com/rss/articles/CBMiFailed'), self.source, self.now)[0]
+        other['title'] = 'AI 新文章链接检查'
+        merged = collector.merge_articles([old], [fresh, other], self.now, {'example'})
+        identities = [(a['id'], a['url']) for a in merged]
+        with patch.object(collector, 'google_original_url', side_effect=TimeoutError) as resolve:
+            collector.resolve_original_links(merged, [old])
+        resolve.assert_called_once()
+        self.assertEqual([(a['id'], a['url']) for a in merged], identities)
+        self.assertEqual(next(a for a in merged if a['url'] == url)['originalUrl'], old['originalUrl'])
+        self.assertNotIn('originalUrl', next(a for a in merged if a['url'] != url))
+        self.assertEqual(collector.merge_articles([old], [], self.now, {'example'}), [old])
+
+    def test_link_resolution_is_bounded_and_shared_across_article_snapshots(self):
+        base = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        articles = [dict(base, url='https://news.google.com/rss/articles/CBMi' + str(i),
+                         publishedAt=collector.iso(self.now - timedelta(hours=i))) for i in range(5)]
+        duplicate = dict(articles[0])
+        direct = dict(base, url='https://publisher.example/direct')
+        articles += [duplicate, direct]
+        with patch.object(collector, 'google_original_url', return_value='https://publisher.example/resolved') as resolve:
+            collector.resolve_original_links(articles, [], limit=2)
+        self.assertEqual(resolve.call_count, 2)
+        self.assertIn('originalUrl', duplicate)
+        self.assertNotIn('originalUrl', direct)
+        self.assertNotIn('originalUrl', articles[2])
+        with patch.object(collector, 'google_original_url') as resolve:
+            collector.resolve_original_links(articles, [], budget=0)
+        resolve.assert_not_called()
+
     def test_fetch_decodes_gzip_feeds_with_or_without_encoding_header(self):
         feed = self.feed()
         for body, headers in ((feed, {}), (gzip.compress(feed), {'Content-Encoding': 'gzip'}),
@@ -493,6 +546,8 @@ class BuildTests(unittest.TestCase):
 
     def test_build_news_only_removes_stale_blog_files(self):
         data = ROOT / 'news/data/news.json'
+        guide_source = ROOT / 'news/guide/book.json'
+        original_guide = guide_source.read_bytes()
         existed = data.exists()
         original = data.read_bytes() if existed else None
         try:
@@ -527,6 +582,7 @@ class BuildTests(unittest.TestCase):
                     self.assertEqual(int.from_bytes(png[20:24], 'big'), size)
                 worker = (output / 'sw.js').read_text()
                 self.assertNotIn('__BUILD_ID__', worker)
+                self.assertNotIn('__APP_BUILD_ID__', worker)
                 self.assertNotIn('__SHELL_FILES__', worker)
                 shell = json.loads(re.search(r'const SHELL = (\[.*?\]);', worker, re.S).group(1))
                 self.assertNotIn('/data/news.json', shell)
@@ -578,6 +634,19 @@ class BuildTests(unittest.TestCase):
                 data.write_text(json.dumps({'articles': [], 'updatedAt': '2026-09-24T07:00:00Z'}))
                 subprocess.run([sys.executable, str(ROOT / 'scripts/build_news.py'), '--output', str(output)], check=True, capture_output=True)
                 self.assertEqual((output / 'sw.js').read_text(), worker)
+                app_version = re.search(r'const APP_VERSION = "([^"]+)"', worker).group(1)
+                # Publishing a changed book needs a coherent new offline edition,
+                # while news/game readers retain the same application version.
+                edition = json.loads(original_guide)
+                edition['revision'] = 'b' * 40
+                edition['updatedAt'] = '2026-10-13T00:00:00Z'
+                edition['entries'][0]['body'] += '\n正文与来源修订。'
+                guide_source.write_text(json.dumps(edition, ensure_ascii=False))
+                subprocess.run([sys.executable, str(ROOT / 'scripts/build_news.py'), '--output', str(output)], check=True, capture_output=True)
+                content_worker = (output / 'sw.js').read_text()
+                self.assertNotEqual(content_worker, worker)
+                self.assertEqual(re.search(r'const APP_VERSION = "([^"]+)"', content_worker).group(1), app_version)
+                guide_source.write_bytes(original_guide)
                 cloud_endpoint = 'https://news-api.zacai.fun/api/news-refresh'
                 env = dict(os.environ, NEWS_REFRESH_ENDPOINT=cloud_endpoint)
                 command = [sys.executable, str(ROOT / 'scripts/build_news.py'), '--output', str(output)]
@@ -585,9 +654,12 @@ class BuildTests(unittest.TestCase):
                 self.assertIn(f'name="news-refresh-endpoint" content="{cloud_endpoint}"',
                               re.sub(r'\s+', ' ', (output / 'index.html').read_text()))
                 self.assertNotEqual((output / 'sw.js').read_text(), worker)
+                self.assertNotEqual(re.search(r'const APP_VERSION = "([^"]+)"',
+                                              (output / 'sw.js').read_text()).group(1), app_version)
                 env['NEWS_REFRESH_ENDPOINT'] = 'https://user:secret@example.com/api/news-refresh'
                 self.assertNotEqual(subprocess.run(command, capture_output=True, env=env).returncode, 0)
         finally:
+            guide_source.write_bytes(original_guide)
             if existed:
                 data.write_bytes(original)
             elif data.exists():

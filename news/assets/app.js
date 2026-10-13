@@ -57,6 +57,8 @@
       return "";
     }
   };
+  const articleUrl = (article) =>
+    safeUrl(article.originalUrl) || safeUrl(article.url);
   const categoryNames = {
     general: "综合热点",
     finance: "财经",
@@ -212,10 +214,10 @@
       textKey(article.title).startsWith(excerptKey);
     return `<article class="article${read ? " read" : ""}" data-article-id="${escape(article.id)}"><div class="article-body">
       ${state.view === "brief" ? `<span class="article-number">${String(index + 1).padStart(2, "0")}</span>` : ""}
-      <h3><a href="${escape(safeUrl(article.url))}" aria-label="${escape(article.title)}" target="_blank" rel="noopener noreferrer">${headline}</a></h3>
+      <h3><a href="${escape(articleUrl(article))}" aria-label="${escape(article.title)}" target="_blank" rel="noopener noreferrer">${headline}</a></h3>
       ${article.excerpt ? `<p${repeatsTitle ? ' class="repeated-excerpt"' : ""}>${escape(article.excerpt)}</p>` : ""}
       <div class="article-meta"><span>${escape(source.name)}</span><time datetime="${escape(article.publishedAt)}" title="北京时间 ${escape(formatTime(article.publishedAt))}">${escape(relativeTime(article.publishedAt))}</time><span class="category-label ${escape(article.category)}">${categoryNames[article.category]}</span>${read ? '<span class="read-label">已读</span>' : ""}</div>
-      ${article.reports?.length ? `<details class="article-reports"><summary>其他 ${article.reports.length} 篇报道</summary>${article.reports.map((a) => `<a href="${escape(safeUrl(a.url))}" target="_blank" rel="noopener noreferrer">${escape(sourceFor(a).name)} · ${escape(a.title)}</a>`).join("")}</details>` : ""}
+      ${article.reports?.length ? `<details class="article-reports"><summary>其他 ${article.reports.length} 篇报道</summary>${article.reports.map((a) => `<a href="${escape(articleUrl(a))}" target="_blank" rel="noopener noreferrer">${escape(sourceFor(a).name)} · ${escape(a.title)}</a>`).join("")}</details>` : ""}
       </div><button class="save-button${saved ? " saved" : ""}" data-save="${escape(article.id)}" aria-label="${saved ? "取消收藏" : "收藏"}：${escape(article.title)}" aria-pressed="${saved}" title="${saved ? "取消收藏" : "收藏文章"}">${icon("bookmark")}</button></article>`;
   }
   function selectBrief(articles) {
@@ -809,7 +811,7 @@
     $("#latest-list").innerHTML = latest
       .map(
         (a) =>
-          `<li><div><a href="${escape(safeUrl(a.url))}" target="_blank" rel="noopener noreferrer">${escape(a.title)}</a><p>${escape(sourceFor(a).name)} · ${escape(relativeTime(a.publishedAt))}</p></div></li>`,
+          `<li><div><a href="${escape(articleUrl(a))}" target="_blank" rel="noopener noreferrer">${escape(a.title)}</a><p>${escape(sourceFor(a).name)} · ${escape(relativeTime(a.publishedAt))}</p></div></li>`,
       )
       .join("");
     $("#tech-list").innerHTML = state.data.articles
@@ -817,7 +819,7 @@
       .slice(0, 5)
       .map(
         (a) =>
-          `<li><a href="${escape(safeUrl(a.url))}" target="_blank" rel="noopener noreferrer">${escape(a.title)}</a><p>${escape(sourceFor(a).name)} · ${escape(relativeTime(a.publishedAt))}</p></li>`,
+          `<li><a href="${escape(articleUrl(a))}" target="_blank" rel="noopener noreferrer">${escape(a.title)}</a><p>${escape(sourceFor(a).name)} · ${escape(relativeTime(a.publishedAt))}</p></li>`,
       )
       .join("");
     $("#source-badges").innerHTML = state.data.sources

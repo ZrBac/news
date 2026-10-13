@@ -1,5 +1,6 @@
 /* Build replaces these constants; news-only publications keep the same shell version. */
 const CACHE = "news-shell-__BUILD_ID__";
+const APP_VERSION = "news-app-__APP_BUILD_ID__";
 const SHELL = __SHELL_FILES__;
 const NEWS_SHELL = __NEWS_SHELL__;
 const GAMES_SHELL = __GAMES_SHELL__;
@@ -167,6 +168,12 @@ self.addEventListener("install", (event) => {
           if (saved) await cache.put(path, saved);
         }
       }
+      await cache.put(
+        "/__news_shell_version__",
+        new Response(JSON.stringify({ appVersion: APP_VERSION }), {
+          headers: { "Content-Type": "application/json" },
+        }),
+      );
     })(),
   );
 });
@@ -211,8 +218,22 @@ self.addEventListener("activate", (event) => {
 });
 
 self.addEventListener("message", (event) => {
-  if (event.data?.type === "ACTIVATE_UPDATE")
-    event.waitUntil(self.skipWaiting());
+  if (event.data?.type === "GET_VERSION" && event.ports[0]) {
+    event.waitUntil(
+      Promise.resolve().then(() =>
+        event.ports[0].postMessage({
+          appVersion: APP_VERSION,
+          cacheName: CACHE,
+        }),
+      ),
+    );
+    return;
+  }
+  if (["ACTIVATE_UPDATE", "SKIP_WAITING"].includes(event.data?.type)) {
+    self.skipWaiting();
+    event.ports[0]?.postMessage({ accepted: true });
+    return;
+  }
   if (
     !["CHECK_OFFLINE", "PREPARE_OFFLINE"].includes(event.data?.type) ||
     !event.ports[0]

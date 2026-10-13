@@ -25,6 +25,7 @@ const server = http.createServer(async (request, response) => {
       .writeHead(200, {
         "Content-Type": type[path.extname(file)] || "application/octet-stream",
         "Cache-Control": "no-cache",
+        "Content-Length": body.length,
       })
       .end(body);
   } catch {
@@ -43,6 +44,7 @@ const server = http.createServer(async (request, response) => {
     for (const name of [
       "indexed-news-browser.cjs",
       "local-livelihood-browser.cjs",
+      "article-links-browser.cjs",
       "news-loading-browser.cjs",
       "source-quality-browser.cjs",
       "news-pages-browser.cjs",

@@ -45,6 +45,7 @@ function worker(options = {}) {
     self: {
       location: { origin: "https://news.test" },
       addEventListener: (type, handler) => (handlers[type] = handler),
+      skipWaiting: options.skipWaiting || (async () => {}),
     },
     caches: {
       open: async () => ({
@@ -74,11 +75,11 @@ function worker(options = {}) {
     });
     return response;
   }
-  async function message(type, paths, page) {
+  async function message(type, paths, page, reply = true) {
     let result, work;
     handlers.message({
       data: { type, paths, page },
-      ports: [{ postMessage: (value) => (result = value) }],
+      ports: reply ? [{ postMessage: (value) => (result = value) }] : [],
       waitUntil: (value) => (work = value),
     });
     await work;
@@ -101,6 +102,18 @@ test("Offline navigation aliases return their matching HTML without Object.hasOw
   ]) {
     assert.equal(await (await request(path)).text(), "cached " + expected);
   }
+});
+test("Workers identify the UI version separately from their offline content", async () => {
+  const result = await worker().message("GET_VERSION");
+  assert.equal(result.appVersion, "news-app-__APP_BUILD_ID__");
+});
+test("Update activation accepts both legacy messages and acknowledged requests", async () => {
+  let activations = 0;
+  const w = worker({ skipWaiting: async () => activations++ });
+  await w.message("ACTIVATE_UPDATE", undefined, undefined, false);
+  assert.equal(activations, 1);
+  assert.equal((await w.message("ACTIVATE_UPDATE")).accepted, true);
+  assert.equal(activations, 2);
 });
 test("Offline shell assets load and unrelated routes still bypass the worker", async () => {
   const { request, matches } = worker();

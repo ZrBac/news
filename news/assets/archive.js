@@ -117,6 +117,7 @@
     );
     const rows = value.rows.filter(
       ([source, category, day, text]) =>
+        (category !== "local" || criteria.filter === "local") &&
         (criteria.filter === "all" || category === criteria.filter) &&
         (criteria.source === "all" || source === criteria.source) &&
         (!criteria.date || day === criteria.date) &&
@@ -135,6 +136,7 @@
         .filter(
           (shard) =>
             !loaded.has(shard.page) &&
+            (shard.category !== "local" || criteria.filter === "local") &&
             (criteria.filter === "all" || shard.category === criteria.filter) &&
             (criteria.source === "all" ||
               shard.sources.includes(criteria.source)) &&

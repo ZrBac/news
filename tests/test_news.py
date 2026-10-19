@@ -473,11 +473,11 @@ class BuildTests(unittest.TestCase):
             self.assertEqual(latest['articles'], busy[:150])
             self.assertEqual(latest['briefDays'], ['2026-10-10', '2026-10-09'])
             self.assertEqual({a['category'] for a in latest['briefArticles']},
-                             {'general', 'finance', 'local', 'livelihood', 'tech', 'ai', 'models', 'entertainment', 'gaming', 'sports', 'housing'})
+                             {'general', 'finance', 'livelihood', 'tech', 'ai', 'models', 'entertainment', 'gaming', 'sports', 'housing'})
             self.assertEqual(len([a for a in latest['briefArticles'] if a['category'] == 'sports']), 5)
             self.assertEqual({a['id'] for a in latest['briefArticles'] if a['category'] == 'models'},
                              {'model', 'yesterday'})
-            self.assertLessEqual(len(latest['briefArticles']), 110)
+            self.assertLessEqual(len(latest['briefArticles']), 100)
     def test_gaming_snapshot_is_available_beyond_the_first_news_page(self):
         spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
         builder = importlib.util.module_from_spec(spec)

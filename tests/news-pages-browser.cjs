@@ -68,29 +68,29 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       complete.articles.map((a) => a.id),
       full.articles.map((a) => a.id),
     );
-    await page.fill("#search", full.articles[full.articles.length - 1].title);
+    const oldestNews = full.articles
+      .filter((a) => a.category !== "local")
+      .at(-1);
+    await page.fill("#search", oldestNews.title);
     await page.locator(".article").first().waitFor();
     assert(
       (await page.locator(".article h3").allTextContents()).includes(
-        full.articles[full.articles.length - 1].title,
+        oldestNews.title,
       ),
     );
-    const date = await page.evaluate(
-      (value) => {
-        const parts = Object.fromEntries(
-          new Intl.DateTimeFormat("en-CA", {
-            timeZone: "Asia/Shanghai",
-            year: "numeric",
-            month: "2-digit",
-            day: "2-digit",
-          })
-            .formatToParts(new Date(value))
-            .map((p) => [p.type, p.value]),
-        );
-        return `${parts.year}-${parts.month}-${parts.day}`;
-      },
-      full.articles[full.articles.length - 1].publishedAt,
-    );
+    const date = await page.evaluate((value) => {
+      const parts = Object.fromEntries(
+        new Intl.DateTimeFormat("en-CA", {
+          timeZone: "Asia/Shanghai",
+          year: "numeric",
+          month: "2-digit",
+          day: "2-digit",
+        })
+          .formatToParts(new Date(value))
+          .map((p) => [p.type, p.value]),
+      );
+      return `${parts.year}-${parts.month}-${parts.day}`;
+    }, oldestNews.publishedAt);
     await page.fill("#search", "");
     await page.click("#date-trigger");
     await page.fill("#date-filter", date);

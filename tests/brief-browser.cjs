@@ -15,6 +15,20 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     page.on("request", (r) => {
       if (r.url().includes("/data/archive/")) archives.push(r.url());
     });
+    const packet = await (
+      await page.request.get(base + "/data/latest.json")
+    ).json();
+    // Ensure the supplemental-save case is covered even on a day when every
+    // category's newest story happens to be within the first 150 news items.
+    packet.briefArticles.unshift({
+      ...packet.modelReleases[0],
+      id: "brief-supplemental-model",
+      title: "测试：今日模型发布",
+      publishedAt: new Date().toISOString(),
+    });
+    await page.route("**/data/latest.json*", (route) =>
+      route.fulfill({ json: packet }),
+    );
     await page.goto(base);
     await page.evaluate(() => window.newsInitialLoad);
     assert.equal(await page.locator("#section-title").innerText(), "每日速览");
@@ -37,7 +51,6 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const categoryNames = {
       general: "综合热点",
       finance: "财经",
-      local: "杭州周末",
       livelihood: "民生服务",
       housing: "杭州房市",
       ai: "人工智能",
@@ -113,7 +126,11 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       (article) => !firstPageIds.has(article.id),
     );
     assert(extraGame);
+    const searchIndex = page.waitForResponse((response) =>
+      new URL(response.url()).pathname.includes("/data/archive/index."),
+    );
     await page.fill("#search", extraGame.title);
+    await searchIndex;
     await page.locator(`[data-save="${extraGame.id}"]`).click();
     assert(
       await page.evaluate(
@@ -173,7 +190,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.equal(await page.locator(".article").count(), 12);
     assert.deepEqual(
       await page.locator(".article h3").allTextContents(),
-      data.articles.slice(0, 12).map((a) => a.title),
+      data.articles
+        .filter((a) => a.category !== "local")
+        .slice(0, 12)
+        .map((a) => a.title),
     );
     assert.equal(await page.inputValue("#date-filter"), "");
     await page.goto(base);

@@ -17,7 +17,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8769";
     const latest = await (
       await page.request.get(base + "/data/latest.json")
     ).json();
-    const target = full.articles.at(-1);
+    const target = full.articles.filter((a) => a.category !== "local").at(-1);
     const recentGameSources = new Set(
       latest.gamingArticles.map((a) => a.sourceId),
     );

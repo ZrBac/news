@@ -61,13 +61,28 @@ class WeekendTests(unittest.TestCase):
         self.assertEqual(calendar['month'], '2026-12')
         self.assertNotIn('start', calendar)
 
-    def test_friday_search_is_once_after_1600_beijing_with_bootstrap(self):
-        previous = {'searchedAt': '2026-10-19T04:00:00Z', 'revision': 'v1'}
-        self.assertFalse(weekend.search_due(datetime(2026, 10, 23, 7, 59, tzinfo=timezone.utc), previous, 'v1'))
-        friday = datetime(2026, 10, 23, 8, tzinfo=timezone.utc)
-        self.assertTrue(weekend.search_due(friday, previous, 'v1'))
-        self.assertFalse(weekend.search_due(friday, {**previous, 'searchedAt': weekend.news.iso(friday)}, 'v1'))
-        self.assertTrue(weekend.search_due(datetime(2026, 10, 24, 8, tzinfo=timezone.utc), previous, 'v1'))
+    def test_daily_search_is_once_per_0900_and_1600_beijing_slot(self):
+        # Friday 16:00 through Saturday morning, afternoon and Sunday morning.
+        previous = {'searchedAt': '2026-10-23T08:00:00Z', 'revision': 'v1'}
+        for stamp, due in [('2026-10-24T00:59:59Z', False),
+                           ('2026-10-24T01:00:00Z', True)]:
+            with self.subTest(stamp=stamp):
+                self.assertEqual(weekend.search_due(weekend.news.parse_date(stamp), previous, 'v1'), due)
+        morning = {**previous, 'searchedAt': '2026-10-24T01:03:00Z'}
+        for stamp, due in [('2026-10-24T01:17:00Z', False),
+                           ('2026-10-24T07:59:59Z', False),
+                           ('2026-10-24T08:00:00Z', True)]:
+            with self.subTest(stamp=stamp):
+                self.assertEqual(weekend.search_due(weekend.news.parse_date(stamp), morning, 'v1'), due)
+        evening = {**previous, 'searchedAt': '2026-10-24T08:12:00Z'}
+        for stamp, due in [('2026-10-24T16:00:00Z', False),
+                           ('2026-10-25T00:59:59Z', False),
+                           ('2026-10-25T01:00:00Z', True)]:
+            with self.subTest(stamp=stamp):
+                self.assertEqual(weekend.search_due(weekend.news.parse_date(stamp), evening, 'v1'), due)
+        # Delayed hourly runs catch up; failed/malformed searches remain retryable.
+        self.assertTrue(weekend.search_due(weekend.news.parse_date('2026-10-24T11:00:00Z'), previous, 'v1'))
+        self.assertTrue(weekend.search_due(self.now, {'searchedAt': 'invalid'}, 'v1'))
         self.assertTrue(weekend.search_due(self.now, {}, 'v1'))
         self.assertTrue(weekend.search_due(self.now, previous, 'v2'))
 

@@ -62,7 +62,7 @@
   const categoryNames = {
     general: "综合热点",
     finance: "财经",
-    local: "杭州周末",
+    local: "去处",
     livelihood: "民生服务",
     tech: "科技动态",
     ai: "人工智能",
@@ -196,7 +196,7 @@
             `<button data-outing-type="${key}" aria-pressed="${state.outingType === key}">${escape(label)}</button>`,
         )
         .join("")}</div>
-      <p class="outing-checked">每周五16点补充检索（北京时间，可能延迟）。${escape(last)}</p>`;
+      <p class="outing-checked">来源每小时检查；每天9点、16点补充检索（北京时间，可能延迟）。${escape(last)}</p>`;
   }
   const timeFormatter = new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
@@ -337,7 +337,6 @@
     const queues = [
       "general",
       "finance",
-      "local",
       "livelihood",
       "tech",
       "ai",
@@ -412,6 +411,9 @@
       ].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
     if (state.filter !== "all")
       articles = articles.filter((a) => a.category === state.filter);
+    // Outings have their own entrance and list; keep saved outings accessible.
+    if (!["local", "saved"].includes(state.view))
+      articles = articles.filter((a) => a.category !== "local");
     if (state.view === "local") articles = articles.filter(outingMatches);
     if (state.source !== "all")
       articles = articles.filter((a) => a.sourceId === state.source);
@@ -734,7 +736,7 @@
       all: "最新资讯",
       general: "综合热点",
       finance: "财经",
-      local: "杭州周末",
+      local: "去处",
       livelihood: "民生服务",
       tech: "科技动态",
       ai: "人工智能",
@@ -748,6 +750,10 @@
       saved: "我的收藏",
     };
     $("#section-title").textContent = titles[state.view] || titles.all;
+    const outings = state.view === "local";
+    $(".filter-tabs").hidden = outings;
+    $(".sidebar").hidden = outings;
+    $(".main-layout").classList.toggle("outings-view", outings);
     $$("[data-view]").forEach((el) => {
       const active =
         el.dataset.view === state.view ||
@@ -782,7 +788,7 @@
         "经济政策、金融市场与企业经营消息，按报道发布时间更新。";
     if (state.view === "local")
       note.textContent =
-        "杭州及周边的近期玩法，明确活动日期的优先展示；时间未明确的消息仅作出游线索。";
+        "杭州及周边去哪玩。看本周末，也看近期的展览、演出、户外和城市活动；具体时间及报名以原文为准。";
     if (state.view === "livelihood")
       note.textContent =
         "社保医保、补贴、就业与消费提醒，附官方辟谣消息。各地政策的适用范围和办理时间见原报道。";
@@ -923,6 +929,7 @@
     const seenSources = new Set();
     const latest = [];
     for (const a of state.data.articles) {
+      if (a.category === "local") continue;
       if (!seenSources.has(a.sourceId)) {
         latest.push(a);
         seenSources.add(a.sourceId);
@@ -989,7 +996,11 @@
     if (ids && state.filter === "local")
       (state.data.weekendArticles || []).forEach((a) => ids.add(a.sourceId));
     const sources = state.data.sources.filter(
-      (source) => !ids || ids.has(source.id),
+      (source) =>
+        (!ids || ids.has(source.id)) &&
+        (state.filter !== "all" ||
+          state.view === "saved" ||
+          source.category !== "local"),
     );
     if (!sources.some((source) => source.id === state.source))
       state.source = "all";
@@ -1264,7 +1275,7 @@
     sourceDialogToken++;
     $("#dialog-title").textContent = "关于本站";
     $("#dialog-content").innerHTML =
-      '<p>个人新闻订阅页，汇总综合、财经、杭州、民生、科技、AI、模型、文娱、游戏和体育资讯，计划每小时检查更新。</p><h3>排序与分类</h3><p>新闻按来源标注的发布时间排列，AI 分类依据标题关键词及来源。模型栏目筛选模型发布、升级与开放消息，标题识别可能遗漏；普通产品功能更新与发布传闻不收录到该栏目。每日速览从不同分类与来源中选取最多 10 条，不代表热度排名。</p><h3>内容与收藏</h3><p>标题及短摘要来自对应资讯源，点击标题阅读原文。收藏仅保存在当前浏览器，不会跨设备同步。</p><p><a href="https://github.com/ZrBac/news/issues" target="_blank" rel="noopener noreferrer">问题反馈</a></p>';
+      '<p>个人新闻订阅页，汇总综合、财经、民生、科技、AI、模型、文娱、游戏、体育和杭州房市资讯，计划每小时检查更新。顶部「去处」独立整理杭州及周边出游消息，不混入新闻列表。</p><h3>排序与分类</h3><p>新闻按来源标注的发布时间排列，AI 分类依据标题关键词及来源。模型栏目筛选模型发布、升级与开放消息，标题识别可能遗漏；普通产品功能更新与发布传闻不收录到该栏目。每日速览从不同分类与来源中选取最多 10 条，不代表热度排名。</p><h3>内容与收藏</h3><p>标题及短摘要来自对应资讯源，点击标题阅读原文。收藏仅保存在当前浏览器，不会跨设备同步。</p><p><a href="https://github.com/ZrBac/news/issues" target="_blank" rel="noopener noreferrer">问题反馈</a></p>';
     $("#info-dialog").showModal();
   }
   function theme(value) {
@@ -1559,7 +1570,7 @@
         .filter((a) => validArticle(a) && a.category === "local")
         .slice(0, 48);
     if (Array.isArray(data.briefArticles))
-      data.briefArticles = data.briefArticles.filter(validArticle).slice(0, 80);
+      data.briefArticles = data.briefArticles.filter(validArticle).slice(0, 100);
     if (Array.isArray(data.briefDays))
       data.briefDays = data.briefDays
         .filter(

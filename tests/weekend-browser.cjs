@@ -79,17 +79,37 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     latest.weekendGuide = {
       search: { searchedAt: "2026-10-23T08:00:00Z", status: "ok" },
     };
+    // Old caches and the full archive can still include outings among news.
+    latest.articles.unshift(market);
+    latest.briefArticles = [
+      market,
+      {
+        ...latest.articles.find((article) => article.category === "general"),
+        publishedAt: "2026-10-23T02:00:00Z",
+      },
+    ];
     await page.route("**/data/latest.json*", (route) =>
       route.fulfill({ json: latest }),
     );
     await page.goto(base + "/#local");
     await page.evaluate(() => window.newsInitialLoad);
-    assert.equal(await page.locator("#section-title").innerText(), "杭州周末");
+    assert.equal(await page.locator("#section-title").innerText(), "去处");
+    assert.equal(await page.locator('[data-filter="local"]').count(), 0);
+    assert.equal(
+      await page.locator('.header-actions [data-view="local"]').innerText(),
+      "去处",
+    );
+    assert.equal(
+      await page.locator('[data-view="local"]').getAttribute("aria-current"),
+      "page",
+    );
+    assert(await page.locator(".filter-tabs").isHidden());
+    assert(await page.locator(".sidebar").isHidden());
     assert.equal(await page.locator(".article").count(), 6);
     assert.equal(await page.locator("[data-outing-type]").count(), 7);
     assert.match(
       await page.locator("#weekend-tools").innerText(),
-      /每周五16点.*最近专题检索/s,
+      /来源每小时检查.*每天9点、16点.*最近专题检索/s,
     );
     assert.match(
       await page.locator('[data-article-id="weekend-market"]').innerText(),
@@ -146,7 +166,17 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator('[data-article-id="weekend-market"]').waitFor();
     assert.match(await page.locator(".outing-details").innerText(), /良渚暖村/);
     await page.locator('[data-view="brief"]').click();
-    await page.locator('[data-filter="local"]').click();
+    assert.equal(
+      await page.locator('[data-article-id="weekend-market"]').count(),
+      0,
+    );
+    assert(await page.locator(".filter-tabs").isVisible());
+    await page.locator('[data-filter="all"]').click();
+    assert.equal(
+      await page.locator('[data-article-id="weekend-market"]').count(),
+      0,
+    );
+    await page.locator('[data-view="local"]').click();
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 844 });
       assert(
@@ -186,7 +216,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: six outing types, weekend/recent dates, expired/cancelled suppression, venue search, dated bookmark backup/import, four widths, offline reopening and expiry, no archive downloads.",
+      "PASS: separate outings navigation and news feeds, six outing types, weekend/recent dates, expired/cancelled suppression, venue search, dated bookmark backup/import, four widths, offline reopening and expiry, no archive downloads.",
     );
   } finally {
     await browser.close();

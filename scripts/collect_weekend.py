@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Prepare recent Hangzhou outings and a Friday search, without a model API."""
+"""Prepare recent Hangzhou outings and twice-daily searches, without a model API."""
 import argparse
 import concurrent.futures
 import functools
@@ -177,9 +177,11 @@ def search_due(now, previous, revision):
     if not last or previous.get('revision') != revision:
         return True
     local = now.astimezone(news.BEIJING)
-    due = (local - timedelta(days=(local.weekday()-4) % 7)).replace(hour=16, minute=0, second=0, microsecond=0)
-    if local < due:
-        due -= timedelta(days=7)
+    due = local.replace(hour=16, minute=0, second=0, microsecond=0)
+    if local.hour < 9:
+        due -= timedelta(days=1)
+    elif local.hour < 16:
+        due = due.replace(hour=9)
     return last < due
 
 

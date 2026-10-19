@@ -55,10 +55,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator("#date-trigger").click();
     assert(await page.locator("#date-filter").isVisible());
     await page.locator("#date-trigger").click();
-    for (const [category, label] of [
-      ["local", "杭州周末"],
-      ["livelihood", "民生服务"],
-    ]) {
+    for (const [category, label] of [["livelihood", "民生服务"]]) {
       if (
         eligibleCategories.size <= 10 &&
         latest.briefArticles.some(
@@ -79,7 +76,6 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.deepEqual(tabs, [
       "general",
       "finance",
-      "local",
       "livelihood",
       "tech",
       "ai",
@@ -130,7 +126,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator('[data-view="brief"]').click();
     for (const [category, label] of [
       ["finance", "财经"],
-      ["local", "杭州周末"],
+      ["local", "去处"],
       ["livelihood", "民生服务"],
     ]) {
       const pool =
@@ -139,7 +135,12 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
           : full.articles.filter((article) => article.category === category);
       const expected = Math.min(12, pool.length);
       assert(expected > 0, "usable initial content for " + category);
-      await page.locator(`[data-filter="${category}"]`).click();
+      await page.locator(".brand").click();
+      await page
+        .locator(
+          `[${category === "local" ? "data-view" : "data-filter"}="${category}"]`,
+        )
+        .click();
       if (category === "local")
         await page.locator('[data-outing-range="recent"]').click();
       await page
@@ -192,9 +193,13 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         ),
       );
       // Category buttons intentionally filter saved articles while in Favorites.
-      // Return through the brief before opening the news section itself.
-      await page.locator('[data-view="brief"]').click();
-      await page.locator(`[data-filter="${category}"]`).click();
+      // Return to news before opening a news section or the separate outings.
+      await page.locator(".brand").click();
+      await page
+        .locator(
+          `[${category === "local" ? "data-view" : "data-filter"}="${category}"]`,
+        )
+        .click();
       if (category === "local")
         await page.locator('[data-outing-range="recent"]').click();
       await page.waitForFunction(
@@ -239,7 +244,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
     await page.waitForFunction(
       () =>
-        document.querySelector("#section-title").textContent === "杭州周末" &&
+        document.querySelector("#section-title").textContent === "去处" &&
         document.querySelectorAll(".article").length > 0 &&
         document.querySelector("#archive-notice").hidden,
     );
@@ -256,6 +261,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       await page.locator(".article h3").allTextContents(),
       online,
     );
+    await page.locator(".brand").click();
     await page.locator('[data-filter="livelihood"]').click();
     await page.waitForFunction(
       () =>

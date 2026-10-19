@@ -24,6 +24,14 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       "杭州房价",
     );
     assert.equal(await page.locator(".price-card").count(), 2);
+    assert.match(
+      await page.locator("#housing-prices").innerText(),
+      /按周.*按月/,
+    );
+    assert.match(
+      await page.locator(".housing-checked").innerText(),
+      /最近检查.*数据日期以各项统计期为准/,
+    );
     assert.equal(await page.locator(".official-grid > div").count(), 2);
     assert.match(
       await page.locator(".official-prices").innerText(),
@@ -42,7 +50,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert(
       data.housingArticles.length > 6 && data.housingArticles.length <= 60,
     );
-    assert(data.housingArticles.some((a) => a.sourceId === "hz-housing-daily"));
+    assert(data.sources.some((source) => source.id === "hz-housing-daily"));
+    assert(
+      data.housingArticles.every((article) => article.category === "housing"),
+    );
     assert.equal(await page.locator(".housing-news .article").count(), 6);
     assert.deepEqual(
       await page.locator(".housing-news h3").allTextContents(),
@@ -163,8 +174,50 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator('[data-filter="housing"]').click();
     assert(await page.locator(".price-card").first().isVisible());
     assert.deepEqual(errors, []);
+    const staleContext = await browser.newContext({ ...devices["iPhone 13"] });
+    const stalePage = await staleContext.newPage();
+    const fixture = JSON.parse(JSON.stringify(data));
+    fixture.housingPrices.checkedAt = new Date().toISOString();
+    fixture.housingPrices.records = fixture.housingPrices.records.map(
+      (record) =>
+        record.kind === "new"
+          ? {
+              ...record,
+              price: 41320,
+              periodStart: "2020-01-01",
+              periodEnd: "2020-01-07",
+              publishedAt: "2020-01-08",
+              url: "https://www.haofangdp.com/fjdphz/newslist/reviewconsultation?itemId=12345",
+              source: "克而瑞浙江区域·杭州房地产市场周报",
+              scope: "杭州新房·克而瑞周报口径",
+            }
+          : record,
+    );
+    fixture.housingPrices.sources = [
+      { kind: "new", status: "partial", usingFallback: true },
+    ];
+    fixture.housingPrices.market.cric.periodStart = "2020-01-01";
+    fixture.housingPrices.market.cric.periodEnd = "2020-01-31";
+    await stalePage.route("**/data/latest.json*", (route) =>
+      route.fulfill({ json: fixture }),
+    );
+    await stalePage.goto(base + "/#housing");
+    await stalePage.evaluate(() => window.newsInitialLoad);
+    const oldCard = stalePage.locator(".price-card").first();
+    assert.match(await oldCard.innerText(), /41,320/);
+    assert.match(await oldCard.innerText(), /统计期已超过 14 天/);
+    assert.match(
+      await oldCard.innerText(),
+      /中指云本轮暂未能核实，补充展示克而瑞公开周报/,
+    );
+    assert.match(await oldCard.innerText(), /2020-01-07/);
+    assert.match(
+      await stalePage.locator(".cric-prices").innerText(),
+      /统计期较早/,
+    );
+    await staleContext.close();
     console.log(
-      "PASS: transaction prices, project sources, automatic housing news, pagination, supplemental saves, last tab, no archive download, four widths, offline prices/news and navigation.",
+      "PASS: transaction prices, update cadence, distinct check/period dates, fallback attribution, stale warnings, project sources, automatic housing news, pagination, supplemental saves, last tab, no archive download, four widths, offline prices/news and navigation.",
     );
   } finally {
     await browser.close();

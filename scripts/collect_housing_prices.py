@@ -7,6 +7,7 @@ Retain the last known period when a source fails or changes its wording.
 import argparse
 import calendar
 import concurrent.futures
+import functools
 import json
 import re
 from datetime import date, datetime, timezone
@@ -70,7 +71,8 @@ def valid_record(r, today):
         return (r['kind'] in ('new', 'resale') and type(r['price']) in (int, float)
                 and 1000 <= r['price'] <= 300000 and start <= end <= published <= today
                 and (end - start).days <= 31 and url.scheme == 'https'
-                and url.hostname in ('www.cih-index.com', 'hznews.hangzhou.com.cn', 'tidenews.com.cn')
+                and url.hostname in ('www.cih-index.com', 'hznews.hangzhou.com.cn', 'tidenews.com.cn', 'www.haofangdp.com')
+                and (url.hostname != 'www.haofangdp.com' or r['kind'] == 'new')
                 and not url.username and not url.password
                 and all(isinstance(r.get(k), str) and r[k] for k in ('scope', 'metric', 'source')))
     except (KeyError, TypeError, ValueError):
@@ -139,7 +141,9 @@ def collect_kind(kind, records, today, get=fetch):
         errors.append(type(exc).__name__)
     # At most four current reports plus the most recent known record, no crawling.
     urls = urls[:4]
-    old = sorted((r for r in records if r['kind'] == kind), key=lambda r: (r['periodEnd'], r['publishedAt']), reverse=True)
+    old = sorted((r for r in records if r['kind'] == kind
+                  and (kind != 'new' or urlsplit(r['url']).hostname == 'www.cih-index.com')),
+                 key=lambda r: (r['periodEnd'], r['publishedAt']), reverse=True)
     if old and old[0]['url'] not in urls:
         urls.append(old[0]['url'])
     incoming = []
@@ -152,7 +156,14 @@ def collect_kind(kind, records, today, get=fetch):
                 errors.append('NoExplicitPrice')
         except Exception as exc:
             errors.append(type(exc).__name__)
-    return incoming, {'kind': kind, 'status': 'ok' if incoming and not errors else 'partial' if incoming else 'unavailable'}
+    fallback = []
+    if kind == 'new' and (not incoming or errors):
+        fallback = collect_weekly_backup(records, today, get)
+        incoming.extend(fallback)
+    status = {'kind': kind, 'status': 'ok' if incoming and not errors else 'partial' if incoming else 'unavailable'}
+    if fallback:
+        status['usingFallback'] = True
+    return incoming, status
 
 
 def merge_records(records, today):
@@ -170,6 +181,57 @@ DISTRICTS = 'https://www.cih-index.com/data/house/hangzhou.html'
 CRIC = 'https://www.haofangdp.com/fjdphz/newslist/interpretation?tags_column_id=193&page='
 CRIC_REPORT = 'https://www.haofangdp.com/fjdphz/newslist/reviewconsultation?itemId=7502178807479727402'
 DISTRICT_NAMES = {'萧山区', '余杭区', '拱墅区', '钱塘区', '临平区', '西湖区', '滨江区', '富阳区', '临安区', '上城区'}
+
+
+def parse_weekly_backup(html, url, today):
+    text = Document(html).text.split('THEEND')[0]
+    title = re.search(r'第\d+周杭州房地产市场周报[（(](\d{1,2})\.(\d{1,2})[-—至](\d{1,2})\.(\d{1,2})[）)]', text[:350])
+    published = re.search(r'克而瑞浙江区域[·•](\d{4}-\d{2}-\d{2})\d{2}:\d{2}', text)
+    # Only the city-wide new-home summary, before land and district sections.
+    core = text.split('核心观点', 1)[-1].split('土地市场', 1)[0]
+    price = re.search(r'新房成交[：:][^。]{1,200}。成交均价[：:]([\d,.]+)元/㎡', core)
+    if not title or not published or not price:
+        return []
+    try:
+        day = date.fromisoformat(published[1])
+        sm, sd, em, ed = map(int, title.groups())
+        year = day.year - (em > day.month)
+        start, end = date(year - (sm > em), sm, sd), date(year, em, ed)
+        record = dict(kind='new', price=float(price[1].replace(',', '')),
+                      periodStart=start.isoformat(), periodEnd=end.isoformat(), publishedAt=published[1],
+                      scope='杭州新房·克而瑞周报口径', metric='成交均价',
+                      source='克而瑞浙江区域·杭州房地产市场周报', url=url)
+        return [record] if (end-start).days == 6 and valid_record(record, today) else []
+    except ValueError:
+        return []
+
+
+def collect_weekly_backup(records, today, get):
+    urls = []
+    for page in (1, 2):
+        try:
+            for href, title in Document(get(CRIC + str(page))).links:
+                url = urljoin(CRIC, href)
+                if (urlsplit(url).hostname == 'www.haofangdp.com'
+                        and '/newslist/reviewconsultation?' in url and '杭州房地产市场周报' in title
+                        and url not in urls):
+                    urls.append(url)
+        except Exception:
+            continue
+        if urls:
+            break
+    urls = urls[:2]
+    old = sorted((r for r in records if r['kind'] == 'new' and urlsplit(r['url']).hostname == 'www.haofangdp.com'),
+                 key=lambda r: r['periodEnd'], reverse=True)
+    if old and old[0]['url'] not in urls:
+        urls.append(old[0]['url'])
+    incoming = []
+    for url in urls:
+        try:
+            incoming.extend(parse_weekly_backup(get(url), url, today))
+        except Exception:
+            pass
+    return incoming
 
 
 def month_period(year, month):
@@ -272,20 +334,23 @@ def parse_cric(html, url, today):
     text = Document(html).text.split('THEEND')[0]
     title = re.search(r'(\d{4})年(\d{1,2})月杭州房地产市场月报', text[:300])
     published = re.search(r'克而瑞浙江区域[·•](\d{4}-\d{2}-\d{2})\d{2}:\d{2}', text)
-    if not title or not published or '新房市场' not in text or '数据来源：克而瑞' not in text:
+    heading = re.search(r'新房市场|商品住宅市场', text)
+    if not title or not published or not heading or '数据来源：克而瑞' not in text:
         return None
-    section = text.split('新房市场', 1)[1].split('区域与板块', 1)[0].split('库存与去化', 1)[0]
+    section = re.split(r'区域与板块|各行政区|项目销售|库存与去化', text[heading.end():], maxsplit=1)[0]
     # Require current-month transaction language, excluding last month's comparison and district prices.
     month = int(title[2])
     match = re.search(fr'{month}月成交面积[\d.]+万㎡[^。；]{{0,100}}[；。]成交均价(?:为|达)?([\d,]+)元/㎡', section)
     if not match:
         match = re.search(fr'{month}月新房成交面积[\d.]+万㎡[^。]{{0,180}}?成交均价(?:为|达)?([\d,]+)元/㎡', text)
     if not match:
+        match = re.search(fr'{month}月新房供应[\d.]+万㎡[^。]{{0,180}}?成交均价(?:为|达)?([\d,]+)元/㎡', section)
+    if not match:
         return None
     try:
         result = dict(**month_period(*title.groups()), publishedAt=published[1],
                       price=float(match[1].replace(',', '')), source='克而瑞浙江区域·杭州市场月报',
-                      scope='杭州新房（普通住宅、别墅）' if '统计口径：普通住宅、别墅' in text else '杭州新房·克而瑞报告口径', url=url)
+                      scope='杭州新房（普通住宅、别墅）' if re.search(r'统计口径：普通住宅、别墅|含普通住宅、别墅', text) else '杭州新房·克而瑞报告口径', url=url)
         return result if valid_market('cric', result, today) else None
     except ValueError:
         return None
@@ -297,10 +362,11 @@ def collect_market(kind, previous, today, get=fetch):
     if kind == 'districts':
         urls = [DISTRICTS]
     else:
-        indices = [NBS] if kind == 'official' else [CRIC + '1', CRIC + '2']
+        indices = [NBS] if kind == 'official' else [CRIC + str(page) for page in range(1, 5)]
         for index in indices:
             try:
-                for href, title in Document(get(index)).links:
+                links = Document(get(index)).links
+                for href, title in links:
                     url = urljoin(index, href)
                     host = urlsplit(url).hostname
                     match = (host == 'www.stats.gov.cn' and '70个大中城市商品住宅销售价格变动情况' in title) if kind == 'official' else (
@@ -308,6 +374,13 @@ def collect_market(kind, previous, today, get=fetch):
                         and '/newslist/reviewconsultation?' in url)
                     if match and url not in urls:
                         urls.append(url)
+                # Monthly reports can move beyond page two as new posts arrive.
+                # Stop as soon as the last completed month's report is found.
+                if kind == 'cric':
+                    month = (today.year, today.month - 1) if today.month > 1 else (today.year - 1, 12)
+                    if any(re.search(fr'{month[0]}年0?{month[1]}月杭州房地产市场月报', title)
+                           for _, title in links):
+                        break
             except Exception:
                 errors.append('IndexUnavailable')
         urls = urls[:3]
@@ -348,14 +421,15 @@ def main():
             # Prevent replacing a newer live record with the seed during an outage.
             raise SystemExit(f'Cannot retain previous prices: {exc}')
     now = datetime.now(timezone.utc)
+    get = functools.lru_cache(maxsize=32)(fetch)
     records = merge_records(previous, now.date())
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
-        results = list(pool.map(lambda k: collect_kind(k, records, now.date()), ('new', 'resale')))
+        results = list(pool.map(lambda k: collect_kind(k, records, now.date(), get), ('new', 'resale')))
     for incoming, _ in results:
         records += incoming
     kinds = ('official', 'districts', 'cric')
     with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:
-        market_results = list(pool.map(lambda k: collect_market(k, previous_market.get(k, {}), now.date()), kinds))
+        market_results = list(pool.map(lambda k: collect_market(k, previous_market.get(k, {}), now.date(), get), kinds))
     payload = dict(checkedAt=now.isoformat(), records=merge_records(records, now.date()),
                    sources=[s for _, s in results], market={k: r for k, (r, _) in zip(kinds, market_results) if r},
                    marketSources=[s for _, s in market_results])

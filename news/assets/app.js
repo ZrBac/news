@@ -345,7 +345,7 @@
       const status = (data.marketSources || []).find((s) => s.kind === kind);
       const stale =
         Date.now() - Date.parse(r.periodEnd + "T00:00:00+08:00") >
-        75 * 86400000;
+        (kind === "cric" ? 45 : 60) * 86400000;
       return `<p class="price-period">统计期 ${escape(r.periodStart)} 至 ${escape(r.periodEnd)}</p>
         <p class="price-published">${escape(r.scope)}${r.publishedAt ? ` · 发布于 ${escape(r.publishedAt)}` : ""}</p>
         <a href="${escape(safeUrl(r.url))}" target="_blank" rel="noopener noreferrer">${escape(r.source)} ↗</a>
@@ -576,18 +576,23 @@
         const status = (data.sources || []).find((s) => s.kind === kind);
         const stale =
           Date.now() - Date.parse(record.periodEnd + "T00:00:00+08:00") >
-          45 * 86400000;
+          (kind === "new" ? 14 : 45) * 86400000;
+        const backup =
+          kind === "new" &&
+          new URL(record.url).hostname === "www.haofangdp.com" &&
+          status?.usingFallback;
         return `<section class="price-card"><h2>${label}<span>${escape(record.metric)}</span></h2>
         <p class="price-value">${escape(record.price.toLocaleString("zh-CN"))}<small>元/㎡</small></p>
         <p class="price-period">统计期 ${escape(record.periodStart)} 至 ${escape(record.periodEnd)}</p>
         <p>${escape(record.scope)}</p>
         <a href="${escape(safeUrl(record.url))}" target="_blank" rel="noopener noreferrer">${escape(record.source)} ↗</a>
         <p class="price-published">发布于 ${escape(record.publishedAt)}</p>
-        ${stale ? '<p class="price-status">统计期已超过 45 天，请留意原站后续发布。</p>' : ""}
-        ${status && status.status !== "ok" ? '<p class="price-status">本轮部分数据未能核实，保留已收录价格。</p>' : ""}</section>`;
+        ${stale ? `<p class="price-status">统计期已超过 ${kind === "new" ? 14 : 45} 天，请留意原站后续发布。</p>` : ""}
+        ${backup ? '<p class="price-status">中指云本轮暂未能核实，补充展示克而瑞公开周报，口径以原文为准。</p>' : status && status.status !== "ok" ? '<p class="price-status">本轮部分数据未能核实，保留已收录价格。</p>' : ""}</section>`;
       })
       .join("");
-    panel.innerHTML = `<h2 class="city-price-heading">杭州整体成交</h2><p class="price-intro">自动检查来源发布的成交均价。新房与二手房分别标注统计周期，没有新数据时保留上次结果。</p>
+    panel.innerHTML = `<h2 class="city-price-heading">杭州整体成交</h2><p class="price-intro">新房成交均价按周、二手房及其他月度统计按月发布。随网站自动检查，没有新数据时保留上次结果。</p>
+      ${data.checkedAt ? `<p class="price-published housing-checked">最近检查 ${escape(formatTime(data.checkedAt))}（北京时间）；数据日期以各项统计期为准。</p>` : ""}
       <div class="housing-links" aria-label="楼盘信息查询">
         <button type="button" class="text-button" data-housing-jump>楼盘动态 ↓</button>
         <a href="https://xinpan.zjol.com.cn/loupan/" target="_blank" rel="noopener noreferrer">住在杭州楼盘库 ↗</a>

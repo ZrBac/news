@@ -107,6 +107,84 @@ class HousingPriceTests(unittest.TestCase):
         result, _ = prices.collect_market('cric', latest, self.today, lambda u: html if 'reviewconsultation?' in u else '')
         self.assertEqual(result, latest)
 
+    def test_cric_updated_heading_and_combined_supply_transaction_sentence(self):
+        url = 'https://www.haofangdp.com/fjdphz/newslist/reviewconsultation?itemId=7514864418342761745'
+        html = '''<h1>2026年9月杭州房地产市场月报</h1><p>克而瑞浙江区域 · 2026-10-11 09:48:07</p>
+        <p>土地市场成交楼面价17629元/㎡。数据来源：克而瑞数据库</p>
+        <h2>商品住宅市场</h2><p>9月新房供应46.51万㎡（环比+51.20%）、成交29.82万㎡（环比+7.36%），供求比1.56；成交金额116.79亿元；成交均价39171元/㎡（含普通住宅、别墅）。</p>
+        <h2>各行政区/板块成交排名</h2><p>滨江区成交均价67255元/㎡。</p>'''
+        today = date(2026, 10, 19)
+        record = prices.parse_cric(html, url, today)
+        self.assertEqual((record['price'], record['periodEnd']), (39171, '2026-09-30'))
+        self.assertIn('普通住宅、别墅', record['scope'])
+        for bad in (html.replace('成交均价39171', '挂牌均价39171'),
+                    html.replace('9月新房供应', '8月新房供应'),
+                    html.replace('2026-10-11', '2026-11-11'),
+                    html.replace('9月新房供应', '9月二手房供应')):
+            self.assertIsNone(prices.parse_cric(bad, url, today))
+
+    def weekly_backup(self):
+        return '''<h1>第40周杭州房地产市场周报（10.5-10.11）</h1>
+        <p>克而瑞浙江区域 · 2026-10-15 10:26:15</p><h2>核心观点</h2>
+        <p>新房成交：445套/6.11万㎡/25.24亿元，套数环比-4%；金额环比-14%。成交均价：41320元/㎡。</p>
+        <h2>土地市场</h2><p>成交楼面价17629元/㎡。</p>
+        <h2>新房市场</h2><p>滨江区均价78507元/㎡，望天际成交均价118028元/㎡。</p>'''
+
+    def test_weekly_backup_keeps_explicit_week_and_city_new_home_scope(self):
+        url = 'https://www.haofangdp.com/fjdphz/newslist/reviewconsultation?itemId=7516323544059016278'
+        html = self.weekly_backup()
+        today = date(2026, 10, 19)
+        record, = prices.parse_weekly_backup(html, url, today)
+        self.assertEqual((record['price'], record['periodStart'], record['periodEnd']),
+                         (41320, '2026-10-05', '2026-10-11'))
+        self.assertIn('克而瑞', record['source'])
+        for bad in (html.replace('成交均价：41320', '挂牌均价：41320'),
+                    html.replace('新房成交：', '二手房成交：'),
+                    html.replace('10.5-10.11', '10.5-10.12'),
+                    html.replace('2026-10-15', '2026-11-15'),
+                    html.replace('杭州房地产市场周报', '宁波房地产市场周报')):
+            self.assertFalse(prices.parse_weekly_backup(bad, url, today))
+        self.assertFalse(prices.parse_weekly_backup(html, 'https://untrusted.example/story', today))
+        cross_year = html.replace('10.5-10.11', '12.28-1.3').replace('2026-10-15', '2027-01-08')
+        record, = prices.parse_weekly_backup(cross_year, url, date(2027, 1, 9))
+        self.assertEqual((record['periodStart'], record['periodEnd']), ('2026-12-28', '2027-01-03'))
+
+    def test_weekly_source_failure_discovers_backup_without_overwriting_price_identity(self):
+        url = 'https://www.haofangdp.com/fjdphz/newslist/reviewconsultation?itemId=7516323544059016278'
+        old, = prices.parse_new(self.week, self.url, self.today)
+        calls = []
+        def get(value):
+            calls.append(value)
+            if value == prices.CIH or value == self.url:
+                raise TimeoutError()
+            if 'interpretation?' in value:
+                return f'<a href="{url}">第40周杭州房地产市场周报（10.5-10.11）</a>'
+            return self.weekly_backup() if value == url else ''
+        incoming, status = prices.collect_kind('new', [old], date(2026, 10, 19), get)
+        latest = prices.merge_records([old] + incoming, date(2026, 10, 19))[0]
+        self.assertEqual((latest['price'], latest['periodEnd'], latest['url']), (41320, '2026-10-11', url))
+        self.assertEqual(status, {'kind': 'new', 'status': 'partial', 'usingFallback': True})
+        self.assertNotIn(prices.CRIC + '2', calls)
+        # A backup outage keeps the successful record and never sends its URL to the CIH parser.
+        incoming, status = prices.collect_kind('new', [latest], date(2026, 10, 19), lambda value: '')
+        self.assertEqual(prices.merge_records([latest] + incoming, date(2026, 10, 19)), [latest])
+        self.assertEqual(status['status'], 'unavailable')
+
+    def test_monthly_discovery_checks_beyond_page_two_and_stops_at_current_period(self):
+        calls = []
+        url = 'https://www.haofangdp.com/fjdphz/newslist/reviewconsultation?itemId=12345'
+        html = '''<h1>2026年9月杭州房地产市场月报</h1><p>克而瑞浙江区域·2026-10-11 09:48:07</p>
+        <p>新房市场9月新房成交面积29.82万㎡，成交均价39171元/㎡。数据来源：克而瑞</p>'''
+        def get(value):
+            calls.append(value)
+            if value == prices.CRIC + '3':
+                return f'<a href="{url}">2026年9月杭州房地产市场月报</a>'
+            return html if value == url else ''
+        result, status = prices.collect_market('cric', {}, date(2026, 10, 19), get)
+        self.assertEqual((result['periodEnd'], result['price']), ('2026-09-30', 39171))
+        self.assertEqual(calls.count(prices.CRIC + '3'), 1)
+        self.assertNotIn(prices.CRIC + '4', calls)
+        self.assertEqual(status['status'], 'partial')  # The fallback report could not be verified.
 
 
 if __name__ == '__main__':

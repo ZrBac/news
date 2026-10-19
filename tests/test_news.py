@@ -162,11 +162,11 @@ class FeedTests(unittest.TestCase):
         local = dict(self.source, category='local', titleFilter='hangzhou-local')
         livelihood = dict(self.source, category='livelihood', titleFilter='livelihood')
         examples = (
-            ('杭州地铁12号线迎来新进展 - 杭州网', 'local'),
-            ('杭州市区天气预报 - 杭州网', 'local'),
-            ('余杭招聘会发布5000个岗位', 'local'),
+            ('杭州地铁12号线迎来新进展 - 杭州网', 'general'),
+            ('杭州市区天气预报 - 杭州网', 'general'),
+            ('余杭招聘会发布5000个岗位', 'livelihood'),
             ('桐庐公园正式开放', 'local'),
-            ('杭州居民医保补贴申领启动', 'local'),
+            ('杭州居民医保补贴申领启动', 'livelihood'),
             ('杭州二手房成交209套', 'housing'),
             ('西湖区新房预售政策公布', 'housing'),
             ('上城区住房补贴申领启动', 'housing'),
@@ -188,15 +188,17 @@ class FeedTests(unittest.TestCase):
                 old = dict(base, title=title, category='general')
                 merged = collector.merge_articles([old], [], self.now, {'example': general})
                 self.assertEqual(merged[0]['category'], category)
-        for title in ('杭州地铁开通', '临平就业补贴申领启动'):
+        for title in ('杭州周末农夫市集开市', '临平亲子手作活动预告', '安吉秋日徒步路线发布',
+                      '杭州书店读书会本周末开放报名', '杭州飞盘运动体验日', '浙江省博物馆特展上新'):
             self.assertEqual(collector.article_category(title, local), 'local')
-        for title in ('北京公交开通', '杭州企业财报公布', '散文随笔：杭州秋日生活与公园',
+        for title in ('北京公交开通', '杭州企业财报公布', '散文随笔：杭州秋日生活与公园', '杭州地铁新线通车',
+                      '杭州露营产业市场规模增长', '杭州音乐节圆满落幕', '去年杭州展览回顾',
                       '杭州假期活动' + '漫游心情' * 40):
             self.assertIsNone(collector.article_category(title, local))
         self.assertIsNone(collector.article_category('养老行业论坛开幕', livelihood))
         self.assertIsNone(collector.article_category('国联民生股价上涨', livelihood))
         self.assertEqual(collector.article_category('医保新规发布', livelihood), 'livelihood')
-        self.assertEqual(collector.article_category('杭州演唱会开票', dict(general, category='entertainment')), 'entertainment')
+        self.assertEqual(collector.article_category('杭州演唱会开票', dict(general, category='entertainment')), 'local')
         self.assertEqual(collector.article_category('杭州电竞比赛开幕', dict(general, category='gaming')), 'gaming')
         self.assertEqual(collector.article_category('日本医保新规发布', dict(general, id='chinanews-world')), 'general')
         housing = dict(base, title='杭州二手房成交209套', category='housing')
@@ -213,7 +215,7 @@ class FeedTests(unittest.TestCase):
 
     def test_archive_limit_still_holds_with_eleven_populated_categories(self):
         base = collector.parse_feed(self.feed(), self.source, self.now)[0]
-        titles = {'general': '综合消息', 'finance': '央行利率调整', 'local': '杭州公交开通', 'livelihood': '医保新政公布',
+        titles = {'general': '综合消息', 'finance': '央行利率调整', 'local': '杭州周末市集开市', 'livelihood': '医保新政公布',
                   'tech': '电脑硬件更新', 'ai': 'AI工具更新', 'models': 'Qwen3模型发布',
                   'entertainment': '电影上映', 'gaming': '游戏发行', 'sports': '体育赛事',
                   'housing': '杭州新盘预售'}
@@ -242,7 +244,7 @@ class FeedTests(unittest.TestCase):
             self.assertEqual(collector.article_category(title, general), 'finance')
             self.assertEqual(collector.article_category(title, finance), 'finance')
         self.assertEqual(collector.article_category('杭州二手房成交统计公布', finance), 'housing')
-        self.assertEqual(collector.article_category('杭州地铁新线开通', finance), 'local')
+        self.assertIsNone(collector.article_category('杭州地铁新线开通', finance))
         self.assertEqual(collector.article_category('金融消费者合法权益保护案例公布', finance), 'livelihood')
         self.assertEqual(collector.article_category('医保补贴申领启动', finance), 'livelihood')
         self.assertIsNone(collector.article_category('巴拿马发生强震', finance))

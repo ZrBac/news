@@ -101,6 +101,50 @@
       ].includes(value.category)
     )
       return false;
+    if (value.outing !== undefined) {
+      const info = value.outing;
+      if (
+        info?.month !== undefined &&
+        !(
+          typeof info.month === "string" &&
+          /^\d{4}-\d{2}$/.test(info.month) &&
+          Number.isFinite(Date.parse(info.month + "-01"))
+        )
+      )
+        return false;
+      if (
+        info?.until !== undefined &&
+        !(
+          typeof info.until === "string" &&
+          /^\d{4}-\d{2}-\d{2}$/.test(info.until) &&
+          Number.isFinite(Date.parse(info.until))
+        )
+      )
+        return false;
+      if (
+        !info ||
+        typeof info !== "object" ||
+        !["market", "culture", "outdoor", "family", "city", "sport"].includes(
+          info.type,
+        ) ||
+        ["venue", "cost", "when"].some(
+          (key) =>
+            info[key] !== undefined &&
+            (typeof info[key] !== "string" || info[key].length > 100),
+        ) ||
+        ((info.start !== undefined || info.end !== undefined) &&
+          !(
+            typeof info.start === "string" &&
+            typeof info.end === "string" &&
+            /^\d{4}-\d{2}-\d{2}$/.test(info.start) &&
+            /^\d{4}-\d{2}-\d{2}$/.test(info.end) &&
+            Number.isFinite(Date.parse(info.start)) &&
+            Number.isFinite(Date.parse(info.end)) &&
+            info.start <= info.end
+          ))
+      )
+        return false;
+    }
     try {
       const url = new URL(value.url);
       if (value.originalUrl !== undefined) {
@@ -188,8 +232,8 @@
         const mergedNews = [
           ...new Map(
             [
-              ...value.newsSaved.map((article) =>
-                Object.fromEntries(
+              ...value.newsSaved.map((article) => ({
+                ...Object.fromEntries(
                   [
                     "id",
                     "title",
@@ -204,7 +248,8 @@
                     .filter((key) => typeof article[key] === "string")
                     .map((key) => [key, article[key]]),
                 ),
-              ),
+                ...(article.outing ? { outing: article.outing } : {}),
+              })),
               ...(Array.isArray(news) ? news.filter(newsArticle) : []),
             ].map((a) => [a.id, a]),
           ).values(),

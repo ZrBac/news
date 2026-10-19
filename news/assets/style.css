@@ -470,6 +470,51 @@ span[data-icon] {
   line-height: 1.8;
   margin: 12px 0 0;
 }
+#weekend-tools {
+  margin: 16px 0 4px;
+}
+.outing-ranges,
+.outing-types {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  padding: 2px 0 7px;
+  scrollbar-width: thin;
+  -webkit-overflow-scrolling: touch;
+}
+.outing-ranges button,
+.outing-types button {
+  flex: 0 0 auto;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  background: transparent;
+  color: var(--secondary);
+  padding: 7px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.outing-ranges button[aria-pressed="true"],
+.outing-types button[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--secondary);
+}
+.outing-checked {
+  margin: 3px 0 12px;
+  font-size: 11px;
+  line-height: 1.7;
+  color: var(--secondary);
+}
+.article-body .outing-summary,
+.article-body .outing-details {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px 10px;
+  color: var(--secondary);
+  font-size: 12px;
+  margin: 7px 0;
+  line-height: 1.7;
+}
 .article,
 .article-placeholder {
   display: grid;

@@ -136,6 +136,8 @@ def article_category(title, source):
     original_title = title
     title = title.rsplit(' - ', 1)[0]
     category = source['category']
+    if is_hangzhou_local(original_title):
+        return 'local'
     if category == 'entertainment':
         if ENTERTAINMENT_NOISE.search(title):
             return None
@@ -157,21 +159,18 @@ def article_category(title, source):
     if category == 'models':
         return None
     if category in ('general', 'finance', 'local', 'livelihood') and source['id'] not in INTERNATIONAL_SOURCES:
-        # Local housing stays with prices; local public services take precedence
-        # over the nationwide livelihood section. Publisher names are not clues.
+        # Weekend activities stay separate from housing and public-service news.
         if source.get('titleFilter') == 'public-rumors' and not is_public_rumor(original_title):
             return None
         if is_hangzhou_housing(original_title):
             return 'housing'
         if is_hangzhou_local(original_title):
             return 'local'
-        if category == 'local':
-            return None
         if source.get('titleFilter') == 'public-rumors':
             return 'livelihood'
         if is_livelihood(original_title):
             return 'livelihood'
-        if category == 'livelihood':
+        if category in ('local', 'livelihood'):
             return None
     if category == 'finance' and FINANCE_PROMOTION.search(title) and not FINANCE_DISCIPLINE.search(title):
         return None
@@ -203,13 +202,20 @@ def is_hangzhou_housing(title):
     return bool(HOUSING_LOCATION.search(title) and HOUSING_TOPIC.search(title) and not HOUSING_NOISE.search(title))
 
 
-HANGZHOU_LOCATION = re.compile(r'杭州|杭城|余杭|萧山|临平|钱塘|拱墅|临安|富阳|滨江区|上城区|西湖区|建德|淳安|桐庐')
+HANGZHOU_LOCATION = re.compile(r'杭州|杭城|余杭|萧山|临平|钱塘|拱墅|临安|富阳|滨江区|上城区|西湖区|建德|淳安|桐庐|良渚|西溪|龙坞|千岛湖|湘湖|莫干山|安吉|德清|海宁|绍兴|桐乡|湖州|乌镇|南浔|西湖(?:边|景区|公园)|浙江省博物馆|浙江美术馆|中国丝绸博物馆|中国茶叶博物馆|中国动漫博物馆|天目里|武林广场')
 LOCAL_SERVICE_TOPIC = re.compile(
-    r'地铁|公交|交通|铁路|高铁|快速路|道路|通行|通车|路网|开通|出行|机场|口岸|通关|'
-    r'城市建设|公园|开园|绿道|亮灯|灯光秀|音乐喷泉|展览|展出|博物馆|文旅|活动|生活周|'
-    r'露营|赏花|赏桂|赏秋|花海|桂花|美食|市场|消费|食品安全|售价|招聘|就业|社保|医保|养老|入学|招生|'
-    r'教育|春秋假|放假|假期|办事|政务|公共服务|天气|气温|气象|降温|冷空气|停电|停水|开放|综合体|竣工|投用')
-LOCAL_NOISE = re.compile(r'散文|随笔|诗歌|抒怀|股价|股票|股市|财报|控股股东|学术活动|学术年会|举行纪念|揭牌|签约|主题党日|党支部')
+    r'市集|集市|夜市|早市|庙会|生活节|美食节|咖啡节|啤酒节|文创节|游园会|'
+    r'展览|特展|新展|看展|艺术展|摄影展|书画展|博物馆.*(?:展|开放日)|漫展|文博会|宠物展|花展|车展|书展|茶博会|'
+    r'演出|演唱会|音乐会|音乐节|戏剧|话剧|脱口秀|露天电影|放映|电影节|'
+    r'露营|营地|徒步|登山|骑行|绿道.*(?:攻略|路线|游玩)|赏秋|赏桂|赏花|晒秋|银杏|红叶|花海|观鸟|采摘|温泉|'
+    r'亲子.{0,12}(?:活动|游玩|体验|乐园|路线|研学|演出|手作|运动)|遛娃|手作|手工|工作坊|非遗体验|社教活动|读书会|阅读会|公益讲座|科普活动|体验课|研学|沙龙|开放日|游线|书店.*(?:活动|讲座)|'
+    r'灯光秀|音乐喷泉|烟花|灯会|夜游|City\s*Walk|城市漫游|秋游|周末.*(?:活动|攻略|去哪)|'
+    r'(?:活动|游玩)(?:汇总|预告|指南|清单|攻略)|'
+    r'运动体验|赛事.*(?:报名|观赛|门票)|飞盘|桨板|皮划艇|攀岩|公园.*(?:开放|开园|游玩|攻略)', re.I)
+LOCAL_NOISE = re.compile(r'散文|随笔|诗歌|抒怀|股价|股票|股市|财报|控股股东|学术活动|学术年会|举行纪念|揭牌|签约|主题党日|党支部|'
+                         r'招聘|医保|社保|征集意见|工作会议|调研|开工|建设项目|融资|产值|市场规模|产业发展|游客量|客流量|接待游客|消费数据|'
+                         r'圆满落幕|圆满收官|活动回顾|赛事回顾|精彩回顾|昨日.*(?:举行|举办)|去年|往年|招代理|加群|返现|'
+                         r'偶遇|现身|露背|曼妙|热聊|人气爆棚|鸣枪开赛|[+＋]FAQ|[+＋]避坑|维度讲透|闭眼清单|实锤|海景房怎么选|江郎才尽|江湖地位|整活|杭州公安|执勤|安保|亲子充电站|职业培训|落幕|收官|品牌推荐|招生官|全球名校|手工金饰|人文珠宝|跨界交流', re.I)
 LIVELIHOOD_TOPIC = re.compile(
     r'社保|社会保险|社会保障|养老金?|医保|医疗保险|报销|生育津贴|育儿|托育|补贴|低保|救助|'
     r'就业|失业|招聘|招工|最低工资|劳动者|劳动权益|权益保障|消费者|消费维权|消费提醒|消费提示|'
@@ -225,7 +231,7 @@ INTERNATIONAL_SOURCES = {'chinanews-world', 'dw', 'rfi'}
 def is_hangzhou_local(title):
     title = unicodedata.normalize('NFKC', title.rsplit(' - ', 1)[0])
     return bool(len(title) <= 100 and HANGZHOU_LOCATION.search(title) and LOCAL_SERVICE_TOPIC.search(title)
-                and not LOCAL_NOISE.search(title))
+                and not LOCAL_NOISE.search(title) and not is_hangzhou_housing(title))
 
 
 def is_livelihood(title):

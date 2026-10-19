@@ -56,7 +56,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert(await page.locator("#date-filter").isVisible());
     await page.locator("#date-trigger").click();
     for (const [category, label] of [
-      ["local", "杭州资讯"],
+      ["local", "杭州周末"],
       ["livelihood", "民生服务"],
     ]) {
       if (
@@ -130,21 +130,25 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator('[data-view="brief"]').click();
     for (const [category, label] of [
       ["finance", "财经"],
-      ["local", "杭州资讯"],
+      ["local", "杭州周末"],
       ["livelihood", "民生服务"],
     ]) {
-      const pool = full.articles.filter(
-        (article) => article.category === category,
-      );
-      assert(pool.length >= 12, "usable initial content for " + category);
+      const pool =
+        category === "local"
+          ? latest.weekendArticles
+          : full.articles.filter((article) => article.category === category);
+      const expected = Math.min(12, pool.length);
+      assert(expected > 0, "usable initial content for " + category);
       await page.locator(`[data-filter="${category}"]`).click();
+      if (category === "local")
+        await page.locator('[data-outing-range="recent"]').click();
       await page
         .waitForFunction(
-          (label) =>
+          ({ label, expected }) =>
             document.querySelector("#section-title").textContent === label &&
-            document.querySelectorAll(".article").length >= 12 &&
+            document.querySelectorAll(".article").length >= expected &&
             document.querySelector("#archive-notice").hidden,
-          label,
+          { label, expected },
         )
         .catch(async (error) => {
           console.error(
@@ -191,12 +195,14 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       // Return through the brief before opening the news section itself.
       await page.locator('[data-view="brief"]').click();
       await page.locator(`[data-filter="${category}"]`).click();
+      if (category === "local")
+        await page.locator('[data-outing-range="recent"]').click();
       await page.waitForFunction(
-        (label) =>
+        ({ label, expected }) =>
           document.querySelector("#section-title").textContent === label &&
-          document.querySelectorAll(".article").length >= 12 &&
+          document.querySelectorAll(".article").length >= expected &&
           document.querySelector("#archive-notice").hidden,
-        label,
+        { label, expected },
       );
     }
     await page.locator(".reading-options > summary").click();
@@ -213,13 +219,11 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.reload();
     await page.evaluate(() => window.newsInitialLoad);
     await page.locator(".reading-options > summary").click();
-    await page
-      .locator("#bookmarks-file")
-      .setInputFiles({
-        name: "bookmarks.json",
-        mimeType: "application/json",
-        buffer: Buffer.from(JSON.stringify(backup)),
-      });
+    await page.locator("#bookmarks-file").setInputFiles({
+      name: "bookmarks.json",
+      mimeType: "application/json",
+      buffer: Buffer.from(JSON.stringify(backup)),
+    });
     await page.waitForFunction(
       () =>
         JSON.parse(localStorage.getItem("zrbac-news-saved-v1") || "[]")
@@ -230,12 +234,13 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator(".reading-options > summary").click();
     await page.goto(base + "/#local");
     await page.evaluate(() => window.newsInitialLoad);
+    await page.locator('[data-outing-range="recent"]').click();
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
     await page.waitForFunction(
       () =>
-        document.querySelector("#section-title").textContent === "杭州资讯" &&
-        document.querySelectorAll(".article").length >= 12 &&
+        document.querySelector("#section-title").textContent === "杭州周末" &&
+        document.querySelectorAll(".article").length > 0 &&
         document.querySelector("#archive-notice").hidden,
     );
     const online = await page.locator(".article h3").allTextContents();
@@ -243,8 +248,9 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await context.setOffline(true);
     await page.reload();
     await page.evaluate(() => window.newsInitialLoad);
+    await page.locator('[data-outing-range="recent"]').click();
     await page.waitForFunction(
-      () => document.querySelectorAll(".article").length >= 12,
+      () => document.querySelectorAll(".article").length > 0,
     );
     assert.deepEqual(
       await page.locator(".article h3").allTextContents(),

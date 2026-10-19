@@ -62,7 +62,7 @@
   const categoryNames = {
     general: "综合热点",
     finance: "财经",
-    local: "杭州资讯",
+    local: "杭州周末",
     livelihood: "民生服务",
     tech: "科技动态",
     ai: "人工智能",
@@ -81,6 +81,8 @@
     date: "",
     limit: 12,
     housingLimit: 6,
+    outingType: "all",
+    outingRange: "weekend",
     saved: new Map(),
   };
   const dayFormatter = new Intl.DateTimeFormat("en-CA", {
@@ -97,6 +99,105 @@
     return `${parts.year}-${parts.month}-${parts.day}`;
   };
   state.date = dayOf(Date.now());
+  const outingTypes = {
+    market: "市集节庆",
+    culture: "展览演出",
+    outdoor: "户外周边",
+    family: "亲子体验",
+    city: "城市漫游",
+    sport: "运动观赛",
+  };
+  function outingWeekend() {
+    const start = new Date(dayOf(Date.now()) + "T12:00:00Z");
+    start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7) + 5);
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 1);
+    return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)];
+  }
+  function outingDates(info) {
+    return (
+      info &&
+      /^\d{4}-\d{2}-\d{2}$/.test(info.start) &&
+      /^\d{4}-\d{2}-\d{2}$/.test(info.end) &&
+      info.start <= info.end
+    );
+  }
+  function outingMatches(article) {
+    const info = article.outing || {};
+    const today = dayOf(Date.now());
+    if (info.cancelled || (outingDates(info) && info.end < today)) return false;
+    if (
+      typeof info.until === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(info.until)
+    ) {
+      if (info.until < today) return false;
+      if (state.outingRange === "weekend" && info.until < outingWeekend()[0])
+        return false;
+    }
+    if (state.outingType !== "all" && info.type !== state.outingType)
+      return false;
+    if (
+      state.outingRange === "weekend" &&
+      typeof info.month === "string" &&
+      !outingWeekend().some((day) => day.slice(0, 7) === info.month)
+    )
+      return false;
+    if (outingDates(info)) {
+      const [start, end] = outingWeekend();
+      return (
+        state.outingRange !== "weekend" ||
+        (info.start <= end && info.end >= start)
+      );
+    }
+    if (
+      typeof info.until === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(info.until)
+    )
+      return true;
+    const age = Date.parse(today) - Date.parse(dayOf(article.publishedAt));
+    return age <= (info.type === "outdoor" ? 21 : 10) * 86400000;
+  }
+  function outingSummary(article) {
+    const info = article.outing || {};
+    const dated = outingDates(info);
+    const ended = dated && info.end < dayOf(Date.now());
+    const when = dated
+      ? info.start === info.end
+        ? info.start
+        : info.start + " 至 " + info.end
+      : info.month
+        ? `${info.month} 活动日历，具体日期见原文`
+        : info.until
+          ? `持续至 ${info.until}，开始时间见原文`
+          : "活动时间见原文";
+    return `<p class="outing-summary"><span>${escape(outingTypes[info.type] || "出游消息")}</span><span>${escape(when)}${ended ? " · 已结束" : ""}</span></p>
+      ${info.venue || info.cost ? `<p class="outing-details">${[info.venue, info.cost].filter(Boolean).map(escape).join(" · ")}</p>` : ""}`;
+  }
+  function renderWeekendTools() {
+    const panel = $("#weekend-tools");
+    panel.hidden = state.view !== "local";
+    $("#search").placeholder =
+      state.view === "local" ? "搜索活动、地点或玩法" : "搜索资讯";
+    if (panel.hidden) return;
+    const [start, end] = outingWeekend();
+    const search = state.data.weekendGuide?.search;
+    const last =
+      search?.searchedAt && Number.isFinite(Date.parse(search.searchedAt))
+        ? `最近专题检索 ${formatTime(search.searchedAt)}。`
+        : "";
+    panel.innerHTML = `<div class="outing-ranges" role="group" aria-label="活动日期范围">
+      <button data-outing-range="weekend" aria-pressed="${state.outingRange === "weekend"}">本周末 ${start.slice(5).replace("-", "/")}—${end.slice(5).replace("-", "/")}</button>
+      <button data-outing-range="recent" aria-pressed="${state.outingRange === "recent"}">近期安排</button></div>
+      <div class="outing-types" role="group" aria-label="选择玩法">${Object.entries(
+        { all: "全部玩法", ...outingTypes },
+      )
+        .map(
+          ([key, label]) =>
+            `<button data-outing-type="${key}" aria-pressed="${state.outingType === key}">${escape(label)}</button>`,
+        )
+        .join("")}</div>
+      <p class="outing-checked">每周五16点补充检索（北京时间，可能延迟）。${escape(last)}</p>`;
+  }
   const timeFormatter = new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
     month: "2-digit",
@@ -164,6 +265,7 @@
       toast("已移出收藏");
     } else {
       const article =
+        state.data.weekendArticles?.find((a) => a.id === id) ||
         state.data.articles.find((a) => a.id === id) ||
         state.data.housingArticles?.find((a) => a.id === id) ||
         state.data.gamingArticles?.find((a) => a.id === id) ||
@@ -215,6 +317,7 @@
     return `<article class="article${read ? " read" : ""}" data-article-id="${escape(article.id)}"><div class="article-body">
       ${state.view === "brief" ? `<span class="article-number">${String(index + 1).padStart(2, "0")}</span>` : ""}
       <h3><a href="${escape(articleUrl(article))}" aria-label="${escape(article.title)}" target="_blank" rel="noopener noreferrer">${headline}</a></h3>
+      ${article.category === "local" ? outingSummary(article) : ""}
       ${article.excerpt ? `<p${repeatsTitle ? ' class="repeated-excerpt"' : ""}>${escape(article.excerpt)}</p>` : ""}
       <div class="article-meta"><span>${escape(source.name)}</span><time datetime="${escape(article.publishedAt)}" title="北京时间 ${escape(formatTime(article.publishedAt))}">${escape(relativeTime(article.publishedAt))}</time><span class="category-label ${escape(article.category)}">${categoryNames[article.category]}</span>${read ? '<span class="read-label">已读</span>' : ""}</div>
       ${article.reports?.length ? `<details class="article-reports"><summary>其他 ${article.reports.length} 篇报道</summary>${article.reports.map((a) => `<a href="${escape(articleUrl(a))}" target="_blank" rel="noopener noreferrer">${escape(sourceFor(a).name)} · ${escape(a.title)}</a>`).join("")}</details>` : ""}
@@ -271,7 +374,10 @@
     return selected;
   }
   function hasSectionSnapshot(data = state.data) {
-    return state.view === "models" && Array.isArray(data?.modelReleases);
+    return (
+      (state.view === "models" && Array.isArray(data?.modelReleases)) ||
+      (state.view === "local" && Array.isArray(data?.weekendArticles))
+    );
   }
   function matchingArticles() {
     let articles =
@@ -279,9 +385,11 @@
         ? [...state.saved.values()].sort((a, b) =>
             b.publishedAt.localeCompare(a.publishedAt),
           )
-        : state.view === "models" && Array.isArray(state.data.modelReleases)
-          ? state.data.modelReleases
-          : state.data.articles;
+        : state.view === "local" && Array.isArray(state.data.weekendArticles)
+          ? state.data.weekendArticles
+          : state.view === "models" && Array.isArray(state.data.modelReleases)
+            ? state.data.modelReleases
+            : state.data.articles;
     if (state.view === "gaming")
       articles = [
         ...new Map(
@@ -304,6 +412,7 @@
       ].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
     if (state.filter !== "all")
       articles = articles.filter((a) => a.category === state.filter);
+    if (state.view === "local") articles = articles.filter(outingMatches);
     if (state.source !== "all")
       articles = articles.filter((a) => a.sourceId === state.source);
     if (state.date)
@@ -315,7 +424,7 @@
         .filter(Boolean);
       articles = articles.filter((a) =>
         words.every((word) =>
-          `${a.title} ${a.excerpt} ${sourceFor(a).name}`
+          `${a.title} ${a.excerpt} ${sourceFor(a).name} ${a.outing?.venue || ""} ${outingTypes[a.outing?.type] || ""}`
             .toLocaleLowerCase()
             .includes(word),
         ),
@@ -625,7 +734,7 @@
       all: "最新资讯",
       general: "综合热点",
       finance: "财经",
-      local: "杭州资讯",
+      local: "杭州周末",
       livelihood: "民生服务",
       tech: "科技动态",
       ai: "人工智能",
@@ -673,7 +782,7 @@
         "经济政策、金融市场与企业经营消息，按报道发布时间更新。";
     if (state.view === "local")
       note.textContent =
-        "杭州交通、城市建设、本地活动与公共服务。房市报道和成交数据可在「杭州房价」查看。";
+        "杭州及周边的近期玩法，明确活动日期的优先展示；时间未明确的消息仅作出游线索。";
     if (state.view === "livelihood")
       note.textContent =
         "社保医保、补贴、就业与消费提醒，附官方辟谣消息。各地政策的适用范围和办理时间见原报道。";
@@ -708,6 +817,7 @@
     renderSourceFilter();
     renderHousingPrices();
     renderExchangeRates();
+    renderWeekendTools();
     const articles = matchingArticles();
     const partial =
       hasArchive() &&
@@ -722,6 +832,8 @@
       $("#result-count").textContent = "成交数据 · 楼盘动态";
     if (state.view === "exchange")
       $("#result-count").textContent = "美元 · 日元 · 泰铢";
+    if (state.view === "local")
+      $("#result-count").textContent = `${articles.length} 条出游消息`;
     $("#articles").setAttribute("aria-busy", "false");
     if (articles.length) {
       $("#articles").innerHTML = articles
@@ -732,7 +844,9 @@
       const emptySaved = state.view === "saved" && !state.saved.size;
       const emptyBrief = state.view === "brief" && state.date && !partial;
       $("#articles").innerHTML =
-        `<div class="empty-state">${icon(emptySaved ? "bookmark" : "search")}<h3>${emptySaved ? "还没有收藏" : emptyBrief ? "这一天暂无匹配的资讯" : partial ? "已加载的资讯中暂无匹配" : "暂时没有匹配的资讯"}</h3><p>${emptySaved ? "点击新闻右侧的书签即可收藏。" : emptyBrief ? "可选择其他日期，或查看全部资讯。" : partial ? "正在查找较早资讯；也可调整关键词、来源或日期。" : "试试其他关键词、来源或日期。"}</p><button data-reset>浏览全部资讯</button></div>`;
+        state.view === "local"
+          ? '<div class="empty-state"><h3>暂时没有匹配的出游消息</h3><p>可切换玩法、调整关键词，或查看近期安排。</p><button data-outing-range="recent">查看近期安排</button></div>'
+          : `<div class="empty-state">${icon(emptySaved ? "bookmark" : "search")}<h3>${emptySaved ? "还没有收藏" : emptyBrief ? "这一天暂无匹配的资讯" : partial ? "已加载的资讯中暂无匹配" : "暂时没有匹配的资讯"}</h3><p>${emptySaved ? "点击新闻右侧的书签即可收藏。" : emptyBrief ? "可选择其他日期，或查看全部资讯。" : partial ? "正在查找较早资讯；也可调整关键词、来源或日期。" : "试试其他关键词、来源或日期。"}</p><button data-reset>浏览全部资讯</button></div>`;
     }
     $("#load-more").hidden =
       articles.length <= state.limit &&
@@ -787,6 +901,8 @@
       : "all";
     state.limit = 12;
     state.housingLimit = 6;
+    state.outingType = "all";
+    state.outingRange = "weekend";
     state.query = "";
     state.source = "all";
     state.date = state.view === "brief" ? dayOf(Date.now()) : "";
@@ -870,6 +986,8 @@
           : null;
     if (ids && state.filter === "models")
       (state.data.modelReleases || []).forEach((a) => ids.add(a.sourceId));
+    if (ids && state.filter === "local")
+      (state.data.weekendArticles || []).forEach((a) => ids.add(a.sourceId));
     const sources = state.data.sources.filter(
       (source) => !ids || ids.has(source.id),
     );
@@ -1305,6 +1423,25 @@
       route(true);
       return;
     }
+    const outingType = e.target.closest("[data-outing-type]");
+    const outingRange = e.target.closest("[data-outing-range]");
+    if (outingType || outingRange) {
+      if (
+        outingType &&
+        ["all", ...Object.keys(outingTypes)].includes(
+          outingType.dataset.outingType,
+        )
+      )
+        state.outingType = outingType.dataset.outingType;
+      if (
+        outingRange &&
+        ["weekend", "recent"].includes(outingRange.dataset.outingRange)
+      )
+        state.outingRange = outingRange.dataset.outingRange;
+      state.limit = 12;
+      render();
+      return;
+    }
     const filter = e.target.closest("[data-filter]");
     if (
       filter &&
@@ -1417,6 +1554,10 @@
       data.housingArticles = data.housingArticles
         .filter((a) => validArticle(a) && a.category === "housing")
         .slice(0, 60);
+    if (Array.isArray(data.weekendArticles))
+      data.weekendArticles = data.weekendArticles
+        .filter((a) => validArticle(a) && a.category === "local")
+        .slice(0, 48);
     if (Array.isArray(data.briefArticles))
       data.briefArticles = data.briefArticles.filter(validArticle).slice(0, 80);
     if (Array.isArray(data.briefDays))

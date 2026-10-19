@@ -6,6 +6,7 @@ on:
     paths: ["news/**", "scripts/**", "tests/**", ".github/workflows/news.yml"]
   schedule:
     - cron: "17 * * * *"
+    - cron: "0 8 * * 5"
   workflow_dispatch:
 
 concurrency:
@@ -49,6 +50,8 @@ jobs:
           node --test tests/casual-games-core.cjs tests/extra-games-core.cjs tests/games-core.cjs tests/table-games-core.cjs tests/sw-compat.cjs
       - name: Collect news and retain the previous archive
         run: python scripts/collect_news.py --previous-url https://news.zacai.fun/data/news.json
+      - name: Prepare Hangzhou outings and Friday weekend search
+        run: python scripts/collect_weekend.py --previous-url https://news.zacai.fun/data/latest.json
       - name: Update Hangzhou transaction price reports
         run: python scripts/collect_housing_prices.py --previous-url https://news.zacai.fun/data/latest.json
       - name: Update foreign currency to CNY reference rates

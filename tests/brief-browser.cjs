@@ -37,7 +37,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const categoryNames = {
       general: "综合热点",
       finance: "财经",
-      local: "杭州资讯",
+      local: "杭州周末",
       livelihood: "民生服务",
       housing: "杭州房市",
       ai: "人工智能",

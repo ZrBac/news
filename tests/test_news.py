@@ -189,16 +189,24 @@ class FeedTests(unittest.TestCase):
                 merged = collector.merge_articles([old], [], self.now, {'example': general})
                 self.assertEqual(merged[0]['category'], category)
         for title in ('杭州周末农夫市集开市', '临平亲子手作活动预告', '安吉秋日徒步路线发布',
-                      '杭州书店读书会本周末开放报名', '杭州飞盘运动体验日', '浙江省博物馆特展上新'):
+                      '杭州书店读书会本周末开放报名', '杭州飞盘运动体验日', '浙江省博物馆特展上新',
+                      '铜鉴湖花海露营地开放', '径山露营基地周末预约'):
             self.assertEqual(collector.article_category(title, local), 'local')
         for title in ('北京公交开通', '杭州企业财报公布', '散文随笔：杭州秋日生活与公园', '杭州地铁新线通车',
                       '杭州露营产业市场规模增长', '杭州音乐节圆满落幕', '去年杭州展览回顾',
+                      '杭州演唱会开票', '杭州11月演唱会日历', '杭州歌友会演出预告',
                       '杭州假期活动' + '漫游心情' * 40):
             self.assertIsNone(collector.article_category(title, local))
         self.assertIsNone(collector.article_category('养老行业论坛开幕', livelihood))
         self.assertIsNone(collector.article_category('国联民生股价上涨', livelihood))
         self.assertEqual(collector.article_category('医保新规发布', livelihood), 'livelihood')
-        self.assertEqual(collector.article_category('杭州演唱会开票', dict(general, category='entertainment')), 'local')
+        self.assertEqual(collector.article_category('杭州演唱会开票', dict(general, category='entertainment')), 'entertainment')
+        camping = dict(local, titleFilter='hangzhou-camping')
+        for title in ('杭州露营地推荐', '铜鉴湖花海露营地开放', '径山营地周末预约'):
+            self.assertEqual(collector.article_category(title, camping), 'local')
+        for title in ('杭州演唱会开票', '上海露营地开放', '杭州医保补贴申领',
+                      '巴黎车展变成中国车展_杭州网 - 车行杭州'):
+            self.assertIsNone(collector.article_category(title, camping))
         self.assertEqual(collector.article_category('杭州电竞比赛开幕', dict(general, category='gaming')), 'gaming')
         self.assertEqual(collector.article_category('日本医保新规发布', dict(general, id='chinanews-world')), 'general')
         housing = dict(base, title='杭州二手房成交209套', category='housing')

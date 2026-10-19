@@ -57,7 +57,7 @@ class WeekendTests(unittest.TestCase):
         old = weekend.outing_info(self.article, '活动日期：2025年10月24日至25日')
         self.assertEqual(old['end'], '2025-10-25')
         self.assertFalse(weekend.valid_info({'type': 'culture', 'end': 'bad-date'}))
-        calendar = weekend.outing_info(dict(self.article, title='杭州12月演唱会时间安排'))
+        calendar = weekend.outing_info(dict(self.article, title='杭州12月话剧演出时间安排'))
         self.assertEqual(calendar['month'], '2026-12')
         self.assertNotIn('start', calendar)
 
@@ -110,7 +110,9 @@ class WeekendTests(unittest.TestCase):
                  item('cancelled', {'type': 'culture', 'cancelled': True}),
                  item('old-news', {'type': 'culture'}, publishedAt='2026-10-01T00:00:00Z'),
                  item('walk', {'type': 'outdoor'}, publishedAt='2026-10-08T00:00:00Z'),
-                 item('future', {'type': 'culture', 'start': '2026-11-01', 'end': '2026-11-05'})]
+                 item('future', {'type': 'culture', 'start': '2026-11-01', 'end': '2026-11-05'}),
+                 dict(item('concert', {'type': 'culture', 'start': '2026-10-24', 'end': '2026-10-25'}), title='杭州本周末演唱会'),
+                 dict(item('fan-show', {'type': 'culture'}), title='杭州歌友会演出预告')]
         self.assertEqual([a['id'] for a in weekend.select_articles(items, self.now)], ['weekend', 'walk', 'future'])
 
     def test_six_outing_types_cover_more_than_markets_exhibitions_and_camping(self):

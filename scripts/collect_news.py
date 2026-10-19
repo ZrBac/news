@@ -136,6 +136,8 @@ def article_category(title, source):
     original_title = title
     title = title.rsplit(' - ', 1)[0]
     category = source['category']
+    if source.get('titleFilter') == 'hangzhou-camping':
+        return 'local' if re.search(r'露营|营地', title) and is_hangzhou_local(original_title) else None
     if is_hangzhou_local(original_title):
         return 'local'
     if category == 'entertainment':
@@ -202,16 +204,17 @@ def is_hangzhou_housing(title):
     return bool(HOUSING_LOCATION.search(title) and HOUSING_TOPIC.search(title) and not HOUSING_NOISE.search(title))
 
 
-HANGZHOU_LOCATION = re.compile(r'杭州|杭城|余杭|萧山|临平|钱塘|拱墅|临安|富阳|滨江区|上城区|西湖区|建德|淳安|桐庐|良渚|西溪|龙坞|千岛湖|湘湖|莫干山|安吉|德清|海宁|绍兴|桐乡|湖州|乌镇|南浔|西湖(?:边|景区|公园)|浙江省博物馆|浙江美术馆|中国丝绸博物馆|中国茶叶博物馆|中国动漫博物馆|天目里|武林广场')
+HANGZHOU_LOCATION = re.compile(r'杭州|杭城|余杭|萧山|临平|钱塘|拱墅|临安|富阳|滨江区|上城区|西湖区|建德|淳安|桐庐|良渚|西溪|龙坞|千岛湖|湘湖|铜鉴湖|径山|莫干山|安吉|德清|海宁|绍兴|桐乡|湖州|乌镇|南浔|西湖(?:边|景区|公园)|浙江省博物馆|浙江美术馆|中国丝绸博物馆|中国茶叶博物馆|中国动漫博物馆|天目里|武林广场')
 LOCAL_SERVICE_TOPIC = re.compile(
     r'市集|集市|夜市|早市|庙会|生活节|美食节|咖啡节|啤酒节|文创节|游园会|'
     r'展览|特展|新展|看展|艺术展|摄影展|书画展|博物馆.*(?:展|开放日)|漫展|文博会|宠物展|花展|车展|书展|茶博会|'
-    r'演出|演唱会|音乐会|音乐节|戏剧|话剧|脱口秀|露天电影|放映|电影节|'
+    r'演出|音乐会|音乐节|戏剧|话剧|脱口秀|露天电影|放映|电影节|'
     r'露营|营地|徒步|登山|骑行|绿道.*(?:攻略|路线|游玩)|赏秋|赏桂|赏花|晒秋|银杏|红叶|花海|观鸟|采摘|温泉|'
     r'亲子.{0,12}(?:活动|游玩|体验|乐园|路线|研学|演出|手作|运动)|遛娃|手作|手工|工作坊|非遗体验|社教活动|读书会|阅读会|公益讲座|科普活动|体验课|研学|沙龙|开放日|游线|书店.*(?:活动|讲座)|'
     r'灯光秀|音乐喷泉|烟花|灯会|夜游|City\s*Walk|城市漫游|秋游|周末.*(?:活动|攻略|去哪)|'
     r'(?:活动|游玩)(?:汇总|预告|指南|清单|攻略)|'
     r'运动体验|赛事.*(?:报名|观赛|门票)|飞盘|桨板|皮划艇|攀岩|公园.*(?:开放|开园|游玩|攻略)', re.I)
+LOCAL_EXCLUDED = re.compile(r'演唱[会會]|巡回演唱|歌友[会會]')
 LOCAL_NOISE = re.compile(r'散文|随笔|诗歌|抒怀|股价|股票|股市|财报|控股股东|学术活动|学术年会|举行纪念|揭牌|签约|主题党日|党支部|'
                          r'招聘|医保|社保|征集意见|工作会议|调研|开工|建设项目|融资|产值|市场规模|产业发展|游客量|客流量|接待游客|消费数据|'
                          r'圆满落幕|圆满收官|活动回顾|赛事回顾|精彩回顾|昨日.*(?:举行|举办)|去年|往年|招代理|加群|返现|'
@@ -231,7 +234,7 @@ INTERNATIONAL_SOURCES = {'chinanews-world', 'dw', 'rfi'}
 def is_hangzhou_local(title):
     title = unicodedata.normalize('NFKC', title.rsplit(' - ', 1)[0])
     return bool(len(title) <= 100 and HANGZHOU_LOCATION.search(title) and LOCAL_SERVICE_TOPIC.search(title)
-                and not LOCAL_NOISE.search(title) and not is_hangzhou_housing(title))
+                and not LOCAL_EXCLUDED.search(title) and not LOCAL_NOISE.search(title) and not is_hangzhou_housing(title))
 
 
 def is_livelihood(title):

@@ -123,6 +123,7 @@
     );
   }
   function outingMatches(article) {
+    if (/演唱[会會]|巡回演唱|歌友[会會]/.test(article.title)) return false;
     const info = article.outing || {};
     const today = dayOf(Date.now());
     if (info.cancelled || (outingDates(info) && info.end < today)) return false;
@@ -176,6 +177,21 @@
   function renderWeekendTools() {
     const panel = $("#weekend-tools");
     panel.hidden = state.view !== "local";
+    const words = state.query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    const places = $$(".camping-place");
+    places.forEach((place) => {
+      place.hidden = !words.every((word) =>
+        `${place.dataset.search} ${place.textContent}`
+          .toLocaleLowerCase()
+          .includes(word),
+      );
+    });
+    const visible = places.filter((place) => !place.hidden).length;
+    $("#camping-places").hidden =
+      panel.hidden ||
+      !["all", "outdoor"].includes(state.outingType) ||
+      !visible;
+    $("#camping-count").textContent = `${visible} 个地点参考`;
     $("#search").placeholder =
       state.view === "local" ? "搜索活动、地点或玩法" : "搜索资讯";
     if (panel.hidden) return;
@@ -1570,7 +1586,9 @@
         .filter((a) => validArticle(a) && a.category === "local")
         .slice(0, 48);
     if (Array.isArray(data.briefArticles))
-      data.briefArticles = data.briefArticles.filter(validArticle).slice(0, 100);
+      data.briefArticles = data.briefArticles
+        .filter(validArticle)
+        .slice(0, 100);
     if (Array.isArray(data.briefDays))
       data.briefDays = data.briefDays
         .filter(

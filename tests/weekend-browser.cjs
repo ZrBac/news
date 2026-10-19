@@ -68,9 +68,14 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       make("weekend-weekday", "杭州周内市集", "market", {
         until: "2026-10-23",
       }),
-      make("weekend-calendar", "杭州11月演唱会日历", "culture", {
+      make("weekend-calendar", "杭州11月话剧演出日历", "culture", {
         month: "2026-11",
       }),
+      make("weekend-concert", "杭州本周末演唱会开票", "culture", {
+        start: "2026-10-24",
+        end: "2026-10-25",
+      }),
+      make("weekend-fan-show", "杭州歌友会演出预告", "culture"),
       {
         ...make("weekend-old", "杭州旧展览消息", "culture"),
         publishedAt: "2026-10-01T02:00:00Z",
@@ -106,6 +111,23 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert(await page.locator(".filter-tabs").isHidden());
     assert(await page.locator(".sidebar").isHidden());
     assert.equal(await page.locator(".article").count(), 6);
+    assert.equal(
+      await page.locator('[data-article-id="weekend-concert"]').count(),
+      0,
+    );
+    assert(await page.locator("#camping-places").isVisible());
+    await page.locator("#camping-places > summary").click();
+    assert.equal(await page.locator(".camping-place:visible").count(), 6);
+    assert.equal(
+      await page
+        .locator('.camping-links a[href^="https://uri.amap.com/search?"]')
+        .count(),
+      6,
+    );
+    await page.fill("#search", "铜鉴湖");
+    assert.equal(await page.locator(".camping-place:visible").count(), 1);
+    assert.match(await page.locator("#camping-count").innerText(), /1 个地点/);
+    await page.fill("#search", "");
     assert.equal(await page.locator("[data-outing-type]").count(), 7);
     assert.match(
       await page.locator("#weekend-tools").innerText(),
@@ -128,6 +150,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       "sport",
     ]) {
       await page.locator(`[data-outing-type="${type}"]`).click();
+      assert.equal(
+        await page.locator("#camping-places").isVisible(),
+        type === "outdoor",
+      );
       assert.equal(await page.locator(".article").count(), 1);
       assert.equal(
         await page
@@ -139,6 +165,14 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator('[data-outing-type="all"]').click();
     await page.locator('[data-outing-range="recent"]').click();
     assert.equal(await page.locator(".article").count(), 9);
+    assert.equal(
+      await page.locator('[data-article-id="weekend-concert"]').count(),
+      0,
+    );
+    assert.equal(
+      await page.locator('[data-article-id="weekend-fan-show"]').count(),
+      0,
+    );
     await page.fill("#search", "良渚暖村");
     await page.waitForFunction(
       () => document.querySelectorAll(".article").length === 1,
@@ -177,6 +211,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       0,
     );
     await page.locator('[data-view="local"]').click();
+    await page.locator("#camping-places > summary").click();
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 844 });
       assert(
@@ -197,6 +232,12 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.reload();
     await page.evaluate(() => window.newsInitialLoad);
     assert.equal(await page.locator(".article").count(), 6);
+    await page.locator("#camping-places > summary").click();
+    assert.equal(await page.locator(".camping-place:visible").count(), 6);
+    assert.equal(
+      await page.locator('[data-article-id="weekend-concert"]').count(),
+      0,
+    );
     await page.evaluate(() => {
       Date.now = () => Date.parse("2026-10-26T10:00:00Z");
     });
@@ -216,7 +257,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: separate outings navigation and news feeds, six outing types, weekend/recent dates, expired/cancelled suppression, venue search, dated bookmark backup/import, four widths, offline reopening and expiry, no archive downloads.",
+      "PASS: separate outings, concert filtering online/offline, six searchable camping references with map links, six outing types, dates/expiry, venue search, bookmark backup/import, four widths, no archive downloads.",
     );
   } finally {
     await browser.close();

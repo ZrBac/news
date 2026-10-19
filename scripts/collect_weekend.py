@@ -18,7 +18,7 @@ ROOT = Path(__file__).resolve().parents[1]
 GROUPS = {
     'market': r'市集|集市|夜市|早市|庙会|生活节|美食节|咖啡节|啤酒节|游园会',
     'family': r'亲子|遛娃|手作|手工|工作坊|非遗体验|社教|读书会|阅读会|讲座|体验课|研学|沙龙|科普',
-    'culture': r'展览|特展|新展|看展|博物馆|艺术|摄影展|书画|演出|演唱会|音乐|戏剧|话剧|脱口秀|放映|电影节|漫展|文博会|宠物展|花展|车展|书展|茶博会',
+    'culture': r'展览|特展|新展|看展|博物馆|艺术|摄影展|书画|演出|音乐|戏剧|话剧|脱口秀|放映|电影节|漫展|文博会|宠物展|花展|车展|书展|茶博会',
     'sport': r'运动体验|观赛|赛事|飞盘|桨板|皮划艇|攀岩',
     'outdoor': r'露营|营地|徒步|登山|骑行|绿道|赏秋|赏桂|赏花|晒秋|银杏|红叶|花海|观鸟|采摘|温泉|秋游',
     'city': r'夜游|灯光|喷泉|灯会|烟花|City\s*Walk|城市漫游|公园|街区',
@@ -262,6 +262,8 @@ def select_articles(articles, now):
             expired[key] = max(expired.get(key, ''), deadline)
     selected = []
     for article in articles:
+        if news.LOCAL_EXCLUDED.search(article['title']):
+            continue
         info = article['outing']
         if info.get('cancelled') or info.get('end', info.get('until', today.isoformat())) < today.isoformat():
             continue

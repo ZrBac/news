@@ -117,14 +117,14 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     assert(await page.locator("#camping-places").isVisible());
     await page.locator("#camping-places > summary").click();
-    assert.equal(await page.locator(".camping-place:visible").count(), 6);
+    assert.equal(await page.locator(".camping-place:visible").count(), 2);
     assert.equal(
       await page
         .locator('.camping-links a[href^="https://uri.amap.com/search?"]')
         .count(),
-      6,
+      2,
     );
-    await page.fill("#search", "铜鉴湖");
+    await page.fill("#search", "风笑岭");
     assert.equal(await page.locator(".camping-place:visible").count(), 1);
     assert.match(await page.locator("#camping-count").innerText(), /1 个地点/);
     await page.fill("#search", "");
@@ -233,7 +233,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.evaluate(() => window.newsInitialLoad);
     assert.equal(await page.locator(".article").count(), 6);
     await page.locator("#camping-places > summary").click();
-    assert.equal(await page.locator(".camping-place:visible").count(), 6);
+    assert.equal(await page.locator(".camping-place:visible").count(), 2);
     assert.equal(
       await page.locator('[data-article-id="weekend-concert"]').count(),
       0,
@@ -257,7 +257,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: separate outings, concert filtering online/offline, six searchable camping references with map links, six outing types, dates/expiry, venue search, bookmark backup/import, four widths, no archive downloads.",
+      "PASS: separate outings, concert filtering online/offline, two searchable drive-in cooking camps with map links, six outing types, dates/expiry, venue search, bookmark backup/import, four widths, no archive downloads.",
     );
   } finally {
     await browser.close();

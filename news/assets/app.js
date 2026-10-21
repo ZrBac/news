@@ -1185,8 +1185,8 @@
               ? "—"
               : `${Math.round(quality.duplicateRate * 100)}%`;
           return (
-            `<div class="source-row" data-source-id="${escape(source.id)}"><div class="source-name"><a href="${escape(safeUrl(source.home))}" target="_blank" rel="noopener noreferrer">${escape(source.name)} ${icon("arrow-up-right")}</a><small>${source.latestAt ? "最近发布：" + escape(formatTime(source.latestAt)) : "本轮未取得有效资讯"}</small></div>` +
-            `<span class="source-status ${source.status === "ok" ? "" : "unavailable"}">${source.status === "ok" ? "● 本轮已连接" : "○ 暂不可用"}</span>` +
+            `<div class="source-row" data-source-id="${escape(source.id)}"><div class="source-name"><a href="${escape(safeUrl(source.home))}" target="_blank" rel="noopener noreferrer">${escape(source.name)} ${icon("arrow-up-right")}</a><small>${source.latestAt ? "最近发布：" + escape(formatTime(source.latestAt)) : source.status === "ok" ? "订阅中暂无可收录的近期资讯" : "本轮未取得有效资讯"}</small></div>` +
+            `<span class="source-status ${source.status === "ok" ? "" : "unavailable"}">${source.status === "ok" ? (source.fetchedCount === 0 ? "● 已连接 · 暂无近期内容" : "● 本轮已连接") : "○ 暂不可用"}</span>` +
             `<dl class="source-metrics"><div><dt>近7天新增</dt><dd>${quality ? quality.newCount + " 条" : "—"}</dd></div><div><dt>同标题重复率</dt><dd>${rate}</dd></div><div><dt>连续未新增</dt><dd>${quality?.noNewDays == null ? "—" : quality.noNewDays + " 天"}</dd></div></dl>` +
             (flags.length
               ? `<p class="source-flags">${flags.map(escape).join(" · ")}</p>`
@@ -1437,7 +1437,7 @@
       renderExchangeRates();
       return;
     }
-    const viewLink = e.target.closest("a[data-view]");
+    const viewLink = e.target.closest("a[data-view], a.brand");
     if (
       viewLink &&
       !e.ctrlKey &&
@@ -1447,7 +1447,7 @@
       e.button === 0
     ) {
       e.preventDefault();
-      const hash = "#" + viewLink.dataset.view;
+      const hash = "#" + (viewLink.dataset.view || "brief");
       if (location.hash !== hash) history.pushState(null, "", hash);
       // A repeated click should also reset the date/search instead of doing nothing.
       route(true);

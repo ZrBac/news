@@ -37,6 +37,25 @@ class FeedTests(unittest.TestCase):
         self.assertEqual(items[0]['url'], 'https://example.com/story')
         self.assertEqual(items[0]['category'], 'ai')
 
+    def test_reachable_empty_feeds_are_not_outages_but_invalid_responses_still_fail(self):
+        source = dict(self.source, name='Example', home='https://example.com', color='#777777',
+                      url='https://example.com/feed')
+        for body in (b'<rss><channel><title>Example</title></channel></rss>',
+                     self.feed(date='Wed, 20 Aug 2025 03:00:00 GMT')):
+            with self.subTest(body=body), patch.object(collector, 'fetch', return_value=body):
+                articles, status = collector.collect(source, self.now)
+                self.assertEqual(articles, [])
+                self.assertEqual(status['status'], 'ok')
+                self.assertEqual(status['fetchedCount'], 0)
+                self.assertIsNone(status['latestAt'])
+        for body in (b'<html><body>Access denied</body></html>', b'<rss>', b'<rss/>'):
+            with self.subTest(body=body), patch.object(collector, 'fetch', return_value=body):
+                articles, status = collector.collect(source, self.now)
+                self.assertEqual(articles, [])
+                self.assertEqual(status['status'], 'unavailable')
+        with patch.object(collector, 'fetch', side_effect=TimeoutError):
+            self.assertEqual(collector.collect(source, self.now)[1]['status'], 'unavailable')
+
     def test_google_redirect_uses_publisher_url_and_rejects_unsafe_responses(self):
         url = 'https://news.google.com/rss/articles/CBMiExample?oc=5'
         page = b'<c-wiz data-n-a-ts="1791858350" data-n-a-sg="public-signature">'

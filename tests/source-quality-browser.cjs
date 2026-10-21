@@ -16,6 +16,8 @@ const legacy = require("./legacy-safari.cjs");
     // a real publisher's temporary outage must not change its expected rows.
     for (const source of sources) source.status = "ok";
     const [busy, quiet, failed] = sources.slice(0, 3);
+    quiet.fetchedCount = 0;
+    quiet.latestAt = null;
     failed.status = "unavailable";
     const updatedAt = latest.updatedAt;
     const startedAt = new Date(
@@ -104,6 +106,12 @@ const legacy = require("./legacy-safari.cjs");
       assert.match(
         await page.locator(`[data-source-id="${quiet.id}"]`).textContent(),
         /8 天未新增/,
+      );
+      assert.match(
+        await page
+          .locator(`[data-source-id="${quiet.id}"] .source-status`)
+          .textContent(),
+        /已连接.*暂无近期内容/,
       );
       await page.selectOption("#source-quality-sort", "new");
       assert.equal(

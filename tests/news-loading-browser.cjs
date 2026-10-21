@@ -133,6 +133,19 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     await page.unroute("**/data/latest.json*");
     await page.unroute("**/data/status.json");
+    let homeDocumentReads = 0;
+    page.on("request", (request) => {
+      if (request.isNavigationRequest() && request.frame() === page.mainFrame())
+        homeDocumentReads++;
+    });
+    await page.locator(".brand").click();
+    await page.locator('[data-filter="finance"]').click();
+    assert.equal(
+      homeDocumentReads,
+      0,
+      "returning home keeps the loaded page ready for the next click",
+    );
+    assert.equal(await page.locator("#section-title").innerText(), "财经");
     await context.setOffline(true);
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.locator(".article").first().waitFor();

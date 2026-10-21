@@ -411,6 +411,9 @@ def parse_feed(data, source, now):
     root = ET.fromstring(data)
     articles = []
     rss1 = '{http://purl.org/rss/1.0/}'
+    if not ((root.tag == 'rss' and root.find('channel') is not None)
+            or root.tag == '{http://www.w3.org/1999/02/22-rdf-syntax-ns#}RDF'):
+        raise ValueError('Response is not a supported RSS document')
     # RSS 1.0/RDF uses namespaced fields (for example DW); RSS 2.0 does not.
     items = root.findall('.//item') + root.findall(f'.//{rss1}item')
     for item in items[:120]:
@@ -510,9 +513,9 @@ def collect(source, now):
     try:
         parser = parse_housing_daily if source.get('format') == 'housing-daily-list' else parse_feed
         articles = parser(fetch(source['url']), source, now)
-        if not articles:
+        if not articles and source.get('format') == 'housing-daily-list':
             raise ValueError('No dated articles from the last 30 days')
-        status.update(status='ok', fetchedCount=len(articles), latestAt=max(a['publishedAt'] for a in articles),
+        status.update(status='ok', fetchedCount=len(articles), latestAt=max((a['publishedAt'] for a in articles), default=None),
                       durationMs=round((time.monotonic() - started) * 1000))
         return articles, status
     except Exception as exc:

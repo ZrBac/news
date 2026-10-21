@@ -430,7 +430,10 @@
     // Outings have their own entrance and list; keep saved outings accessible.
     if (!["local", "saved"].includes(state.view))
       articles = articles.filter((a) => a.category !== "local");
-    if (state.view === "local") articles = articles.filter(outingMatches);
+    if (state.view === "local")
+      articles = articles
+        .filter(outingMatches)
+        .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
     if (state.source !== "all")
       articles = articles.filter((a) => a.sourceId === state.source);
     if (state.date)
@@ -804,7 +807,7 @@
         "经济政策、金融市场与企业经营消息，按报道发布时间更新。";
     if (state.view === "local")
       note.textContent =
-        "杭州及周边去哪玩。看本周末，也看近期的展览、演出、户外和城市活动；具体时间及报名以原文为准。";
+        "杭州及周边的近期玩法，按消息发布时间从新到旧排列。活动日期单独标注，具体时间及报名以原文为准。";
     if (state.view === "livelihood")
       note.textContent =
         "社保医保、补贴、就业与消费提醒，附官方辟谣消息。各地政策的适用范围和办理时间见原报道。";

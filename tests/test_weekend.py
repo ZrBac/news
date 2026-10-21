@@ -113,7 +113,20 @@ class WeekendTests(unittest.TestCase):
                  item('future', {'type': 'culture', 'start': '2026-11-01', 'end': '2026-11-05'}),
                  dict(item('concert', {'type': 'culture', 'start': '2026-10-24', 'end': '2026-10-25'}), title='杭州本周末演唱会'),
                  dict(item('fan-show', {'type': 'culture'}), title='杭州歌友会演出预告')]
-        self.assertEqual([a['id'] for a in weekend.select_articles(items, self.now)], ['weekend', 'walk', 'future'])
+        self.assertEqual([a['id'] for a in weekend.select_articles(items, self.now)], ['weekend', 'future', 'walk'])
+
+    def test_new_reports_precede_older_dated_events_without_changing_their_dates(self):
+        older = dict(self.article, id='older', title='乌镇戏剧节舞台介绍',
+                     publishedAt='2026-10-18T01:00:00Z',
+                     outing={'type': 'culture', 'start': '2026-10-15', 'end': '2026-10-25',
+                             'checkedAt': '2026-10-19T04:00:00Z'})
+        newer = dict(self.article, id='newer', title='杭州新展览消息',
+                     url='https://example.com/new-exhibition',
+                     publishedAt='2026-10-19T03:00:00Z', outing={'type': 'culture'})
+        selected = weekend.select_articles([older, newer], self.now)
+        self.assertEqual([a['id'] for a in selected], ['newer', 'older'])
+        self.assertEqual(selected[1]['publishedAt'], '2026-10-18T01:00:00Z')
+        self.assertEqual(selected[1]['outing']['end'], '2026-10-25')
 
     def test_six_outing_types_cover_more_than_markets_exhibitions_and_camping(self):
         examples = {'market': '杭州咖啡市集', 'culture': '杭州话剧演出', 'outdoor': '安吉山野徒步',

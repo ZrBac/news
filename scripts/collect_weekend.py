@@ -253,7 +253,6 @@ def event_key(article):
 
 def select_articles(articles, now):
     today = now.astimezone(news.BEIJING).date()
-    start, end = weekend_days(now)
     expired = {}
     for article in articles:
         key = event_key(article)
@@ -274,14 +273,9 @@ def select_articles(articles, now):
         if 'end' not in info and 'until' not in info and age > (21 if info['type'] == 'outdoor' else 10):
             continue
         selected.append(article)
-    def priority(article):
-        info = article['outing']
-        deadline = info.get('end', info.get('until'))
-        overlaps = info.get('start', start.isoformat()) <= end.isoformat() and (deadline or end.isoformat()) >= start.isoformat()
-        rank = 0 if deadline and overlaps else 1 if deadline and deadline < start.isoformat() else 2 if not deadline else 3
-        return rank, -news.parse_date(article['publishedAt']).timestamp()
     result, urls, events = [], set(), set()
-    for article in sorted(selected, key=priority):
+    # Event dates determine eligibility, not which old report stays at the top.
+    for article in sorted(selected, key=lambda a: news.parse_date(a['publishedAt']), reverse=True):
         url = article.get('originalUrl', article['url'])
         key = event_key(article)
         if url in urls or key and key in events:

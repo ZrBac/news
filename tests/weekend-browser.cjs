@@ -81,6 +81,13 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         publishedAt: "2026-10-01T02:00:00Z",
       },
     ];
+    // Simulate an older cached snapshot with dated reports pinned first.
+    latest.weekendArticles.find((a) => a.id === "weekend-culture").publishedAt =
+      "2026-10-21T02:00:00Z";
+    latest.weekendArticles.find((a) => a.id === "weekend-outdoor").publishedAt =
+      "2026-10-23T09:00:00Z";
+    latest.weekendArticles.find((a) => a.id === "weekend-city").publishedAt =
+      "2026-10-23T08:00:00Z";
     latest.weekendGuide = {
       search: { searchedAt: "2026-10-23T08:00:00Z", status: "ok" },
     };
@@ -111,6 +118,14 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert(await page.locator(".filter-tabs").isHidden());
     assert(await page.locator(".sidebar").isHidden());
     assert.equal(await page.locator(".article").count(), 6);
+    assert.deepEqual(
+      await page
+        .locator(".article")
+        .evaluateAll((nodes) =>
+          nodes.slice(0, 2).map((node) => node.dataset.articleId),
+        ),
+      ["weekend-outdoor", "weekend-city"],
+    );
     assert.equal(
       await page.locator('[data-article-id="weekend-concert"]').count(),
       0,
@@ -165,6 +180,14 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator('[data-outing-type="all"]').click();
     await page.locator('[data-outing-range="recent"]').click();
     assert.equal(await page.locator(".article").count(), 9);
+    const recentTimes = await page
+      .locator(".article time")
+      .evaluateAll((nodes) => nodes.map((node) => Date.parse(node.dateTime)));
+    assert(
+      recentTimes.every(
+        (time, index) => index === 0 || time <= recentTimes[index - 1],
+      ),
+    );
     assert.equal(
       await page.locator('[data-article-id="weekend-concert"]').count(),
       0,
@@ -232,6 +255,14 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.reload();
     await page.evaluate(() => window.newsInitialLoad);
     assert.equal(await page.locator(".article").count(), 6);
+    assert.deepEqual(
+      await page
+        .locator(".article")
+        .evaluateAll((nodes) =>
+          nodes.slice(0, 2).map((node) => node.dataset.articleId),
+        ),
+      ["weekend-outdoor", "weekend-city"],
+    );
     await page.locator("#camping-places > summary").click();
     assert.equal(await page.locator(".camping-place:visible").count(), 2);
     assert.equal(
@@ -257,7 +288,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: separate outings, concert filtering online/offline, two searchable drive-in cooking camps with map links, six outing types, dates/expiry, venue search, bookmark backup/import, four widths, no archive downloads.",
+      "PASS: newest outings first online/offline with old cached order, separate navigation, concert filtering, cooking camps, six outing types, dates/expiry, venue search, bookmarks, four widths, no archive downloads.",
     );
   } finally {
     await browser.close();

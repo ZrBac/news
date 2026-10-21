@@ -9,7 +9,7 @@
     "dev": "wrangler dev"
   },
   "devDependencies": {
-    "miniflare": "5.20260921.0-alpha",
-    "wrangler": "4.137.0"
+    "miniflare": "5.20261006.1-alpha",
+    "wrangler": "4.149.0"
   }
 }

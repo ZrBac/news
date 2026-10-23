@@ -178,23 +178,37 @@
     const panel = $("#weekend-tools");
     panel.hidden = state.view !== "local";
     const words = state.query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
-    const places = $$(".camping-place");
-    places.forEach((place) => {
-      place.hidden = !words.every((word) =>
-        `${place.dataset.search} ${place.textContent}`
-          .toLocaleLowerCase()
-          .includes(word),
-      );
+    let referenceCount = 0;
+    $$("[data-place-group]").forEach((group) => {
+      const places = [...group.querySelectorAll("[data-place-types]")];
+      places.forEach((place) => {
+        place.hidden =
+          (state.outingType !== "all" &&
+            !place.dataset.placeTypes.split(" ").includes(state.outingType)) ||
+          !words.every((word) =>
+            `${place.dataset.search} ${place.textContent}`
+              .toLocaleLowerCase()
+              .includes(word),
+          );
+      });
+      const visible = places.filter((place) => !place.hidden).length;
+      group.hidden = panel.hidden || !visible;
+      group.querySelector("[data-place-count]").textContent =
+        `${visible} 个地点参考`;
+      if (!group.hidden) referenceCount += visible;
+      // Search exposes matching places, then restores the reader's expansion choice.
+      if (words.length && !group.hidden) {
+        if (group.dataset.beforeSearch === undefined)
+          group.dataset.beforeSearch = String(group.open);
+        group.open = true;
+      } else if (group.dataset.beforeSearch !== undefined) {
+        group.open = group.dataset.beforeSearch === "true";
+        delete group.dataset.beforeSearch;
+      }
     });
-    const visible = places.filter((place) => !place.hidden).length;
-    $("#camping-places").hidden =
-      panel.hidden ||
-      !["all", "outdoor"].includes(state.outingType) ||
-      !visible;
-    $("#camping-count").textContent = `${visible} 个地点参考`;
     $("#search").placeholder =
       state.view === "local" ? "搜索活动、地点或玩法" : "搜索资讯";
-    if (panel.hidden) return;
+    if (panel.hidden) return 0;
     const [start, end] = outingWeekend();
     const search = state.data.weekendGuide?.search;
     const last =
@@ -213,6 +227,7 @@
         )
         .join("")}</div>
       <p class="outing-checked">来源每小时检查；每天9点、16点补充检索（北京时间，可能延迟）。${escape(last)}</p>`;
+    return referenceCount;
   }
   const timeFormatter = new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
@@ -842,7 +857,7 @@
     renderSourceFilter();
     renderHousingPrices();
     renderExchangeRates();
-    renderWeekendTools();
+    const referenceCount = renderWeekendTools();
     const articles = matchingArticles();
     const partial =
       hasArchive() &&
@@ -858,7 +873,8 @@
     if (state.view === "exchange")
       $("#result-count").textContent = "美元 · 日元 · 泰铢";
     if (state.view === "local")
-      $("#result-count").textContent = `${articles.length} 条出游消息`;
+      $("#result-count").textContent =
+        `${articles.length} 条出游消息${referenceCount ? ` · ${referenceCount} 个地点参考` : ""}`;
     $("#articles").setAttribute("aria-busy", "false");
     if (articles.length) {
       $("#articles").innerHTML = articles
@@ -870,7 +886,9 @@
       const emptyBrief = state.view === "brief" && state.date && !partial;
       $("#articles").innerHTML =
         state.view === "local"
-          ? '<div class="empty-state"><h3>暂时没有匹配的出游消息</h3><p>可切换玩法、调整关键词，或查看近期安排。</p><button data-outing-range="recent">查看近期安排</button></div>'
+          ? referenceCount
+            ? '<div class="empty-state"><p>地点参考见上方；当前筛选下暂无近期活动消息。</p></div>'
+            : '<div class="empty-state"><h3>暂时没有匹配的出游消息</h3><p>可切换玩法、调整关键词，或查看近期安排。</p><button data-outing-range="recent">查看近期安排</button></div>'
           : `<div class="empty-state">${icon(emptySaved ? "bookmark" : "search")}<h3>${emptySaved ? "还没有收藏" : emptyBrief ? "这一天暂无匹配的资讯" : partial ? "已加载的资讯中暂无匹配" : "暂时没有匹配的资讯"}</h3><p>${emptySaved ? "点击新闻右侧的书签即可收藏。" : emptyBrief ? "可选择其他日期，或查看全部资讯。" : partial ? "正在查找较早资讯；也可调整关键词、来源或日期。" : "试试其他关键词、来源或日期。"}</p><button data-reset>浏览全部资讯</button></div>`;
     }
     $("#load-more").hidden =

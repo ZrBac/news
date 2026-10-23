@@ -516,36 +516,35 @@ span[data-icon] {
   line-height: 1.7;
   color: var(--secondary);
 }
-.camping-places {
+.place-guide {
   margin: 12px 0;
   border-top: 1px solid var(--line);
-  border-bottom: 1px solid var(--line);
 }
-.camping-places > summary {
+.place-guide > summary {
   padding: 12px 0;
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
 }
-.camping-places > summary span {
+.place-guide > summary span {
   margin-left: 8px;
   color: var(--secondary);
   font-size: 12px;
   font-weight: 400;
 }
-.camping-intro,
-.camping-note {
+.place-intro,
+.place-note {
   color: var(--secondary);
   font-size: 12px;
   line-height: 1.8;
   margin: 0 0 12px;
 }
-.camping-intro a,
-.camping-links a {
+.place-intro a,
+.place-links a {
   text-decoration: underline;
   text-underline-offset: 3px;
 }
-.camping-grid {
+.place-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 0 24px;
@@ -553,26 +552,26 @@ span[data-icon] {
   padding: 0;
   margin: 0 0 12px;
 }
-.camping-place {
+.place-card {
   min-width: 0;
   padding: 12px 0;
   border-top: 1px solid var(--line);
 }
-.camping-area {
+.place-area {
   color: var(--secondary);
   font-size: 11px;
 }
-.camping-place h3 {
+.place-card h3 {
   font-size: 15px;
   line-height: 1.6;
   margin: 4px 0;
 }
-.camping-place p {
+.place-card p {
   font-size: 12px;
   line-height: 1.8;
   margin: 4px 0;
 }
-.camping-links {
+.place-links {
   display: flex;
   flex-wrap: wrap;
   gap: 8px 14px;
@@ -581,7 +580,7 @@ span[data-icon] {
   margin-top: 8px;
 }
 @media (max-width: 600px) {
-  .camping-grid {
+  .place-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 }

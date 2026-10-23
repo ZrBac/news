@@ -131,6 +131,54 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       0,
     );
     assert(await page.locator("#camping-places").isVisible());
+    assert(await page.locator("#hiking-places").isVisible());
+    assert(await page.locator("#rainy-places").isVisible());
+    assert.equal(await page.locator("[data-place-group][open]").count(), 0);
+    assert.match(
+      await page.locator("#result-count").innerText(),
+      /13 个地点参考/,
+    );
+    // Searching opens just the matching reference group, without relying on feeds.
+    await page.fill("#search", "宝石山");
+    assert.equal(await page.locator(".place-card:visible").count(), 1);
+    assert.match(
+      await page.locator(".place-card:visible").innerText(),
+      /保俶塔.*初阳台/s,
+    );
+    assert.match(
+      await page.locator("#result-count").innerText(),
+      /0 条出游消息 · 1 个地点参考/,
+    );
+    assert.match(await page.locator("#articles").innerText(), /地点参考见上方/);
+    assert(await page.locator("#rainy-places").isHidden());
+    await page.fill("#search", "");
+    assert.equal(await page.locator("[data-place-group][open]").count(), 0);
+    await page.fill("#search", "雨天");
+    assert.equal(await page.locator(".place-card:visible").count(), 5);
+    assert.match(
+      await page.locator("#rainy-places").innerText(),
+      /周末及法定节假日仍需预约/,
+    );
+    assert(await page.locator("#hiking-places").isHidden());
+    await page.fill("#search", "雨天 自然");
+    assert.equal(await page.locator(".place-card:visible").count(), 1);
+    assert.match(
+      await page.locator(".place-card:visible h3").innerText(),
+      /浙江自然博物院/,
+    );
+    await page.fill("#search", "不存在的地点");
+    assert.equal(await page.locator("[data-place-group]:visible").count(), 0);
+    assert.match(await page.locator("#articles").innerText(), /暂时没有匹配/);
+    await page.fill("#search", "");
+    const referenceLinks = await page
+      .locator("#hiking-places a, #rainy-places a")
+      .evaluateAll((nodes) => nodes.map((a) => ({ href: a.href, rel: a.rel })));
+    assert.equal(referenceLinks.length, 22);
+    assert(
+      referenceLinks.every(
+        (a) => a.href.startsWith("https://") && a.rel.includes("noopener"),
+      ),
+    );
     await page.locator("#camping-places > summary").click();
     assert.equal(await page.locator(".camping-place:visible").count(), 2);
     assert.equal(
@@ -169,6 +217,20 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         await page.locator("#camping-places").isVisible(),
         type === "outdoor",
       );
+      assert.equal(
+        await page.locator("#hiking-places").isVisible(),
+        type === "outdoor",
+      );
+      assert.equal(
+        await page.locator("#rainy-places").isVisible(),
+        ["culture", "family", "city"].includes(type),
+      );
+      if (["culture", "family", "city"].includes(type)) {
+        assert.equal(
+          await page.locator("#rainy-places .place-card:not([hidden])").count(),
+          { culture: 5, family: 4, city: 1 }[type],
+        );
+      }
       assert.equal(await page.locator(".article").count(), 1);
       assert.equal(
         await page
@@ -223,6 +285,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator('[data-article-id="weekend-market"]').waitFor();
     assert.match(await page.locator(".outing-details").innerText(), /良渚暖村/);
     await page.locator('[data-view="brief"]').click();
+    assert.equal(await page.locator("[data-place-group]:visible").count(), 0);
     assert.equal(
       await page.locator('[data-article-id="weekend-market"]').count(),
       0,
@@ -234,7 +297,11 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       0,
     );
     await page.locator('[data-view="local"]').click();
-    await page.locator("#camping-places > summary").click();
+    for (const group of ["hiking-places", "rainy-places", "camping-places"]) {
+      if (!(await page.locator("#" + group).evaluate((node) => node.open)))
+        await page.locator("#" + group + " > summary").click();
+    }
+    assert.equal(await page.locator(".place-card:visible").count(), 13);
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 844 });
       assert(
@@ -265,6 +332,23 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     await page.locator("#camping-places > summary").click();
     assert.equal(await page.locator(".camping-place:visible").count(), 2);
+    await page.locator("#hiking-places > summary").click();
+    assert.equal(
+      await page.locator("#hiking-places .place-card:visible").count(),
+      6,
+    );
+    await page.fill("#search", "雨天 阅读");
+    assert.equal(await page.locator(".place-card:visible").count(), 1);
+    assert.match(
+      await page.locator(".place-card:visible h3").innerText(),
+      /浙江图书馆/,
+    );
+    await page.fill("#search", "");
+    assert.equal(await page.locator("#rainy-places[open]").count(), 0);
+    assert.equal(
+      await page.locator("#hiking-places .place-card:visible").count(),
+      6,
+    );
     assert.equal(
       await page.locator('[data-article-id="weekend-concert"]').count(),
       0,
@@ -288,7 +372,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: newest outings first online/offline with old cached order, separate navigation, concert filtering, cooking camps, six outing types, dates/expiry, venue search, bookmarks, four widths, no archive downloads.",
+      "PASS: newest outings online/offline, hiking/rainy/camping references, search expansion/restoration, category filters, source/map links, dates/expiry, bookmarks, four widths, no archive downloads.",
     );
   } finally {
     await browser.close();

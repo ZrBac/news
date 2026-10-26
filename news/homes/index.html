@@ -65,7 +65,6 @@
           <h1 id="homes-title" tabindex="-1">我的看房</h1>
           <p class="home-muted">先看预算内的线索，再把值得去看的留下。</p>
         </div>
-        <button id="add-home" class="home-primary" disabled>＋ 添加房源</button>
       </div>
       <section class="home-brief" aria-label="找房条件">
         <div id="profile-summary">正在读取找房条件…</div>
@@ -73,23 +72,10 @@
           调整条件 ↗
         </button>
       </section>
-      <div class="home-local">
-        <span id="cloud-status" role="status">正在读取私人看房本…</span>
-        <div class="home-actions">
-          <button id="cloud-connect">连接私人看房本</button>
-          <button id="cloud-sync" hidden>立即同步</button>
-          <button id="cloud-share" hidden>复制共用链接</button>
-          <button id="cloud-merge" hidden>合并两边记录</button>
-          <button id="export-homes" disabled>导出备份</button
-          ><button id="import-homes" disabled>导入备份</button
-          ><input
-            id="backup-file"
-            type="file"
-            accept="application/json,.json"
-            hidden
-          />
-        </div>
-      </div>
+      <p id="cloud-status" class="home-muted" role="status">
+        正在读取私人看房本…
+      </p>
+      <button id="cloud-merge" hidden>合并两边记录</button>
       <p id="home-message" role="status" hidden></p>
       <p id="storage-error" role="alert" hidden></p>
       <section
@@ -155,6 +141,22 @@
       </section>
       <div class="home-list-heading" id="saved-homes">
         <h2>我的收藏与看房记录</h2>
+        <button id="add-home" class="home-primary" disabled>＋ 其他房源</button>
+      </div>
+      <div class="home-local">
+        <div class="home-actions">
+          <button id="cloud-connect">连接私人看房本</button>
+          <button id="cloud-sync" hidden>立即同步</button>
+          <button id="cloud-share" hidden>复制共用链接</button>
+          <button id="export-homes" disabled>导出备份</button
+          ><button id="import-homes" disabled>导入备份</button
+          ><input
+            id="backup-file"
+            type="file"
+            accept="application/json,.json"
+            hidden
+          />
+        </div>
       </div>
       <div class="home-filters">
         <label class="home-search"

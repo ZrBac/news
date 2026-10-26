@@ -1,0 +1,17 @@
+[Unit]
+Description=Check public Hangzhou home candidates
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=zrbachomes
+Group=zrbachomes
+ExecStart=/usr/bin/python3 /opt/zrbac-homes/scripts/collect_home_candidates.py
+TimeoutStartSec=180
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/zrbac-homes
+Environment=PYTHONDONTWRITEBYTECODE=1

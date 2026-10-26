@@ -1,0 +1,25 @@
+[Unit]
+Description=Private home-viewing notebook API
+After=network.target
+
+[Service]
+User=zrbachomes
+Group=zrbachomes
+WorkingDirectory=/opt/zrbac-homes/scripts
+EnvironmentFile=/etc/zrbac-homes.env
+Environment=PYTHONDONTWRITEBYTECODE=1
+ExecStart=/opt/zrbac-homes/.venv/bin/gunicorn --bind 127.0.0.1:8094 --workers 1 --threads 2 --timeout 150 --error-logfile - homes_api:create_app()
+Restart=on-failure
+RestartSec=5
+StateDirectory=zrbac-homes
+StateDirectoryMode=0700
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/zrbac-homes
+MemoryMax=768M
+
+[Install]
+WantedBy=multi-user.target

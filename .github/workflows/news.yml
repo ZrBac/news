@@ -3,7 +3,7 @@ name: Update and publish news
 on:
   push:
     branches: [hexo]
-    paths: ["news/**", "scripts/**", "tests/**", ".github/workflows/news.yml"]
+    paths: ["news/**", "scripts/**", "tests/**", "deploy/homes/**", ".github/workflows/news.yml"]
   schedule:
     - cron: "17 * * * *"
     - cron: "0 1,8 * * *"
@@ -38,6 +38,8 @@ jobs:
           node --check news/assets/pwa.js
           node --check news/assets/homes.js
           node --check news/assets/homes-core.js
+          node --check news/assets/homes-sync.js
+          node --check news/assets/home-finder.js
           node --test tests/homes-core.cjs
           node --check news/assets/guide.js
           node --test tests/guide-core.cjs

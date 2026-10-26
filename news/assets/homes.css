@@ -558,3 +558,114 @@
     gap: 10px;
   }
 }
+/* Public discovery and the private notebook share the mobile layout. */
+.home-discover {
+  margin: 28px 0 40px;
+}
+.home-discover h2,
+#saved-homes h2 {
+  font-size: 1.3rem;
+  margin: 0 0 6px;
+}
+.home-candidates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.candidate-card {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  min-width: 0;
+  background: var(--surface, var(--bg));
+}
+.candidate-card h3 {
+  margin: 14px 0 6px;
+  font-size: 1.14rem;
+  line-height: 1.4;
+}
+.candidate-card .home-price {
+  margin: 16px 0 6px;
+  font-size: 1.45rem;
+}
+.candidate-note {
+  font-size: 0.83rem;
+  line-height: 1.7;
+  margin: 14px 0;
+  overflow-wrap: anywhere;
+}
+.candidate-observed {
+  font-size: 0.72rem;
+  margin: 12px 0 0;
+}
+.candidate-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 20px;
+}
+.candidate-bottom a {
+  display: inline-block;
+  font-size: 0.83rem;
+  padding: 8px 4px 8px 0;
+  margin-right: 8px;
+}
+.candidate-bottom button {
+  flex-shrink: 0;
+}
+.candidate-history {
+  font-size: 0.8rem;
+  line-height: 1.7;
+  margin-top: 12px;
+}
+.candidate-history ul {
+  padding-left: 18px;
+}
+.home-source-list {
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+#candidate-more {
+  display: block;
+  margin: 20px auto;
+}
+#candidate-more[hidden] {
+  display: none;
+}
+#sync-dialog > p,
+#sync-dialog > label {
+  font-size: 0.88rem;
+  line-height: 1.8;
+  margin: 14px 0;
+  display: block;
+}
+#sync-form label {
+  display: grid;
+  gap: 8px;
+  margin: 16px 0;
+}
+#sync-link-output {
+  width: 100%;
+  min-height: 100px;
+  overflow-wrap: anywhere;
+}
+#saved-homes {
+  scroll-margin-top: 80px;
+}
+@media (max-width: 680px) {
+  .home-candidates {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .candidate-card {
+    padding: 18px;
+  }
+  .home-discover .home-list-heading {
+    align-items: flex-start;
+    gap: 14px;
+  }
+  .home-discover .home-list-heading > a {
+    flex-shrink: 0;
+    font-size: 0.82rem;
+  }
+}

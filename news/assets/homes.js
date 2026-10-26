@@ -121,11 +121,17 @@
         }
         clean.revision = revision + 1;
         store.put(clean, "state");
+        const cloud = store.get("cloud");
+        cloud.onsuccess = () => {
+          if (cloud.result?.token)
+            store.put({ ...cloud.result, pending: true }, "cloud");
+        };
       };
     });
     state = clean;
     channel?.postMessage({ revision: state.revision });
     render();
+    window.HomeCloud?.sync();
   }
   async function refresh() {
     if (!db || document.querySelector(".home-dialog[open]")) return;
@@ -156,6 +162,7 @@
       ),
     );
   document.querySelectorAll(".home-dialog").forEach((dialog) => {
+    dialog.addEventListener("close", () => window.HomeCloud?.sync());
     dialog.addEventListener("input", () => {
       dialog.dataset.dirty = "1";
     });
@@ -266,10 +273,11 @@
           .join("")
       : state.homes.length
         ? '<div class="home-empty"><h2>没有符合筛选的房源</h2><p>试试其他关键词，或清除筛选条件。</p><button id="reset-filters" class="home-primary">清除筛选</button></div>'
-        : '<div class="home-empty"><div class="home-empty-icon" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8" /></svg></div><h2>先放进一套想看的房子</h2><p>记下名称和房源链接就能开始。报价、通勤和现场照片，看完再慢慢补齐。</p><button id="empty-add" class="home-primary">添加第一套房源</button></div>';
+        : '<div class="home-empty"><div class="home-empty-icon" aria-hidden="true"><svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="m3 10 9-7 9 7M5 9v12h14V9M9 21v-8h6v8" /></svg></div><h2>收藏想看的房子</h2><p>在上方候选中点“收藏”，来源和报价会一起带过来。也可以自己补充其他房源。</p><button id="empty-add" class="home-primary">添加其他房源</button></div>';
     $("#compare-bar").hidden = selected.size === 0;
     $("#compare-count").textContent = `已选 ${selected.size} / 3 套`;
     $("#show-compare").disabled = selected.size < 2;
+    window.dispatchEvent(new CustomEvent("homebookchange"));
   }
   function fill(form, fields) {
     for (const [key, value] of Object.entries(fields)) {
@@ -747,6 +755,14 @@
       $("#import-homes").disabled = false;
     }
   });
+  window.HomeNotebook = {
+    snapshot: () => H.copy(state),
+    async save(next, revision) {
+      if (!ready) throw new Error("请先允许浏览器存储，再收藏房源。");
+      await commit(next, revision);
+    },
+    message,
+  };
   window.homesInitialLoad = (async () => {
     try {
       await openDB();
@@ -760,6 +776,15 @@
         "import-homes",
       ])
         document.getElementById(id).disabled = false;
+      window.HomeCloud?.init({
+        db,
+        message,
+        isEditing: () => !!document.querySelector(".home-dialog[open]"),
+        async refreshed() {
+          await refresh();
+          channel?.postMessage({ cloud: true });
+        },
+      }).catch((error) => message(`同步暂不可用。${errorText(error)}`));
     } catch (error) {
       $("#storage-error").textContent =
         `无法读取看房存储，已暂停编辑，避免丢失记录。请在普通浏览器标签页打开并允许网站存储，再重新加载。${errorText(error)}`;

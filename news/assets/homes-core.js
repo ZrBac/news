@@ -1,4 +1,4 @@
-/* The private notebook is device-local. Backups are validated before any write. */
+/* The private notebook is validated before local saves, imports and cloud sync. */
 (function (root, factory) {
   const api = factory();
   if (typeof module === "object" && module.exports) module.exports = api;

@@ -8,7 +8,12 @@
     <meta name="robots" content="noindex" />
     <meta
       name="description"
-      content="收藏房源，记录报价、两个人的通勤和看房感受。记录保存在当前设备，可导出完整备份。"
+      content="按预算查看杭州候选房源，跟踪来源报价变化，和一起看房的人共用私人看房本。"
+    />
+    <meta name="homes-api" content="https://zacai.fun/api/homes" />
+    <meta
+      name="home-candidates-fallback"
+      content="/assets/news/home-candidates.json"
     />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <script>
@@ -30,7 +35,9 @@
     <link rel="stylesheet" href="/assets/news/homes.css" />
     <script src="/assets/news/compat.js" defer></script>
     <script src="/assets/news/homes-core.js" defer></script>
+    <script src="/assets/news/homes-sync.js" defer></script>
     <script src="/assets/news/homes.js" defer></script>
+    <script src="/assets/news/home-finder.js" defer></script>
     <script src="/assets/news/pwa.js" defer></script>
     <title>我的看房 · 资讯</title>
   </head>
@@ -54,9 +61,9 @@
     <main id="home-book" class="home-page">
       <div class="home-heading">
         <div>
-          <p class="home-eyebrow">从收藏一套，到选好一个家</p>
+          <p class="home-eyebrow">杭州 · 两个人一起找个家</p>
           <h1 id="homes-title" tabindex="-1">我的看房</h1>
-          <p class="home-muted">把价格、两个人的通勤和现场感受放在一起。</p>
+          <p class="home-muted">先看预算内的线索，再把值得去看的留下。</p>
         </div>
         <button id="add-home" class="home-primary" disabled>＋ 添加房源</button>
       </div>
@@ -67,10 +74,12 @@
         </button>
       </section>
       <div class="home-local">
-        <span
-          >仅保存在当前浏览器，不自动同步。清理数据或换设备前请导出备份，照片也会一起保存。</span
-        >
+        <span id="cloud-status" role="status">正在读取私人看房本…</span>
         <div class="home-actions">
+          <button id="cloud-connect">连接私人看房本</button>
+          <button id="cloud-sync" hidden>立即同步</button>
+          <button id="cloud-share" hidden>复制共用链接</button>
+          <button id="cloud-merge" hidden>合并两边记录</button>
           <button id="export-homes" disabled>导出备份</button
           ><button id="import-homes" disabled>导入备份</button
           ><input
@@ -83,6 +92,70 @@
       </div>
       <p id="home-message" role="status" hidden></p>
       <p id="storage-error" role="alert" hidden></p>
+      <section
+        id="home-discover"
+        class="home-discover"
+        aria-labelledby="discover-title"
+      >
+        <div class="home-list-heading">
+          <div>
+            <h2 id="discover-title">先看看这些</h2>
+            <p class="home-muted" id="candidate-summary">正在整理候选房源…</p>
+          </div>
+          <a class="home-link" href="#saved-homes">我的收藏 ↓</a>
+        </div>
+        <div class="home-filters">
+          <label
+            ><span class="sr-only">候选范围</span
+            ><select id="candidate-scope">
+              <option value="budget">预算内线索</option>
+              <option value="verify">价格待核实</option>
+              <option value="other">超预算 / 状态存疑</option>
+              <option value="all">全部观察</option>
+            </select></label
+          >
+          <label
+            ><span class="sr-only">候选类型</span
+            ><select id="candidate-kind">
+              <option value="">新房优先，二手房也看</option>
+              <option value="new">只看新房</option>
+              <option value="resale">只看二手房</option>
+            </select></label
+          >
+          <label
+            ><span class="sr-only">候选区域</span
+            ><select id="candidate-area">
+              <option value="">全部覆盖区域</option>
+              <option value="西湖">西湖</option>
+              <option value="余杭">余杭 · 西溪及周边</option>
+              <option value="上城">上城</option>
+            </select></label
+          >
+        </div>
+        <p id="candidate-message" class="home-muted" role="status"></p>
+        <div
+          id="candidate-list"
+          class="home-candidates"
+          aria-live="polite"
+        ></div>
+        <button id="candidate-more" hidden>再看一些</button>
+        <details class="home-help">
+          <summary>覆盖范围、更新时间和通勤</summary>
+          <p id="candidate-coverage"></p>
+          <p>
+            总价参考和按均价估算的金额，不代表有对应房号在售。挂牌价格、余房、税费、车位、装修需要分别核实。
+          </p>
+          <p>
+            通勤目的地为云谷园区（灯彩街 1008 号）和西溪园区（文一西路 969
+            号）。目前还没有早高峰路线数据，也尚未确定谁去哪个园区；请从候选的地图入口查看位置，再核实“开车＋送站”的两条路线。在建地铁不计入已开通线路。
+          </p>
+          <div id="candidate-sources" class="home-source-list"></div>
+          <button id="candidate-refresh">重新读取最新结果</button>
+        </details>
+      </section>
+      <div class="home-list-heading" id="saved-homes">
+        <h2>我的收藏与看房记录</h2>
+      </div>
       <div class="home-filters">
         <label class="home-search"
           ><span class="sr-only">搜索房源和笔记</span
@@ -152,7 +225,7 @@
           ><a href="/#housing">杭州市场资讯 →</a>
         </div>
         <p>
-          房源和价格需自行填写；这里没有自动抓取房源或推算通勤。通勤请按早晚高峰核实，规划中的线路不要当作已经开通。
+          候选列表会定时检查公开页面，收藏时保留当次来源信息。个人报价和笔记由你填写，不会因为列表更新而被覆盖。
         </p>
       </details>
       <div id="offline-tools" class="home-offline">
@@ -169,6 +242,45 @@
         ><button id="install-app">安装到桌面</button>
       </footer>
     </main>
+
+    <dialog id="sync-dialog" class="home-dialog" aria-labelledby="sync-title">
+      <div class="dialog-heading">
+        <h2 id="sync-title">私人看房本</h2>
+        <button
+          type="button"
+          data-close="sync-dialog"
+          aria-label="关闭同步设置"
+        >
+          ×
+        </button>
+      </div>
+      <p>
+        连接后，收藏、看房笔记和照片保存在你的服务器；离线记录会在联网后继续同步。只有持有私人同步码的人能查看和编辑。
+      </p>
+      <form id="sync-form">
+        <label
+          >私人同步码或共用链接<input
+            id="sync-token"
+            type="password"
+            autocomplete="off"
+            maxlength="500"
+            required
+        /></label>
+        <p id="sync-error" role="status"></p>
+        <button id="sync-submit" type="submit" class="home-primary">
+          连接并同步
+        </button>
+      </form>
+      <label for="sync-link-output"
+        >在另一台设备打开同一个私人链接即可共用。请只发给一起看房的人。</label
+      >
+      <textarea
+        id="sync-link-output"
+        readonly
+        hidden
+        aria-label="私人共用链接"
+      ></textarea>
+    </dialog>
 
     <dialog
       id="home-editor"

@@ -1,0 +1,15 @@
+[Unit]
+Description=Back up the private home-viewing notebook
+
+[Service]
+Type=oneshot
+User=zrbachomes
+Group=zrbachomes
+ExecStart=/usr/bin/python3 /opt/zrbac-homes/scripts/homes_api.py --backup
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/zrbac-homes
+Environment=PYTHONDONTWRITEBYTECODE=1

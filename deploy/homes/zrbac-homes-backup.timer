@@ -1,0 +1,9 @@
+[Unit]
+Description=Daily notebook backup with 14-day retention
+
+[Timer]
+OnCalendar=*-*-* 03:30:00 Asia/Shanghai
+Persistent=true
+
+[Install]
+WantedBy=timers.target

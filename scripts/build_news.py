@@ -245,7 +245,7 @@ def main():
     pages.update({path: (output / path.lstrip('/') / 'index.html').read_text() for path in static_paths})
     shell_files = ['/', '/games/', '/guide/', '/homes/', '/manifest.webmanifest', '/assets/news/icon-180.png',
                    '/assets/news/icon-192.png', '/assets/news/icon-512.png']
-    for filename in ('compat.js', 'compat.css', 'archive.js', 'personal.js', 'exchange-core.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json', 'homes-core.js', 'homes.js', 'homes.css'):
+    for filename in ('compat.js', 'compat.css', 'archive.js', 'personal.js', 'exchange-core.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json', 'homes-core.js', 'homes-sync.js', 'homes.js', 'home-finder.js', 'home-candidates.json', 'homes.css'):
         asset = output / 'assets/news' / filename
         digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:12]
         versioned = asset.with_name(f'{asset.stem}.{digest}{asset.suffix}')

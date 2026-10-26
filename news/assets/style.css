@@ -12,6 +12,9 @@
     "Microsoft YaHei", sans-serif;
   color-scheme: light;
 }
+.housing-home-book { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 18px; margin-bottom: 24px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
+.housing-home-book strong { font-size: 16px; }
+.housing-home-book small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
 :root[data-reading-size="large"] {
   --reading-scale: 1.12;
 }

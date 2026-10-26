@@ -100,6 +100,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         publishedAt: "2026-10-23T02:00:00Z",
       },
     ];
+    // Keep the fixture's coverage metadata aligned with its frozen clock.
+    latest.briefDays = ["2026-10-23"];
     await page.route("**/data/latest.json*", (route) =>
       route.fulfill({ json: latest }),
     );

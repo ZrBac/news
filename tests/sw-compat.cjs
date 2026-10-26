@@ -6,7 +6,13 @@ const source = fs
   .readFileSync(require.resolve("../news/sw.js"), "utf8")
   .replace(
     "__SHELL_FILES__",
-    JSON.stringify(["/", "/games/", "/guide/", "/assets/news/compat.test.js"]),
+    JSON.stringify([
+      "/",
+      "/games/",
+      "/guide/",
+      "/homes/",
+      "/assets/news/compat.test.js",
+    ]),
   )
   .replace(
     "__NEWS_SHELL__",
@@ -19,6 +25,10 @@ const source = fs
   .replace(
     "__GUIDE_SHELL__",
     JSON.stringify(["/", "/guide/", "/assets/news/compat.test.js"]),
+  )
+  .replace(
+    "__HOMES_SHELL__",
+    JSON.stringify(["/", "/homes/", "/assets/news/compat.test.js"]),
   )
   .replace(
     "__GUIDE_FILES__",
@@ -99,9 +109,31 @@ test("Offline navigation aliases return their matching HTML without Object.hasOw
     ["/guide", "/guide/"],
     ["/guide/", "/guide/"],
     ["/guide/index.html?from=home", "/guide/"],
+    ["/homes", "/homes/"],
+    ["/homes/", "/homes/"],
+    ["/homes/index.html?from=housing", "/homes/"],
   ]) {
     assert.equal(await (await request(path)).text(), "cached " + expected);
   }
+});
+
+test("Home notebook preparation does not download games or guide chapters", async () => {
+  const entries = new Map([
+    ["/", new Response("home")],
+    ["/assets/news/compat.test.js", new Response("asset")],
+  ]);
+  const fetched = [];
+  const w = worker({
+    entries,
+    fetch: async (request) => {
+      fetched.push(new URL(request.url).pathname);
+      return new Response("home notebook");
+    },
+  });
+  const result = await w.message("PREPARE_OFFLINE", ["/homes/"], "homes");
+  assert.equal(result.ready, true);
+  assert.deepEqual(fetched, ["/homes/"]);
+  assert.equal(await (await w.request("/homes/")).text(), "home notebook");
 });
 test("Workers identify the UI version separately from their offline content", async () => {
   const result = await worker().message("GET_VERSION");
@@ -237,9 +269,7 @@ test("Guide preparation keeps completed chapters and retries only the failed cha
     "guide readiness must not depend on missing game files",
   );
   assert.equal(
-    await (
-      await w.request("/guide/chapters/1.aaaaaaaaaaaa.json", "cors")
-    )
+    await (await w.request("/guide/chapters/1.aaaaaaaaaaaa.json", "cors"))
       .json()
       .then((data) => data.entries[0].body),
     "正文及备注",

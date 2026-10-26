@@ -18,6 +18,18 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8769";
       await page.request.get(base + "/data/latest.json")
     ).json();
     const target = full.articles.filter((a) => a.category !== "local").at(-1);
+    async function expectTarget(reader) {
+      // A matching story may be grouped under a newer publisher's headline.
+      // Its original link must still be present in that card's other reports.
+      await reader.waitForFunction(
+        (url) =>
+          document.querySelector("#archive-notice").hidden &&
+          Array.from(document.querySelectorAll(".article a")).some(
+            (link) => link.href === url,
+          ),
+        target.originalUrl || target.url,
+      );
+    }
     const recentGameSources = new Set(
       latest.gamingArticles.map((a) => a.sourceId),
     );
@@ -77,12 +89,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8769";
       "an absent keyword needs an index, not every historical story",
     );
     await page.fill("#search", target.title);
-    await page.locator(".article h3").first().waitFor();
-    assert(
-      (await page.locator(".article h3").allTextContents()).includes(
-        target.title,
-      ),
-    );
+    await expectTarget(page);
     assert(
       pageReads <= 3,
       "historical search downloads only matching category chunks",
@@ -281,12 +288,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8769";
     assert(await retryPage.locator("#load-notice").isHidden());
     failed = false;
     await retryPage.click("[data-retry-archive]");
-    await retryPage.locator(".article h3").first().waitFor();
-    assert(
-      (await retryPage.locator(".article h3").allTextContents()).includes(
-        target.title,
-      ),
-    );
+    await expectTarget(retryPage);
     await retryContext.close();
     console.log(
       "PASS: indexed search, rare game sources, scoped sources, small persisted snapshot, cached offline history, read markers, font preference, bookmark backup/merge/rejection and chunk retries.",

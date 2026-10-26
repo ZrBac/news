@@ -5,6 +5,7 @@ const SHELL = __SHELL_FILES__;
 const NEWS_SHELL = __NEWS_SHELL__;
 const GAMES_SHELL = __GAMES_SHELL__;
 const GUIDE_SHELL = __GUIDE_SHELL__;
+const HOMES_SHELL = __HOMES_SHELL__;
 const GUIDE_FILES = __GUIDE_FILES__;
 const GUIDE_REVISION = __GUIDE_REVISION__;
 const PAGES = {
@@ -16,6 +17,9 @@ const PAGES = {
   "/guide": "/guide/",
   "/guide/": "/guide/",
   "/guide/index.html": "/guide/",
+  "/homes": "/homes/",
+  "/homes/": "/homes/",
+  "/homes/index.html": "/homes/",
 };
 
 async function validateShell(
@@ -139,6 +143,7 @@ self.addEventListener("install", (event) => {
         for (const [page, group] of [
           ["/games/", GAMES_SHELL],
           ["/guide/", GUIDE_SHELL],
+          ["/homes/", HOMES_SHELL],
         ])
           if (await previous.match(page)) {
             pages.add(page);
@@ -180,19 +185,24 @@ self.addEventListener("install", (event) => {
 
 // Complete chapters are stored immediately; retries only request missing chapters.
 let repairing;
-async function repairShell(guide = false, report) {
+async function repairShell(page = "games", report) {
   if (repairing) {
     await repairing.catch(() => {});
-    return repairShell(guide, report);
+    return repairShell(page, report);
   }
   repairing = (async () => {
     const cache = await caches.open(CACHE);
-    const assets = guide ? GUIDE_SHELL : GAMES_SHELL;
+    const guide = page === "guide";
+    const assets = guide
+      ? GUIDE_SHELL
+      : page === "homes"
+        ? HOMES_SHELL
+        : GAMES_SHELL;
     const paths = guide ? [...assets, ...GUIDE_FILES] : assets;
     const { staged, failed } = await stageMissing(cache, paths, report);
     await validateShell(
       (path) => staged.get(path) || cache.match(path),
-      guide ? ["/", "/guide/"] : ["/", "/games/"],
+      ["/", `/${page}/`],
       assets,
     );
     for (const [path, response] of staged) await cache.put(path, response);
@@ -251,11 +261,14 @@ self.addEventListener("message", (event) => {
           event.ports[0].postMessage({ ready: false, reason: "version" });
           return;
         }
-        const guide = event.data.page === "guide";
+        const page = ["guide", "homes"].includes(event.data.page)
+          ? event.data.page
+          : "games";
+        const guide = page === "guide";
         let repairFailed = false;
         if (event.data.type === "PREPARE_OFFLINE") {
           try {
-            await repairShell(guide, (value) =>
+            await repairShell(page, (value) =>
               event.ports[0].postMessage(value),
             );
           } catch {
@@ -266,7 +279,11 @@ self.addEventListener("message", (event) => {
           missing = [];
         // The Home Screen start URL is '/', even when installation starts in /games/.
         // Check the entire launch shell, not just assets of the currently open page.
-        const required = guide ? [...GUIDE_SHELL, ...GUIDE_FILES] : GAMES_SHELL;
+        const required = guide
+          ? [...GUIDE_SHELL, ...GUIDE_FILES]
+          : page === "homes"
+            ? HOMES_SHELL
+            : GAMES_SHELL;
         for (const path of required)
           if (!(await cache.match(path))) missing.push(path);
         event.ports[0].postMessage({

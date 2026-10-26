@@ -1,0 +1,550 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="robots" content="noindex" />
+    <meta
+      name="description"
+      content="收藏房源，记录报价、两个人的通勤和看房感受。记录保存在当前设备，可导出完整备份。"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <script>
+      try {
+        const theme =
+          localStorage.getItem("zrbac-news-theme") === "dark"
+            ? "dark"
+            : "light";
+        document.documentElement.dataset.theme = theme;
+        document.querySelector('meta[name="theme-color"]').content =
+          theme === "dark" ? "#181818" : "#ffffff";
+      } catch {}
+    </script>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/assets/news/icon-180.png" />
+    <link rel="icon" type="image/svg+xml" href="/assets/news/favicon.svg" />
+    <link rel="stylesheet" href="/assets/news/style.css" />
+    <link rel="stylesheet" href="/assets/news/compat.css" />
+    <link rel="stylesheet" href="/assets/news/homes.css" />
+    <script src="/assets/news/compat.js" defer></script>
+    <script src="/assets/news/homes-core.js" defer></script>
+    <script src="/assets/news/homes.js" defer></script>
+    <script src="/assets/news/pwa.js" defer></script>
+    <title>我的看房 · 资讯</title>
+  </head>
+  <body>
+    <a href="#homes-title" class="skip-link">跳到我的看房</a>
+    <header class="header">
+      <div class="header-inner">
+        <a class="brand" href="/"><span class="brand-name">资讯</span></a>
+        <div class="header-actions">
+          <a href="/#housing" class="games-link">杭州房价</a
+          ><button
+            id="theme-toggle"
+            class="icon-button"
+            aria-label="切换深色模式"
+          >
+            ◐
+          </button>
+        </div>
+      </div>
+    </header>
+    <main id="home-book" class="home-page">
+      <div class="home-heading">
+        <div>
+          <p class="home-eyebrow">从收藏一套，到选好一个家</p>
+          <h1 id="homes-title" tabindex="-1">我的看房</h1>
+          <p class="home-muted">把价格、两个人的通勤和现场感受放在一起。</p>
+        </div>
+        <button id="add-home" class="home-primary" disabled>＋ 添加房源</button>
+      </div>
+      <section class="home-brief" aria-label="找房条件">
+        <div id="profile-summary">正在读取找房条件…</div>
+        <button id="edit-profile" class="home-link" disabled>
+          调整条件 ↗
+        </button>
+      </section>
+      <div class="home-local">
+        <span
+          >仅保存在当前浏览器，不自动同步。清理数据或换设备前请导出备份，照片也会一起保存。</span
+        >
+        <div class="home-actions">
+          <button id="export-homes" disabled>导出备份</button
+          ><button id="import-homes" disabled>导入备份</button
+          ><input
+            id="backup-file"
+            type="file"
+            accept="application/json,.json"
+            hidden
+          />
+        </div>
+      </div>
+      <p id="home-message" role="status" hidden></p>
+      <p id="storage-error" role="alert" hidden></p>
+      <div class="home-filters">
+        <label class="home-search"
+          ><span class="sr-only">搜索房源和笔记</span
+          ><input
+            id="home-search"
+            type="search"
+            maxlength="200"
+            placeholder="搜索小区、板块、看房笔记"
+        /></label>
+        <label
+          ><span class="sr-only">看房进度</span
+          ><select id="status-filter">
+            <option value="">全部进度</option>
+            <option value="planned">待看</option>
+            <option value="visited">已看</option>
+            <option value="shortlist">重点考虑</option>
+            <option value="rejected">已排除</option>
+          </select></label
+        >
+        <label
+          ><span class="sr-only">房源类型</span
+          ><select id="kind-filter">
+            <option value="">全部房源</option>
+            <option value="new">新房</option>
+            <option value="resale">二手房</option>
+          </select></label
+        >
+        <label
+          ><span class="sr-only">排序方式</span
+          ><select id="sort-homes">
+            <option value="updated">最近更新</option>
+            <option value="price">价格从低到高</option>
+            <option value="priority">购房偏好优先</option>
+          </select></label
+        >
+      </div>
+      <div class="home-list-heading">
+        <p id="home-count" class="home-muted">正在读取记录…</p>
+        <p class="home-muted">勾选 2–3 套即可比较</p>
+      </div>
+      <div id="home-list" class="home-list" aria-live="polite"></div>
+      <div id="compare-bar" class="home-compare-bar" hidden>
+        <span id="compare-count"></span>
+        <div>
+          <button id="clear-compare">清空</button
+          ><button id="show-compare" class="home-primary" disabled>
+            开始比较
+          </button>
+        </div>
+      </div>
+      <details class="home-help">
+        <summary>从哪里开始找房？</summary>
+        <p>
+          在房源平台看到合适的房子，先保存名称、链接和报价。看完再补现场感受、照片和通勤实测；挂牌、沟通报价和成交记录会分别标注。
+        </p>
+        <div class="home-actions">
+          <a
+            href="https://xinpan.zjol.com.cn/loupan/"
+            target="_blank"
+            rel="noopener noreferrer"
+            >住在杭州楼盘库 ↗</a
+          ><a
+            href="https://hz.newhouse.fang.com/house/s/"
+            target="_blank"
+            rel="noopener noreferrer"
+            >杭州新房 ↗</a
+          ><a href="/#housing">杭州市场资讯 →</a>
+        </div>
+        <p>
+          房源和价格需自行填写；这里没有自动抓取房源或推算通勤。通勤请按早晚高峰核实，规划中的线路不要当作已经开通。
+        </p>
+      </details>
+      <div id="offline-tools" class="home-offline">
+        <span id="offline-status" role="status">正在检查离线资源…</span
+        ><button id="prepare-offline">准备离线使用</button
+        ><small id="offline-hint"></small
+        ><a id="offline-secure-link" href="https://news.zacai.fun/homes/" hidden
+          >用 Safari 打开安全页面</a
+        >
+      </div>
+      <noscript>看房笔记需要开启 JavaScript 才能在当前设备保存。</noscript>
+      <footer class="home-footer">
+        <span>自己的看房本 · 随看随记</span
+        ><button id="install-app">安装到桌面</button>
+      </footer>
+    </main>
+
+    <dialog
+      id="home-editor"
+      class="home-dialog"
+      aria-labelledby="home-editor-title"
+    >
+      <div class="dialog-heading">
+        <h2 id="home-editor-title">添加房源</h2>
+        <button
+          type="button"
+          data-close="home-editor"
+          aria-label="关闭房源编辑"
+        >
+          ×
+        </button>
+      </div>
+      <form id="home-form">
+        <div class="home-form-grid">
+          <label class="home-wide"
+            >小区 / 楼盘名称 <span class="home-muted">必填</span
+            ><input
+              name="name"
+              required
+              maxlength="100"
+              placeholder="先记一个名字，其余可稍后补"
+          /></label>
+          <label
+            >类型<select name="kind">
+              <option value="new">新房</option>
+              <option value="resale">二手房</option>
+            </select></label
+          >
+          <label
+            >进度<select name="status">
+              <option value="planned">待看</option>
+              <option value="visited">已看</option>
+              <option value="shortlist">重点考虑</option>
+              <option value="rejected">已排除</option>
+            </select></label
+          >
+          <label
+            >区域 / 板块<input
+              name="district"
+              maxlength="100"
+              placeholder="如：西湖区 · 西溪"
+          /></label>
+          <label
+            >建筑面积（㎡）<input
+              name="size"
+              type="number"
+              min="0.01"
+              max="10000"
+              step="0.01"
+              inputmode="decimal"
+          /></label>
+          <label class="home-wide"
+            >房源链接<input
+              name="sourceUrl"
+              type="url"
+              maxlength="2000"
+              placeholder="粘贴完整的 https:// 房源地址"
+          /></label>
+          <label class="home-wide"
+            >地址<input
+              name="address"
+              maxlength="300"
+              placeholder="用于打开地图搜索"
+          /></label>
+          <label class="home-wide"
+            >户型 / 楼层 / 朝向<input
+              name="layout"
+              maxlength="100"
+              placeholder="如：三室两厅 · 中层 · 南向"
+          /></label>
+          <label class="home-wide"
+            >交付、装修和其他情况<textarea
+              name="detail"
+              rows="2"
+              maxlength="1000"
+              placeholder="交付时间、装修标准、楼龄等，待核实也可以记下来"
+            ></textarea>
+          </label>
+          <label class="home-wide"
+            >考虑 / 排除理由<textarea
+              name="reason"
+              rows="2"
+              maxlength="1000"
+              placeholder="留下最影响选择的那一点"
+            ></textarea>
+          </label>
+        </div>
+        <details id="quote-fields" class="home-form-section" open>
+          <summary>记一笔价格</summary>
+          <p class="home-muted">
+            编辑时填写会新增一条记录；留空保留原有价格。历史记录不会被覆盖。
+          </p>
+          <div class="home-form-grid">
+            <label
+              >房屋总价（万元）<input
+                name="price"
+                type="number"
+                min="0.01"
+                max="100000"
+                step="0.01"
+                inputmode="decimal"
+            /></label>
+            <label
+              >价格性质<select name="priceType">
+                <option value="asking">挂牌价</option>
+                <option value="quoted">沟通报价</option>
+                <option value="contract">已核实成交价</option>
+              </select></label
+            >
+            <label>记录日期<input name="priceDate" type="date" /></label
+            ><label
+              >来源 / 说明<input
+                name="priceSource"
+                maxlength="300"
+                placeholder="如：销售姓名、平台、截图日期"
+            /></label>
+          </div>
+        </details>
+        <details class="home-form-section">
+          <summary>车位、税费和装修</summary>
+          <p class="home-muted">
+            单位：万元。只填已了解的金额；无需支付填
+            0，未知留空。预算比较会注明未填项。
+          </p>
+          <div class="home-form-grid">
+            <label
+              >车位<input
+                name="parking"
+                type="number"
+                min="0"
+                max="100000"
+                step="0.01"
+                inputmode="decimal" /></label
+            ><label
+              >税费及其他费用<input
+                name="tax"
+                type="number"
+                min="0"
+                max="100000"
+                step="0.01"
+                inputmode="decimal" /></label
+            ><label
+              >另需装修费用<input
+                name="decoration"
+                type="number"
+                min="0"
+                max="100000"
+                step="0.01"
+                inputmode="decimal"
+            /></label>
+          </div>
+        </details>
+        <details class="home-form-section">
+          <summary>两个人的通勤</summary>
+          <p class="home-muted">
+            一个开车，一个送地铁站。记录早晚高峰的查询值或实测值，并写明日期和依据。
+          </p>
+          <div class="home-form-grid">
+            <label class="home-wide"
+              >这套房的通勤方案<select name="driver">
+                <option value="undecided">开车方向待确定</option>
+                <option value="yungu">开车去云谷，送站后去西溪</option>
+                <option value="xixi">开车去西溪，送站后去云谷</option>
+              </select></label
+            >
+            <label class="home-wide"
+              >送达的地铁站<input name="station" maxlength="100"
+            /></label>
+            <label
+              >开车全程（分钟）<input
+                name="driverTotal"
+                type="number"
+                min="0"
+                max="600"
+                step="1"
+                inputmode="numeric"
+              /><small>含送站，从家到开车者园区</small></label
+            ><label
+              >其中送站绕路（分钟）<input
+                name="detour"
+                type="number"
+                min="0"
+                max="600"
+                step="1"
+                inputmode="numeric"
+            /></label>
+            <label
+              >① 家到地铁站（分钟）<input
+                name="drop"
+                type="number"
+                min="0"
+                max="600"
+                step="1"
+                inputmode="numeric" /></label
+            ><label
+              >② 进站候车（分钟）<input
+                name="wait"
+                type="number"
+                min="0"
+                max="600"
+                step="1"
+                inputmode="numeric" /></label
+            ><label
+              >③ 地铁全程含换乘（分钟）<input
+                name="metro"
+                type="number"
+                min="0"
+                max="600"
+                step="1"
+                inputmode="numeric" /></label
+            ><label
+              >④ 出站到园区（分钟）<input
+                name="lastLeg"
+                type="number"
+                min="0"
+                max="600"
+                step="1"
+                inputmode="numeric"
+            /></label>
+            <label>核实日期<input name="commuteDate" type="date" /></label
+            ><label class="home-wide"
+              >时段 / 依据 / 园区入口<textarea
+                name="commuteNote"
+                rows="2"
+                maxlength="1000"
+                placeholder="如：周二 8:00 地图查询；还没实测。请把园区入口到工位的时间也考虑进去。"
+              ></textarea>
+            </label>
+          </div>
+        </details>
+        <p class="home-form-error" role="alert" hidden></p>
+        <div class="home-form-actions">
+          <button type="button" data-close="home-editor">取消</button
+          ><button type="submit" class="home-primary">保存房源</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog
+      id="profile-editor"
+      class="home-dialog"
+      aria-labelledby="profile-title"
+    >
+      <div class="dialog-heading">
+        <h2 id="profile-title">找房条件</h2>
+        <button data-close="profile-editor" aria-label="关闭条件编辑">×</button>
+      </div>
+      <form id="profile-form">
+        <div class="home-form-grid">
+          <label
+            >预算下限（万元）<input
+              name="budgetMin"
+              type="number"
+              min="0"
+              max="100000"
+              step="0.01"
+              inputmode="decimal" /></label
+          ><label
+            >预算上限（万元）<input
+              name="budgetMax"
+              type="number"
+              min="0"
+              max="100000"
+              step="0.01"
+              inputmode="decimal"
+          /></label>
+          <label class="home-wide"
+            >意向区域<input name="areas" maxlength="300" /></label
+          ><label class="home-wide"
+            >购房偏好<select name="priority">
+              <option value="new">新房优先，二手房也可</option>
+              <option value="resale">二手房优先，新房也可</option>
+              <option value="any">新房、二手房均可</option>
+            </select></label
+          >
+          <label class="home-wide"
+            >默认通勤方案<select name="driver">
+              <option value="undecided">开车方向待确定</option>
+              <option value="yungu">开车去云谷，送站后去西溪</option>
+              <option value="xixi">开车去西溪，送站后去云谷</option></select
+            ><small>用于新添加的房源，已记录的通勤方案保持原样。</small></label
+          >
+          <label
+            >开车最多（分钟）<input
+              name="maxDrive"
+              type="number"
+              min="0"
+              max="600"
+              step="1"
+              inputmode="numeric"
+              placeholder="未确定可留空" /></label
+          ><label
+            >送站＋地铁最多（分钟）<input
+              name="maxTransit"
+              type="number"
+              min="0"
+              max="600"
+              step="1"
+              inputmode="numeric"
+              placeholder="未确定可留空"
+          /></label>
+        </div>
+        <p class="home-muted">预算用于提示，不会隐藏低于下限或超预算的房源。</p>
+        <p class="home-form-error" role="alert" hidden></p>
+        <div class="home-form-actions">
+          <button type="button" data-close="profile-editor">取消</button
+          ><button type="submit" class="home-primary">保存条件</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="home-detail" class="home-dialog" aria-labelledby="detail-title">
+      <div class="dialog-heading">
+        <h2 id="detail-title">房源详情</h2>
+        <button data-close="home-detail" aria-label="关闭房源详情">×</button>
+      </div>
+      <div id="detail-content"></div>
+      <form id="visit-form" class="home-visit-form">
+        <h3>记一次看房</h3>
+        <label>看房日期<input name="date" type="date" required /></label
+        ><label
+          >现场感受与待确认事项<textarea
+            name="note"
+            rows="4"
+            maxlength="4000"
+            placeholder="喜欢什么？哪里不满意？下次要向销售或中介确认什么？"
+          ></textarea></label
+        ><label
+          >照片（每次最多 6 张）<input
+            id="visit-photos"
+            type="file"
+            accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
+            multiple
+          /><small>保存时压缩，原图请自行保留。照片不会上传。</small></label
+        >
+        <p id="photo-count" class="home-muted"></p>
+        <p class="home-form-error" role="alert" hidden></p>
+        <div class="home-form-actions">
+          <button type="submit" class="home-primary">保存看房记录</button>
+        </div>
+      </form>
+    </dialog>
+    <dialog
+      id="compare-dialog"
+      class="home-dialog home-compare-dialog"
+      aria-labelledby="compare-title"
+    >
+      <div class="dialog-heading">
+        <h2 id="compare-title">放在一起比较</h2>
+        <button data-close="compare-dialog" aria-label="关闭比较">×</button>
+      </div>
+      <p class="home-muted">
+        可左右滑动。空白条件不参与判断；通勤时间以自己填写的依据为准。
+      </p>
+      <div
+        id="compare-content"
+        class="home-table-scroll"
+        tabindex="0"
+        role="region"
+        aria-label="房源对比表"
+      ></div>
+    </dialog>
+    <div id="pwa-update" class="pwa-update" hidden>
+      <span data-update-text>网站有新版本。</span
+      ><button id="apply-update">更新页面</button>
+    </div>
+    <dialog id="info-dialog" aria-labelledby="dialog-title">
+      <div class="dialog-heading">
+        <h2 id="dialog-title">安装到桌面</h2>
+        <button id="close-dialog" aria-label="关闭">×</button>
+      </div>
+      <div id="dialog-content"></div>
+    </dialog>
+  </body>
+</html>

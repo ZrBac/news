@@ -37,7 +37,7 @@
       "<h3>iPhone / iPad</h3><p>在 Safari 的普通标签页中打开本站，点击分享按钮，选择“添加到主屏幕”。添加后先保持联网，从桌面图标打开一次，进入生活指南或小游戏，等显示“已准备好，可离线阅读”或“已准备好，可离线玩”再断网。Safari 与桌面入口需要分别准备。</p>" +
       "<h3>Android</h3><p>在浏览器菜单中选择“安装应用”或“添加到主屏幕”。</p>" +
       "<h3>Mac Safari</h3><p>在支持的版本中，选择“文件 → 添加到程序坞”。</p>" +
-      "<p>生活指南和小游戏分别在对应页面准备离线资源。完成后，可离线阅读已下载的指南、已保存的资讯和收藏，也可以玩已准备好的小游戏。更新资讯、打开原文链接需要联网；清除浏览器数据会移除本地缓存。</p>";
+      "<p>生活指南、小游戏和我的看房分别在对应页面准备离线资源。完成后，可离线阅读已下载的指南、已保存的资讯和收藏，玩已准备好的小游戏，也可以记录看房。更新资讯、打开原文链接需要联网；清除浏览器数据会移除本地缓存和看房记录。看房记录请提前导出备份；Safari 与桌面入口的记录可能需要分别导入。</p>";
     document.querySelector("#info-dialog").showModal();
   });
 
@@ -48,7 +48,8 @@
     secureLink = document.querySelector("#offline-secure-link"),
     isGames = !!document.querySelector("#library"),
     isGuide = !!document.querySelector("#life-guide"),
-    hasOfflineTools = isGames || isGuide;
+    isHomes = !!document.querySelector("#home-book"),
+    hasOfflineTools = isGames || isGuide || isHomes;
   let registration,
     applyingUpdate = false,
     checking,
@@ -58,7 +59,11 @@
   const workerVersions = new WeakMap();
   const notice = document.querySelector("#pwa-update");
   const messages = {
-    ready: isGuide ? "已准备好，可离线阅读" : "已准备好，可离线玩",
+    ready: isGuide
+      ? "已准备好，可离线阅读"
+      : isHomes
+        ? "已准备好，可离线记看房"
+        : "已准备好，可离线玩",
     checking: "正在检查离线资源…",
     downloading: "正在准备离线资源，请保持联网…",
     controller: "还未完成离线准备，请保持联网后重试。",
@@ -214,9 +219,14 @@
       };
       heartbeat();
       try {
-        worker.postMessage({ type, paths, page: isGuide ? "guide" : "games" }, [
-          channel.port2,
-        ]);
+        worker.postMessage(
+          {
+            type,
+            paths,
+            page: isGuide ? "guide" : isHomes ? "homes" : "games",
+          },
+          [channel.port2],
+        );
       } catch {
         finish({ ready: false, reason: "controller" });
       }
@@ -234,7 +244,7 @@
       const paths = [
         ...new Set([
           "/",
-          ...(isGuide ? ["/guide/"] : ["/games/"]),
+          ...(isGuide ? ["/guide/"] : isHomes ? ["/homes/"] : ["/games/"]),
           "/manifest.webmanifest",
           ...Array.from(
             document.querySelectorAll("script[src], link[rel=stylesheet]"),

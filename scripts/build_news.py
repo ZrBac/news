@@ -223,6 +223,7 @@ def main():
     shutil.copy2(ROOT / 'news/index.html', output / 'index.html')
     shutil.copytree(ROOT / 'news/games', output / 'games')
     shutil.copytree(ROOT / 'news/guide', output / 'guide')
+    shutil.copytree(ROOT / 'news/homes', output / 'homes')
     shutil.copytree(ROOT / 'news/assets', output / 'assets/news', dirs_exist_ok=True)
     chapters, static_paths = build_guide_reader(output)
     # Keep the previous edition available to older installed readers until they update.
@@ -239,11 +240,12 @@ def main():
     homepage = homepage.replace('content="https://zacai.fun/api/news-refresh"',
                                 f'content="{html_escape(refresh_endpoint, quote=True)}"')
     pages = {'/': homepage, '/games/': (output / 'games/index.html').read_text(),
-             '/guide/': (output / 'guide/index.html').read_text()}
+             '/guide/': (output / 'guide/index.html').read_text(),
+             '/homes/': (output / 'homes/index.html').read_text()}
     pages.update({path: (output / path.lstrip('/') / 'index.html').read_text() for path in static_paths})
-    shell_files = ['/', '/games/', '/guide/', '/manifest.webmanifest', '/assets/news/icon-180.png',
+    shell_files = ['/', '/games/', '/guide/', '/homes/', '/manifest.webmanifest', '/assets/news/icon-180.png',
                    '/assets/news/icon-192.png', '/assets/news/icon-512.png']
-    for filename in ('compat.js', 'compat.css', 'archive.js', 'personal.js', 'exchange-core.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json'):
+    for filename in ('compat.js', 'compat.css', 'archive.js', 'personal.js', 'exchange-core.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json', 'homes-core.js', 'homes.js', 'homes.css'):
         asset = output / 'assets/news' / filename
         digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:12]
         versioned = asset.with_name(f'{asset.stem}.{digest}{asset.suffix}')
@@ -276,10 +278,13 @@ def main():
     guide_shell = list(dict.fromkeys(['/', '/guide/', '/manifest.webmanifest',
         '/assets/news/icon-180.png', '/assets/news/icon-192.png', '/assets/news/icon-512.png',
         *re.findall(r'/assets/news/[\w.-]+\.[a-f0-9]{12}\.(?:json|js|css|svg)\b', pages['/'] + pages['/guide/'])]))
+    homes_shell = list(dict.fromkeys([*news_shell, '/homes/',
+        *re.findall(r'/assets/news/[\w.-]+\.[a-f0-9]{12}\.(?:json|js|css|svg)\b', pages['/homes/'])]))
     worker = worker.replace('__SHELL_FILES__', json.dumps(shell_files))
     worker = worker.replace('__NEWS_SHELL__', json.dumps(news_shell))
     worker = worker.replace('__GAMES_SHELL__', json.dumps(game_shell))
     worker = worker.replace('__GUIDE_SHELL__', json.dumps(guide_shell))
+    worker = worker.replace('__HOMES_SHELL__', json.dumps(homes_shell))
     worker = worker.replace('__GUIDE_FILES__', json.dumps([chapter['file'] for chapter in chapters]))
     worker = worker.replace('__GUIDE_REVISION__', json.dumps(json.loads(old_book)['revision']))
     (output / 'sw.js').write_text(worker)

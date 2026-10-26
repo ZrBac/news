@@ -72,11 +72,14 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       .filter((a) => a.category !== "local")
       .at(-1);
     await page.fill("#search", oldestNews.title);
-    await page.locator(".article").first().waitFor();
-    assert(
-      (await page.locator(".article h3").allTextContents()).includes(
-        oldestNews.title,
-      ),
+    // Duplicate reports can share a card whose headline belongs to another
+    // publisher; the searched report must remain reachable in that card.
+    await page.waitForFunction(
+      (url) =>
+        Array.from(document.querySelectorAll(".article a")).some(
+          (link) => link.href === url,
+        ),
+      oldestNews.originalUrl || oldestNews.url,
     );
     const date = await page.evaluate((value) => {
       const parts = Object.fromEntries(

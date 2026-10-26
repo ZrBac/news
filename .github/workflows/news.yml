@@ -76,6 +76,19 @@ jobs:
       - name: Install browser checks
         if: github.event_name == 'push'
         run: |
+          # The Azure mirror can stall for minutes on browser font packages.
+          # Keep the complete dependency installation, using Ubuntu's main mirror.
+          sudo python3 - <<'PY'
+          from pathlib import Path
+          files = [Path('/etc/apt/sources.list'), *Path('/etc/apt/sources.list.d').glob('*.sources'), *Path('/etc/apt/sources.list.d').glob('*.list')]
+          for path in files:
+              if path.is_file():
+                  original = path.read_text()
+                  updated = original.replace('http://azure.archive.ubuntu.com/ubuntu', 'https://archive.ubuntu.com/ubuntu').replace('https://azure.archive.ubuntu.com/ubuntu', 'https://archive.ubuntu.com/ubuntu')
+                  if updated != original:
+                      path.write_text(updated)
+          Path('/etc/apt/apt.conf.d/99news-network').write_text('Acquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nAcquire::Retries "2";\n')
+          PY
           npm ci --prefix tests/browser
           tests/browser/node_modules/.bin/playwright install --with-deps chromium
       - name: Check mobile reading and offline recovery before publishing

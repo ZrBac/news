@@ -12,7 +12,7 @@ from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import collect_home_candidates as collector
-from homes_api import Application, MAX_BODY, backup
+from homes_api import Application, MAX_BODY, backup, candidate_fits
 
 
 def empty_book():
@@ -21,6 +21,12 @@ def empty_book():
 
 
 class CandidateTests(unittest.TestCase):
+    def test_area_and_room_requirements_match_browser_rules(self):
+        cases = json.loads((Path(__file__).parent / 'fixtures/home-requirements.json').read_text())
+        for case in cases:
+            with self.subTest(case=case['label']):
+                self.assertEqual(candidate_fits(case), case['fits'])
+
     def new_page(self, unit='per平方米', value=28000, tags='普通住宅', status='在售'):
         data = {'@type': 'ItemList', 'itemListElement': [{'item': {'name': '测试住宅', 'description': '西湖 三墩 三居 100-120㎡',
                 'url': 'https://hz.newhouse.fang.com/loupan/20101.htm', 'offers': {'price': value, 'unitText': unit}}}]}
@@ -212,6 +218,19 @@ class NotebookAPITests(unittest.TestCase):
         response = self.call(QUERY_STRING='since=1')[1]
         self.assertTrue(response['unchanged'])
         self.assertNotIn('state', response)
+
+    def test_public_feed_filters_new_observations_without_changing_saved_records(self):
+        good = {'id': 'qualified', 'areas': [100, 100], 'layout': '3室2厅'}
+        bad = dict(good, id='two-rooms', layout='2室3厅')
+        path = Path(self.temp.name, 'candidates.json')
+        path.write_text(json.dumps({'schema': 1, 'items': [good, bad]}))
+        book = empty_book()
+        self.call('PUT', body={'baseRevision': 0, 'state': book})
+        self.assertEqual(self.call(path='/api/homes/candidates', token=False)[1]['items'], [good])
+        self.assertEqual(len(json.loads(path.read_text())['items']), 2, 'raw source history stays intact')
+        self.assertEqual(self.call()[1]['state'], book)
+        path.write_text(json.dumps({'schema': 1, 'items': [bad, dict(good, areas=[])]}))
+        self.assertEqual(self.call(path='/api/homes/candidates', token=False)[1]['items'], [])
 
     def test_concurrent_writes_have_one_winner(self):
         def save(_):

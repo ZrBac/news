@@ -21,6 +21,22 @@ MAX_BODY = 60 * 1024 * 1024
 ID = re.compile(r'[a-zA-Z0-9_-]{1,80}\Z')
 
 
+def candidate_fits(item):
+    """Public candidates must meet both requirements; unknowns stay excluded."""
+    if not isinstance(item, dict):
+        return False
+    areas, layout = item.get('areas'), item.get('layout')
+    if (not isinstance(areas, list) or len(areas) != 2
+            or any(type(a) not in (int, float) or not math.isfinite(a) for a in areas)
+            or not 100 <= areas[0] <= areas[1] or not isinstance(layout, str)):
+        return False
+    numerals = dict(zip('零〇一二两三四五六七八九十', (0, 0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10)))
+    layout = re.sub(r'[零〇一二两三四五六七八九十]+', lambda m: str(numerals.get(m[0], 0)), layout)
+    groups = re.findall(r'(\d+(?:\.\d+)?(?:\s*[-–—~/、至到]\s*\d+(?:\.\d+)?)*)\s*(?:室|居)', layout)
+    rooms = [float(n) for group in groups for n in re.findall(r'\d+(?:\.\d+)?', group)]
+    return bool(rooms) and all(n.is_integer() and n >= 3 for n in rooms)
+
+
 def require(test, message='记录格式不正确'):
     if not test:
         raise ValueError(message)
@@ -172,6 +188,7 @@ class Application:
                 data = json.loads((self.directory / 'candidates.json').read_text())
             except (OSError, ValueError):
                 return answer(503, {'error': '候选列表暂未准备好'})
+            data['items'] = [item for item in data.get('items', []) if candidate_fits(item)]
             return answer(200, data)
         if path != '/api/homes/notebook' or method not in ('GET', 'PUT'):
             return answer(405, {'error': '不支持此操作'})

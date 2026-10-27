@@ -113,18 +113,18 @@ const synced = async (page) => {
       firstCommunities.length,
       "show a range of communities first",
     );
+    await a.locator("#candidate-more").click();
+    assert.equal(
+      await a.locator(".candidate-card").count(),
+      24,
+      "load more qualifying candidates",
+    );
     await a.locator("#candidate-area").selectOption("西湖");
     await a.locator("#candidate-region").selectOption("三墩");
     assert((await a.locator(".candidate-card").count()) > 0);
     for (const card of await a.locator(".candidate-card").all()) {
       assert.match(await card.innerText(), /西湖 · 三墩/);
     }
-    await a.locator("#candidate-more").click();
-    assert.equal(
-      await a.locator(".candidate-card").count(),
-      24,
-      "load the next batch within the chosen region",
-    );
     await a.locator("#candidate-area").selectOption("上城");
     assert.equal(
       await a.locator("#candidate-region").inputValue(),
@@ -234,9 +234,51 @@ const synced = async (page) => {
     await b.waitForFunction(
       () => document.querySelectorAll(".home-card").length === 5,
     );
+    // Cached data from an older release must also obey the stricter requirements,
+    // even when the API is unreachable and "all observations" is selected.
+    const before = await a.evaluate(() => window.HomeNotebook.snapshot().homes);
+    await a.evaluate(() => {
+      const key = "zrbac-home-candidates-v1",
+        feed = JSON.parse(localStorage.getItem(key));
+      const candidate = {
+        ...feed.items[0],
+        kind: "resale",
+        priceBasis: "listing",
+        total: 330,
+        areas: [100, 100],
+        layout: "3室2厅",
+      };
+      feed.items = [
+        { ...candidate, id: "qualifying-cache", name: "符合条件的旧缓存" },
+        { ...candidate, id: "small-cache", areas: [99.99, 99.99] },
+        { ...candidate, id: "two-room-cache", layout: "2室3厅" },
+        { ...candidate, id: "unknown-cache", layout: "" },
+      ];
+      localStorage.setItem(key, JSON.stringify(feed));
+    });
+    await first.context.route(api + "/candidates", (route) => route.abort());
+    await a.reload();
+    await a.evaluate(() =>
+      Promise.all([window.homeCandidatesReady, window.homesInitialLoad]),
+    );
+    await a.locator("#candidate-scope").selectOption("all");
+    assert.equal(await a.locator(".candidate-card").count(), 1);
+    assert.equal(
+      await a.locator(".candidate-card h3").textContent(),
+      "符合条件的旧缓存",
+    );
+    assert.deepEqual(
+      await a.evaluate(() => window.HomeNotebook.snapshot().homes),
+      before,
+      "existing notebook entries remain intact",
+    );
+    assert.match(
+      await a.locator("#candidate-requirements").textContent(),
+      /100㎡.*3 室.*不含两室/,
+    );
     assert.deepEqual(errors, []);
     console.log(
-      "Home finder: candidate price provenance, mobile layout, local migration, two-device sync, offline conflict and draft preservation passed",
+      "Home finder: size/room requirements across cached feeds, pagination, preserved saves, candidate price provenance, mobile layout, migration and two-device sync passed",
     );
   } finally {
     await browser.close();

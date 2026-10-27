@@ -210,7 +210,7 @@
               ? `按此均价，${p.budgetMax} 万约对应 ${number((p.budgetMax * 10000) / c.unitPrice)}㎡，有无该面积房源待核实。`
               : "";
           const map = `https://uri.amap.com/search?keyword=${encodeURIComponent("杭州 " + c.name)}&city=杭州&view=map`;
-          return `<article class="candidate-card" data-candidate="${esc(c.id)}"><div class="home-card-top"><span class="home-tag">${c.kind === "new" ? "新房" : "二手房"}</span><span class="home-tag ${category(c, p) === "budget" ? "active" : ""}">${esc(scopeLabel)}</span></div><h3>${esc(c.name)}</h3><p class="home-muted">${esc([c.district, c.region, area(c), c.kind === "resale" ? c.layout : ""].filter(Boolean).join(" · "))}</p><p class="home-price">${esc(q.main)}</p><p class="home-quote">${esc(q.note)}</p>${c.unitPrice && c.total ? `<p class="home-quote">参考均价 ${esc(c.unitPrice)} 元/㎡</p>` : ""}${affordable ? `<p class="candidate-note">${esc(affordable)}</p>` : ""}<p class="candidate-note">${esc(c.address || "详细位置请查看来源与地图")}<br>通勤待核实 · ${esc(c.status)}</p>${caution ? `<p class="home-caution">${esc(caution)}</p>` : ""}${history(c)}<div class="candidate-bottom"><div><a href="${esc(url(c.url))}" target="_blank" rel="noopener noreferrer">查看房源 ↗</a> <a href="${esc(map)}" target="_blank" rel="noopener noreferrer">地图 ↗</a></div><button data-save-candidate="${esc(c.id)}" ${saved.has(c.url) ? "disabled" : ""}>${saved.has(c.url) ? "已收藏" : "＋ 收藏"}</button></div><p class="candidate-observed home-muted">该条检查于 ${esc(date(c.checkedAt))}</p></article>`;
+          return `<article class="candidate-card" data-candidate="${esc(c.id)}"><div class="home-card-top"><span class="home-tag">${c.kind === "new" ? "新房" : "二手房"}</span><span class="home-tag ${category(c, p) === "budget" ? "active" : ""}">${esc(scopeLabel)}</span></div><h3>${esc(c.name)}</h3><p class="home-muted">${esc([c.district, c.region, area(c), c.layout.replace(/\s*—.*$/, "")].filter(Boolean).join(" · "))}</p><p class="home-price">${esc(q.main)}</p><p class="home-quote">${esc(q.note)}</p>${c.unitPrice && c.total ? `<p class="home-quote">参考均价 ${esc(c.unitPrice)} 元/㎡</p>` : ""}${affordable ? `<p class="candidate-note">${esc(affordable)}</p>` : ""}<p class="candidate-note">${esc(c.address || "详细位置请查看来源与地图")}<br>通勤待核实 · ${esc(c.status)}</p>${caution ? `<p class="home-caution">${esc(caution)}</p>` : ""}${history(c)}<div class="candidate-bottom"><div><a href="${esc(url(c.url))}" target="_blank" rel="noopener noreferrer">查看房源 ↗</a> <a href="${esc(map)}" target="_blank" rel="noopener noreferrer">地图 ↗</a></div><button data-save-candidate="${esc(c.id)}" ${saved.has(c.url) ? "disabled" : ""}>${saved.has(c.url) ? "已收藏" : "＋ 收藏"}</button></div><p class="candidate-observed home-muted">该条检查于 ${esc(date(c.checkedAt))}</p></article>`;
         })
         .join("") ||
       `<div class="home-empty"><h3>这批来源暂时没有符合条件的线索</h3><p>可以查看“价格待核实”，或切换区域和房源类型。列表未覆盖全部市场。</p></div>`;
@@ -245,7 +245,8 @@
       )
     )
       throw new Error("房源数据格式暂不可用");
-    feed = value;
+    // Apply the same requirements to old local caches, offline seeds and the API.
+    feed = { ...value, items: value.items.filter(H.candidateFits) };
     render();
   }
   async function load() {

@@ -1,0 +1,105 @@
+[
+  {
+    "label": "exactly 100 square metres and three rooms",
+    "areas": [100, 100],
+    "layout": "3室2厅",
+    "fits": true
+  },
+  {
+    "label": "larger four-room unit",
+    "areas": [136.62, 136.62],
+    "layout": "4室2厅",
+    "fits": true
+  },
+  {
+    "label": "new project with qualifying range",
+    "areas": [100, 131],
+    "layout": "三居/ 四居 —100~131平米",
+    "fits": true
+  },
+  {
+    "label": "Arabic bedroom range",
+    "areas": [110, 140],
+    "layout": "3-4居",
+    "fits": true
+  },
+  {
+    "label": "just under 100",
+    "areas": [99.99, 99.99],
+    "layout": "3室2厅",
+    "fits": false
+  },
+  {
+    "label": "two rooms even with three living rooms",
+    "areas": [120, 120],
+    "layout": "2室3厅",
+    "fits": false
+  },
+  {
+    "label": "Chinese two-bedroom unit",
+    "areas": [120, 120],
+    "layout": "两居",
+    "fits": false
+  },
+  {
+    "label": "one-room unit",
+    "areas": [110, 110],
+    "layout": "1室2厅",
+    "fits": false
+  },
+  { "label": "unknown area", "areas": [], "layout": "3室2厅", "fits": false },
+  {
+    "label": "unknown layout",
+    "areas": [110, 110],
+    "layout": "",
+    "fits": false
+  },
+  {
+    "label": "range includes smaller flats",
+    "areas": [95, 141],
+    "layout": "三居/四居",
+    "fits": false
+  },
+  {
+    "label": "range includes two-room flats",
+    "areas": [100, 140],
+    "layout": "二居/三居",
+    "fits": false
+  },
+  {
+    "label": "compact mixed room types",
+    "areas": [100, 140],
+    "layout": "三居二居",
+    "fits": false
+  },
+  {
+    "label": "numeric range includes two-room flats",
+    "areas": [100, 140],
+    "layout": "2-3室",
+    "fits": false
+  },
+  {
+    "label": "Chinese range includes two-room flats",
+    "areas": [100, 140],
+    "layout": "二至四居",
+    "fits": false
+  },
+  {
+    "label": "fractional room count is unclear",
+    "areas": [110, 110],
+    "layout": "3.5室",
+    "fits": false
+  },
+  {
+    "label": "reversed area range",
+    "areas": [120, 110],
+    "layout": "3室2厅",
+    "fits": false
+  },
+  {
+    "label": "malformed area",
+    "areas": ["110", 110],
+    "layout": "3室2厅",
+    "fits": false
+  }
+]

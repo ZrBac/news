@@ -5,6 +5,7 @@
 - 程序：`/opt/zrbac-homes/scripts/`，独立虚拟环境 `/opt/zrbac-homes/.venv/`。
 - 私人数据：`/var/lib/zrbac-homes/notebook.sqlite3`，含收藏、配置、笔记与压缩照片。SQLite WAL 写入，服务用户 `zrbachomes`，状态目录权限 0700。
 - 公开候选：同目录 `candidates.json`，只包含来源页面公开信息和观察历史。采集使用固定 HTTPS 来源，不接受用户提交的抓取地址，不登录或绕过验证码。
+- API 每次返回候选时要求面积至少 100㎡、至少 3 室；未知信息或跨过下限的范围排除。原始来源观察继续保留，私人收藏不受此筛选影响；新采集结果也自动按相同条件返回。
 - 私人认证：`/etc/zrbac-homes.env`（0600）提供 `HOMES_TOKEN_SHA256` 和 `HOMES_STATE_DIR`。此部署只对应一个家庭看房本。无注册接口；未经认证不能读取或写入私人记录。CORS 仅允许 `https://news.zacai.fun`，浏览器不发送 Cookie。
 - 每日同机备份：`/var/lib/zrbac-homes/backups/YYYY-MM-DD.sqlite3`，保留最近 14 份，用 SQLite backup API 获得一致快照。同机备份不能防止整台服务器或磁盘损坏；浏览器仍可导出完整 JSON。
 

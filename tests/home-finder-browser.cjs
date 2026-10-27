@@ -99,6 +99,39 @@ const synced = async (page) => {
       (await a.locator(".candidate-card").count()) > 0,
       "prepopulated budget candidates",
     );
+    await a.locator("#candidate-kind").selectOption("resale");
+    const firstCommunities = await a
+      .locator(".candidate-card h3")
+      .allTextContents();
+    assert.equal(
+      firstCommunities.length,
+      12,
+      "more than six candidates are initially visible",
+    );
+    assert.equal(
+      new Set(firstCommunities).size,
+      firstCommunities.length,
+      "show a range of communities first",
+    );
+    await a.locator("#candidate-area").selectOption("西湖");
+    await a.locator("#candidate-region").selectOption("三墩");
+    assert((await a.locator(".candidate-card").count()) > 0);
+    for (const card of await a.locator(".candidate-card").all()) {
+      assert.match(await card.innerText(), /西湖 · 三墩/);
+    }
+    await a.locator("#candidate-more").click();
+    assert.equal(
+      await a.locator(".candidate-card").count(),
+      24,
+      "load the next batch within the chosen region",
+    );
+    await a.locator("#candidate-area").selectOption("上城");
+    assert.equal(
+      await a.locator("#candidate-region").inputValue(),
+      "",
+      "changing district resets an incompatible region",
+    );
+    await a.locator("#candidate-area").selectOption("");
     await a.locator("#candidate-kind").selectOption("new");
     await a.locator("[data-save-candidate]").first().click();
     await a.waitForFunction(

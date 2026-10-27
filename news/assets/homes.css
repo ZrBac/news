@@ -132,6 +132,13 @@
 .home-filters select {
   font-size: 13px;
 }
+.home-candidate-filters {
+  flex-wrap: wrap;
+}
+.home-candidate-filters > label {
+  flex: 1;
+  min-width: 0;
+}
 .home-list-heading {
   display: flex;
   justify-content: space-between;
@@ -530,6 +537,9 @@
   .home-filters select {
     font-size: 12px;
     padding: 10px 6px;
+  }
+  .home-filters.home-candidate-filters > label {
+    flex: 1 1 calc(50% - 8px);
   }
   .home-list {
     grid-template-columns: 1fr;

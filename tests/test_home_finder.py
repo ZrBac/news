@@ -7,6 +7,7 @@ import sqlite3
 import sys
 import tempfile
 import unittest
+from unittest.mock import patch
 from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
@@ -79,6 +80,92 @@ class CandidateTests(unittest.TestCase):
         self.assertEqual(result['items'][0]['checkedAt'], item['checkedAt'])
         self.assertTrue(result['items'][0]['stale'])
         self.assertFalse(result['sources'][0]['ok'])
+
+    def resale_list(self):
+        fields = {'district': '151', 'comarea': '2349', 'price': '300^350', 'purpose': '住宅',
+                  'tags': '3', 'pageType': 'esfindex2022', 'total': '1'}
+        inputs = ''.join(f'<input data-id="{k}" value="{v}">' for k, v in fields.items())
+        card = '<li class="listhouse"><a class="listtype" href="//m.fang.com/esf/hz/3_123.html">' \
+               '<div class="img"><p></p></div><div class="txt"><h3>精装三房</h3><p>' \
+               '<span>89.52㎡</span><span>3室2厅</span><span>南</span><span>紫金名门</span></p>' \
+               '<div class="price"><span><em>330</em>万</span><span>36863元/㎡</span></div></div></a></li>'
+        return '<title>杭州三墩二手房</title>' + inputs + '<ul id="content">' + card + '</ul>' + \
+               '<ul id="recommend">' + card.replace('3_123', '3_456') + '</ul>'
+
+    def test_resale_list_requires_the_requested_city_region_price_and_residential_filters(self):
+        config = next(x for x in collector.sources() if x['id'] == 'resale-area-sandun')
+        body = self.resale_list()
+        rows = collector.parse_resale_list(body, config)
+        self.assertEqual(len(rows), 1)
+        self.assertEqual((rows[0]['name'], rows[0]['total'], rows[0]['areas']), ('紫金名门', 330, [89.52, 89.52]))
+        for before, after in [('杭州', '上海'), ('value="2349"', 'value="2918"'), ('300^350', ''),
+                              ('value="住宅"', 'value="商铺"'), ('value="3"', 'value=""')]:
+            with self.subTest(before=before), self.assertRaises(ValueError):
+                collector.parse_resale_list(body.replace(before, after), config)
+        for before, after in [('/esf/hz/', '/zf/hz/'), ('<em>330</em>', '<em>360</em>')]:
+            self.assertEqual(collector.parse_resale_list(body.replace(before, after), config), [])
+
+    def test_pagination_deduplicates_moved_items_and_stays_on_the_district_list(self):
+        config = collector.sources()[0]
+        next_url = config['url'] + 'b92/'
+        calls = []
+        first = collector.observe(collector.parse_new(self.new_page(), config)[0], {}, '2026-10-25T01:00:00+00:00')
+        def loader(url):
+            calls.append(url)
+            if url == config['url']:
+                return self.new_page() + '<a href="' + next_url + '">下一页</a>'
+            return self.new_page() + '<a href="https://unrelated.example/b93/">下一页</a>'
+        with patch.object(collector, 'sources', return_value=[config]):
+            result = collector.collect({'items': [first]}, loader)
+        self.assertEqual(calls, [config['url'], next_url])
+        self.assertEqual(len(result['items']), 1)
+        self.assertNotIn('missing', result['items'][0])
+        self.assertEqual(result['items'][0]['firstSeen'], first['firstSeen'])
+
+    def test_partial_page_failure_keeps_its_old_rows_without_refreshing_their_dates(self):
+        config = collector.sources()[0]
+        next_url = config['url'] + 'b92/'
+        old = collector.observe(collector.parse_new(self.new_page(), config)[0], {}, '2026-10-25T01:00:00+00:00')
+        second = dict(old, id='new-20102', sourcePage=next_url)
+        moved = dict(old, id='new-20103', sourcePage=config['url'])
+        def loader(url):
+            if url == next_url:
+                raise TimeoutError()
+            return self.new_page(value=29000) + '<a href="' + next_url + '">下一页</a>'
+        with patch.object(collector, 'sources', return_value=[config]):
+            result = collector.collect({'items': [old, second, moved]}, loader)
+        rows = {x['id']: x for x in result['items']}
+        self.assertFalse(result['sources'][0]['ok'])
+        self.assertTrue(result['sources'][0]['partial'])
+        self.assertEqual(rows[old['id']]['unitPrice'], 29000)
+        self.assertTrue(rows[second['id']]['stale'])
+        self.assertNotIn('missing', rows[second['id']])
+        self.assertEqual(rows[second['id']]['checkedAt'], second['checkedAt'])
+        self.assertTrue(rows[moved['id']]['stale'])
+        self.assertNotIn('missing', rows[moved['id']], 'the row could have moved onto the unread page')
+
+    def test_fresh_result_wins_over_absence_in_an_overlapping_source(self):
+        config = collector.sources()[0]
+        other = dict(config, id='new-overlap', url='https://hz.newhouse.fang.com/house/s/xihu/another/')
+        old = collector.observe(collector.parse_new(self.new_page(), other)[0], {}, '2026-10-25T01:00:00+00:00')
+        def loader(url):
+            return self.new_page(tags='酒店式公寓') if url == other['url'] else self.new_page()
+        with patch.object(collector, 'sources', return_value=[config, other]):
+            result = collector.collect({'items': [old]}, loader)
+        self.assertEqual(len(result['items']), 1)
+        self.assertNotIn('missing', result['items'][0])
+        self.assertNotIn('stale', result['items'][0])
+
+    def test_network_retry_is_bounded_and_does_not_retry_access_denials(self):
+        with patch.object(collector.urllib.request, 'urlopen', side_effect=TimeoutError()) as request:
+            with self.assertRaises(TimeoutError):
+                collector.fetch('https://example.com/')
+            self.assertEqual(request.call_count, 2)
+        denial = collector.urllib.error.HTTPError('https://example.com/', 403, 'Forbidden', {}, None)
+        with patch.object(collector.urllib.request, 'urlopen', side_effect=denial) as request:
+            with self.assertRaises(collector.urllib.error.HTTPError):
+                collector.fetch('https://example.com/')
+            self.assertEqual(request.call_count, 1)
 
 
 class NotebookAPITests(unittest.TestCase):

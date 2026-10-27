@@ -39,7 +39,7 @@
     }
   };
   let feed,
-    limit = 6,
+    limit = 12,
     origin = "",
     loading = false;
   const profile = () =>
@@ -120,12 +120,31 @@
       scope = $("#candidate-scope").value,
       kind = $("#candidate-kind").value,
       district = $("#candidate-area").value;
+    const regionSelect = $("#candidate-region"),
+      selectedRegion = regionSelect.value;
+    const regions = [
+      ...new Set(
+        feed.items
+          .filter((c) => !district || c.district === district)
+          .map((c) => c.region)
+          .filter(Boolean),
+      ),
+    ].sort((a, b) => a.localeCompare(b, "zh-CN"));
+    regionSelect.innerHTML =
+      '<option value="">全部板块</option>' +
+      regions
+        .map((r) => `<option value="${esc(r)}">${esc(r)}</option>`)
+        .join("");
+    regionSelect.value = regions.includes(selectedRegion) ? selectedRegion : "";
+    const region = regionSelect.value;
     const saved = new Set(
       (window.HomeNotebook?.snapshot().homes || []).map((h) => h.sourceUrl),
     );
     const all = feed.items.filter(
       (c) =>
-        (!kind || c.kind === kind) && (!district || c.district === district),
+        (!kind || c.kind === kind) &&
+        (!district || c.district === district) &&
+        (!region || c.region === region),
     );
     const items = all.filter(
       (c) => scope === "all" || category(c, p) === scope,
@@ -140,12 +159,29 @@
     items.sort(
       (a, b) => rank(a) - rank(b) || (amount(b) || 0) - (amount(a) || 0),
     );
-    const budgetCount = all.filter((c) => category(c, p) === "budget").length;
+    // Show different communities before repeating units from the same community.
+    const counts = new Map(),
+      occurrence = new Map();
+    for (const c of items) {
+      const key = [c.kind, c.district, c.name].join("|");
+      occurrence.set(c.id, counts.get(key) || 0);
+      counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    items.sort(
+      (a, b) =>
+        rank(a) - rank(b) ||
+        occurrence.get(a.id) - occurrence.get(b.id) ||
+        (amount(b) || 0) - (amount(a) || 0),
+    );
+    const budget = all.filter((c) => category(c, p) === "budget");
+    const resale = budget.filter((c) => c.kind === "resale");
+    const communities = new Set(resale.map((c) => c.district + "|" + c.name))
+      .size;
     $("#candidate-summary").textContent =
-      `${budgetCount} 条预算内线索 · 新房展示参考总价，二手房展示单套挂牌价`;
+      `预算内：${budget.length - resale.length} 个新盘 · ${resale.length} 条二手挂牌（${communities} 个小区）`;
     const failures = feed.sources.filter((s) => !s.ok).length;
     $("#candidate-message").textContent =
-      `${origin}检查于 ${date(feed.updatedAt)}${failures ? ` · ${failures} 个来源本次未更新，保留上次结果` : ""} · 当前 ${items.length} 条`;
+      `${origin}检查于 ${date(feed.updatedAt)}${failures ? ` · ${failures} 个来源有页面未更新，保留上次结果` : ""} · 当前 ${items.length} 条`;
     $("#candidate-list").innerHTML =
       items
         .slice(0, limit)
@@ -179,6 +215,8 @@
         .join("") ||
       `<div class="home-empty"><h3>这批来源暂时没有符合条件的线索</h3><p>可以查看“价格待核实”，或切换区域和房源类型。列表未覆盖全部市场。</p></div>`;
     $("#candidate-more").hidden = items.length <= limit;
+    $("#candidate-more").textContent =
+      `再看 ${Math.min(12, Math.max(0, items.length - limit))} 条 · 还有 ${Math.max(0, items.length - limit)} 条`;
     $("#candidate-coverage").textContent =
       feed.coverage + " 每天 9:00、16:00 检查，时间为北京时间。";
     $("#candidate-sources").innerHTML = feed.sources
@@ -294,13 +332,19 @@
       render();
     }
   });
-  for (const id of ["candidate-scope", "candidate-kind", "candidate-area"])
+  for (const id of [
+    "candidate-scope",
+    "candidate-kind",
+    "candidate-area",
+    "candidate-region",
+  ])
     $("#" + id).addEventListener("change", () => {
-      limit = 6;
+      if (id === "candidate-area") $("#candidate-region").value = "";
+      limit = 12;
       render();
     });
   $("#candidate-more").addEventListener("click", () => {
-    limit += 6;
+    limit += 12;
     render();
   });
   $("#candidate-refresh").addEventListener("click", load);

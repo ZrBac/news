@@ -255,6 +255,11 @@ def main():
         shell_files.append(f'/assets/news/{versioned.name}')
     for path, page in pages.items():
         (output / path.lstrip('/') / 'index.html').write_text(page)
+    # Older installed workers only intercept known navigation paths. Keep an
+    # independent entrance for readers stuck on the original manual notebook.
+    live_homes = output / 'homes/live'
+    live_homes.mkdir(parents=True, exist_ok=True)
+    (live_homes / 'index.html').write_text(pages['/homes/'])
     shutil.copy2(ROOT / 'news/manifest.webmanifest', output / 'manifest.webmanifest')
     worker = (ROOT / 'news/sw.js').read_text()
     shell_digest = hashlib.sha256(pages['/'].encode() + worker.encode())

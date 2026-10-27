@@ -620,6 +620,7 @@ class BuildTests(unittest.TestCase):
                 self.assertIn('/homes/', shell)
                 homes = (output / 'homes/index.html').read_text()
                 self.assertIn('id="home-book"', homes)
+                self.assertEqual((output / 'homes/live/index.html').read_text(), homes)
                 self.assertNotIn('__HOMES_SHELL__', worker)
                 homes_shell = json.loads(re.search(r'const HOMES_SHELL = (\[.*?\]);', worker, re.S).group(1))
                 self.assertIn('/homes/', homes_shell)

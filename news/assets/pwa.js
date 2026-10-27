@@ -80,15 +80,19 @@
   };
   function status(reason) {
     if (!offlineStatus) return;
-    offlineStatus.textContent = messages[reason] || messages.registration;
+    offlineStatus.textContent =
+      reason === "version" && registration?.waiting?.state !== "installed"
+        ? "离线版本尚未更新，请保持联网后点“重新检查”。"
+        : messages[reason] || messages.registration;
     offlineStatus.classList.toggle("ready", reason === "ready");
     offlineStatus.dataset.state = reason;
     if (offlineTools) offlineTools.hidden = !hasOfflineTools;
     if (prepareButton) {
-      prepareButton.textContent =
-        reason === "ready" || reason === "timeout"
-          ? "重新检查"
-          : "准备离线使用";
+      prepareButton.textContent = ["ready", "timeout", "version"].includes(
+        reason,
+      )
+        ? "重新检查"
+        : "准备离线使用";
       prepareButton.disabled = [
         "checking",
         "downloading",

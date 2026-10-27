@@ -304,8 +304,28 @@ self.addEventListener("message", (event) => {
 });
 
 async function navigation(request, page) {
-  // Launch the installed version directly, including after a cold offline start.
-  // HTML and its hashed assets switch together through the update button.
+  // Home candidates should not be hidden behind an old manual-only notebook.
+  // Keep the installed HTML and its assets together for the offline fallback;
+  // do not write a newer network page into the older worker's cache.
+  if (page === "/homes/" && self.navigator?.onLine !== false) {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 3500);
+    try {
+      const response = await fetch(request, {
+        cache: "no-cache",
+        signal: controller.signal,
+      });
+      if (response.ok) {
+        await response.clone().arrayBuffer();
+        return response;
+      }
+    } catch {
+      // A failed or slow network still permits the saved notebook to open.
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  // Other entrances keep their installed version until an explicit update.
   try {
     const cached = await (await caches.open(CACHE)).match(page);
     if (cached) return cached;
@@ -319,6 +339,15 @@ self.addEventListener("fetch", (event) => {
   const request = event.request;
   const url = new URL(request.url);
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
+  if (
+    request.mode === "navigate" &&
+    ["/homes/live", "/homes/live/", "/homes/live/index.html"].includes(
+      url.pathname,
+    )
+  ) {
+    event.respondWith(navigation(request, "/homes/"));
+    return;
+  }
   if (
     request.mode === "navigate" &&
     Object.prototype.hasOwnProperty.call(PAGES, url.pathname)

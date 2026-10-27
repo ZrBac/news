@@ -736,7 +736,7 @@
         ${backup ? '<p class="price-status">中指云本轮暂未能核实，补充展示克而瑞公开周报，口径以原文为准。</p>' : status && status.status !== "ok" ? '<p class="price-status">本轮部分数据未能核实，保留已收录价格。</p>' : ""}</section>`;
       })
       .join("");
-    panel.innerHTML = `<a class="housing-home-book" href="/homes/"><span><strong>我的看房</strong><small>收藏房源，记报价、通勤和现场感受</small></span><span aria-hidden="true">→</span></a><h2 class="city-price-heading">杭州整体成交</h2><p class="price-intro">新房成交均价按周、二手房及其他月度统计按月发布。随网站自动检查，没有新数据时保留上次结果。</p>
+    panel.innerHTML = `<a class="housing-home-book" href="/homes/live/"><span><strong>看房源 · 新房与二手房</strong><small>按预算和板块筛选，收藏后记录看房</small></span><span aria-hidden="true">→</span></a><h2 class="city-price-heading">杭州整体成交</h2><p class="price-intro">新房成交均价按周、二手房及其他月度统计按月发布。随网站自动检查，没有新数据时保留上次结果。</p>
       ${data.checkedAt ? `<p class="price-published housing-checked">最近检查 ${escape(formatTime(data.checkedAt))}（北京时间）；数据日期以各项统计期为准。</p>` : ""}
       <div class="housing-links" aria-label="楼盘信息查询">
         <button type="button" class="text-button" data-housing-jump>楼盘动态 ↓</button>

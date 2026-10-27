@@ -50,10 +50,11 @@ function worker(options = {}) {
         super(new URL(url, "https://news.test"), init);
       }
     },
-    setTimeout,
+    setTimeout: options.setTimeout || setTimeout,
     clearTimeout,
     self: {
       location: { origin: "https://news.test" },
+      navigator: { onLine: options.online !== false },
       addEventListener: (type, handler) => (handlers[type] = handler),
       skipWaiting: options.skipWaiting || (async () => {}),
     },
@@ -112,6 +113,7 @@ test("Offline navigation aliases return their matching HTML without Object.hasOw
     ["/homes", "/homes/"],
     ["/homes/", "/homes/"],
     ["/homes/index.html?from=housing", "/homes/"],
+    ["/homes/live/", "/homes/"],
   ]) {
     assert.equal(await (await request(path)).text(), "cached " + expected);
   }
@@ -175,6 +177,44 @@ test("Cached navigation never waits on a stalled network request", async () => {
   });
   assert.equal(await (await w.request("/games/")).text(), "cached /games/");
   assert.equal(fetches, 0);
+});
+test("Home navigation reads new HTML online without replacing the installed fallback", async () => {
+  const entries = new Map([["/homes/", new Response("installed notebook")]]);
+  const w = worker({
+    entries,
+    fetch: async () => new Response("new candidates"),
+  });
+  for (const path of ["/homes/", "/homes/live/", "/homes/index.html"])
+    assert.equal(await (await w.request(path)).text(), "new candidates");
+  assert.equal(await entries.get("/homes/").text(), "installed notebook");
+});
+test("Home navigation uses its saved page offline and after a bounded network timeout", async () => {
+  let calls = 0,
+    deadline;
+  const offline = worker({
+    online: false,
+    fetch: async () => {
+      calls++;
+      throw new Error("offline");
+    },
+  });
+  assert.equal(
+    await (await offline.request("/homes/live/")).text(),
+    "cached /homes/",
+  );
+  assert.equal(calls, 0);
+  const slow = worker({
+    setTimeout: (fn, ms) => {
+      deadline = ms;
+      return setTimeout(fn, 1);
+    },
+    fetch: (_request, { signal }) =>
+      new Promise((_resolve, reject) =>
+        signal.addEventListener("abort", () => reject(new Error("timeout"))),
+      ),
+  });
+  assert.equal(await (await slow.request("/homes/")).text(), "cached /homes/");
+  assert.equal(deadline, 3500);
 });
 test("Readiness includes the home-screen launch page, not only the game assets", async () => {
   const entries = new Map([

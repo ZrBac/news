@@ -128,12 +128,59 @@ class WeekendTests(unittest.TestCase):
         self.assertEqual(selected[1]['publishedAt'], '2026-10-18T01:00:00Z')
         self.assertEqual(selected[1]['outing']['end'], '2026-10-25')
 
-    def test_six_outing_types_cover_more_than_markets_exhibitions_and_camping(self):
+    def test_four_outing_types_put_camping_first_and_fold_legacy_categories(self):
         examples = {'market': '杭州咖啡市集', 'culture': '杭州话剧演出', 'outdoor': '安吉山野徒步',
-                    'family': '杭州非遗手作工作坊', 'city': '杭州城市漫游夜游路线', 'sport': '杭州飞盘运动体验'}
+                    'camping': '安吉周末露营市集'}
         for kind, title in examples.items():
             self.assertTrue(weekend.news.is_hangzhou_local(title))
             self.assertEqual(weekend.outing_info(dict(self.article, title=title))['type'], kind)
+        for title, kind in [('杭州非遗手作工作坊', 'culture'), ('杭州城市漫游夜游路线', 'outdoor'),
+                            ('杭州飞盘运动体验', 'outdoor')]:
+            self.assertEqual(weekend.outing_info(dict(self.article, title=title))['type'], kind)
+
+    def test_cached_camping_keeps_verified_dates_when_reclassified(self):
+        old = dict(self.article, title='杭州露营节', outing={'type': 'outdoor', 'start': '2026-10-24',
+                   'end': '2026-10-25', 'attemptedAt': weekend.news.iso(self.now)})
+        article = dict(old)
+        weekend.enrich([article], [old], self.now, lambda u: self.fail('fresh cache must not refetch'))
+        self.assertEqual(article['outing']['type'], 'camping')
+        self.assertEqual(article['outing']['end'], '2026-10-25')
+
+    def test_camping_survives_busy_list_and_excludes_private_recaps(self):
+        articles = [dict(self.article, id=str(i), title='杭州新展览'+str(i),
+                         url='https://example.com/'+str(i), outing={'type': 'culture'}) for i in range(60)]
+        camp = dict(self.article, id='camp', title='安吉营地开放与预约指南', publishedAt='2026-10-10T02:00:00Z',
+                    url='https://example.com/camp', outing={'type': 'camping'})
+        noise = [dict(self.article, id='bad'+str(i), title=title, outing={'type': 'culture'}) for i, title in enumerate([
+            '杭州市笕和幼儿园举行亲子毅行秋游活动', '平安家族办公室服务周年庆暨公益音乐会在杭州举行',
+            '从乌镇戏剧节看长期主义的落地实验', '11天上演74场中外好戏 乌镇戏剧节曲终韵长', '杭州露营产业规模增长'])]
+        selected = weekend.select_articles(articles + [camp] + noise, self.now)
+        self.assertEqual(len(selected), 48)
+        self.assertIn('camp', [a['id'] for a in selected])
+        self.assertFalse(any(a['id'].startswith('bad') for a in selected))
+        self.assertEqual(selected[-1]['id'], 'camp')
+
+    def test_camping_search_includes_opening_notices_without_weekend_keyword(self):
+        urls = []
+        source = {'id': 'camp', 'category': 'local', 'titleFilter': 'hangzhou-camping',
+                  'url': 'https://news.google.com/rss/search?q=杭州+露营+when:14d'}
+        weekend.search_weekend([source], self.now, lambda url: urls.append(url) or b'<rss><channel/></rss>')
+        query = weekend.parse_qs(weekend.urlsplit(urls[0]).query)['q'][0]
+        self.assertIn('when:21d', query)
+        self.assertNotIn('本周末', query)
+
+    def test_scenic_camping_headline_requires_body_evidence(self):
+        candidate = dict(self.article, title='大杭州三处旷野，周末直接冲',
+                         sourceId='gnews-hangzhou-camping', outing={'type': 'outdoor'})
+        self.assertEqual(weekend.select_articles([candidate], self.now), [])
+        weekend.enrich([candidate], [], self.now, lambda url: '安屿露营公园一期已经对外开放，可预约自驾营位。\n另有附近市集，活动时间：10月24日至11月22日\n活动地点：市集草坪')
+        self.assertEqual(candidate['outing']['type'], 'camping')
+        self.assertNotIn('end', candidate['outing'])
+        self.assertNotIn('venue', candidate['outing'])
+        self.assertEqual(weekend.select_articles([candidate], self.now), [candidate])
+        unsupported = dict(self.article, title='杭州周末公园游玩攻略', sourceId='gnews-hangzhou-camping')
+        weekend.enrich([unsupported], [], self.now, lambda url: '这里介绍花园和室内书店，没有营地信息。')
+        self.assertEqual(weekend.select_articles([unsupported], self.now), [])
 
     def test_duplicate_event_reports_and_old_undated_echoes_do_not_fill_the_list(self):
         known = dict(self.article, id='known', title='杭州良渚文创市集', outing={'type': 'market', 'until': '2026-10-18'})

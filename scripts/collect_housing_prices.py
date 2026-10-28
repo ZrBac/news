@@ -7,14 +7,15 @@ Retain the last known period when a source fails or changes its wording.
 import argparse
 import calendar
 import concurrent.futures
-import functools
 import json
 import re
+import threading
 from datetime import date, datetime, timezone
 from html.parser import HTMLParser
 from pathlib import Path
 from urllib.parse import urljoin, urlsplit
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError, URLError
 
 ROOT = Path(__file__).resolve().parents[1]
 CIH = 'https://www.cih-index.com/citydetail/3146b167-dcc5-4be2-9db2-47f2a6bda5b6'
@@ -61,6 +62,41 @@ def fetch(url):
     if len(body) > 2_000_000:
         raise ValueError('Oversized price report')
     return body.decode('utf-8')
+
+
+def failure_reason(exc):
+    if isinstance(exc, HTTPError):
+        return 'rate_limited' if exc.code == 429 else 'access_restricted' if exc.code in (401, 403) else 'connection_failed'
+    return 'connection_failed' if isinstance(exc, (TimeoutError, URLError, OSError)) else 'unrecognized_report'
+
+
+class ReportFetcher:
+    """Reuse successes and failures; stop contacting an unreachable or limiting host this run."""
+    def __init__(self, get=fetch):
+        self.get, self.cache, self.failed = get, {}, {}
+        self.guard, self.locks = threading.Lock(), {}
+
+    def __call__(self, url):
+        host = urlsplit(url).hostname
+        with self.guard:
+            lock = self.locks.setdefault(host, threading.Lock())
+        with lock:
+            if url in self.cache:
+                value = self.cache[url]
+                if isinstance(value, Exception):
+                    raise value
+                return value
+            if host in self.failed:
+                raise self.failed[host]
+            try:
+                self.cache[url] = self.get(url)
+                return self.cache[url]
+            except Exception as exc:
+                self.cache[url] = exc
+                if (isinstance(exc, HTTPError) and exc.code in (401, 403, 429, 500, 502, 503, 504)
+                        or not isinstance(exc, HTTPError) and isinstance(exc, (TimeoutError, URLError, OSError))):
+                    self.failed[host] = exc
+                raise
 
 
 def valid_record(r, today):
@@ -138,7 +174,7 @@ def collect_kind(kind, records, today, get=fetch):
             if match and url not in urls:
                 urls.append(url)
     except Exception as exc:
-        errors.append(type(exc).__name__)
+        errors.append(failure_reason(exc))
     # At most four current reports plus the most recent known record, no crawling.
     urls = urls[:4]
     old = sorted((r for r in records if r['kind'] == kind
@@ -152,17 +188,20 @@ def collect_kind(kind, records, today, get=fetch):
         try:
             parsed = parser(get(url), url, today)
             incoming.extend(parsed)
-            if not parsed:
-                errors.append('NoExplicitPrice')
+            # Ordinary resale news can be successfully read without publishing a monthly average.
+            if not parsed and kind == 'new':
+                errors.append('unrecognized_report')
         except Exception as exc:
-            errors.append(type(exc).__name__)
+            errors.append(failure_reason(exc))
     fallback = []
     if kind == 'new' and (not incoming or errors):
-        fallback = collect_weekly_backup(records, today, get)
+        fallback = collect_weekly_backup(records, today, get, errors)
         incoming.extend(fallback)
     status = {'kind': kind, 'status': 'ok' if incoming and not errors else 'partial' if incoming else 'unavailable'}
     if fallback:
         status['usingFallback'] = True
+    if errors:
+        status['issues'] = sorted(set(errors))
     return incoming, status
 
 
@@ -206,7 +245,8 @@ def parse_weekly_backup(html, url, today):
         return []
 
 
-def collect_weekly_backup(records, today, get):
+def collect_weekly_backup(records, today, get, issues=None):
+    issues = issues if issues is not None else []
     urls = []
     for page in (1, 2):
         try:
@@ -216,8 +256,9 @@ def collect_weekly_backup(records, today, get):
                         and '/newslist/reviewconsultation?' in url and '杭州房地产市场周报' in title
                         and url not in urls):
                     urls.append(url)
-        except Exception:
-            continue
+        except Exception as exc:
+            issues.append(failure_reason(exc))
+            break
         if urls:
             break
     urls = urls[:2]
@@ -229,8 +270,8 @@ def collect_weekly_backup(records, today, get):
     for url in urls:
         try:
             incoming.extend(parse_weekly_backup(get(url), url, today))
-        except Exception:
-            pass
+        except Exception as exc:
+            issues.append(failure_reason(exc))
     return incoming
 
 
@@ -381,8 +422,9 @@ def collect_market(kind, previous, today, get=fetch):
                     if any(re.search(fr'{month[0]}年0?{month[1]}月杭州房地产市场月报', title)
                            for _, title in links):
                         break
-            except Exception:
-                errors.append('IndexUnavailable')
+            except Exception as exc:
+                errors.append(failure_reason(exc))
+                break
         urls = urls[:3]
         fallback = previous.get('url') or (CRIC_REPORT if kind == 'cric' else '')
         if fallback and fallback not in urls:
@@ -390,17 +432,21 @@ def collect_market(kind, previous, today, get=fetch):
     incoming = []
     for url in urls:
         try:
-            parsed = parser(get(url), url, today)
+            body = get(url)
+            parsed = parser(body, url, today)
             if parsed:
                 incoming.append(parsed)
             else:
-                errors.append('UnrecognizedReport')
-        except Exception:
-            errors.append('SourceUnavailable')
+                errors.append('not_public' if kind == 'districts' and '--' in Document(body).text else 'unrecognized_report')
+        except Exception as exc:
+            errors.append(failure_reason(exc))
     candidates = incoming + ([previous] if valid_market(kind, previous, today) else [])
     # For the same month prefer freshly fetched data (publishers can revise statistics).
     latest = max(candidates, key=lambda r: (r['periodEnd'], r.get('publishedAt', '')), default=None)
-    return latest, dict(kind=kind, status='ok' if incoming and not errors else 'partial' if incoming else 'unavailable')
+    status = dict(kind=kind, status='ok' if incoming and not errors else 'partial' if incoming else 'unavailable')
+    if errors:
+        status['issues'] = sorted(set(errors))
+    return latest, status
 
 
 def main():
@@ -421,7 +467,7 @@ def main():
             # Prevent replacing a newer live record with the seed during an outage.
             raise SystemExit(f'Cannot retain previous prices: {exc}')
     now = datetime.now(timezone.utc)
-    get = functools.lru_cache(maxsize=32)(fetch)
+    get = ReportFetcher()
     records = merge_records(previous, now.date())
     with concurrent.futures.ThreadPoolExecutor(max_workers=2) as pool:
         results = list(pool.map(lambda k: collect_kind(k, records, now.date(), get), ('new', 'resale')))

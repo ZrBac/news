@@ -137,7 +137,11 @@ def article_category(title, source):
     title = title.rsplit(' - ', 1)[0]
     category = source['category']
     if source.get('titleFilter') == 'hangzhou-camping':
-        return 'local' if re.search(r'露营|营地', title) and is_hangzhou_local(original_title) else None
+        # Some local camping guides use a scenic headline; verify their body in collect_weekend.
+        direct = re.search(r'露营|营地|野营', title) and is_hangzhou_local(original_title)
+        candidate = (HANGZHOU_LOCATION.search(title) and re.search(r'周末|出游|攻略|旷野|野趣|牧场', title)
+                     and not LOCAL_EXCLUDED.search(title) and not LOCAL_NOISE.search(title))
+        return 'local' if direct or candidate else None
     if is_hangzhou_local(original_title):
         return 'local'
     if category == 'entertainment':
@@ -214,7 +218,11 @@ LOCAL_SERVICE_TOPIC = re.compile(
     r'灯光秀|音乐喷泉|烟花|灯会|夜游|City\s*Walk|城市漫游|秋游|周末.*(?:活动|攻略|去哪)|'
     r'(?:活动|游玩)(?:汇总|预告|指南|清单|攻略)|'
     r'运动体验|赛事.*(?:报名|观赛|门票)|飞盘|桨板|皮划艇|攀岩|公园.*(?:开放|开园|游玩|攻略)', re.I)
-LOCAL_EXCLUDED = re.compile(r'演唱[会會]|巡回演唱|歌友[会會]')
+LOCAL_EXCLUDED = re.compile(
+    r'演唱[会會]|巡回演唱|歌友[会會]|幼儿园|(?:小学|中学|学校).{0,20}(?:秋游|研学|毅行)|'
+    r'家族办公室|周年庆|客户答谢|团建回顾|长期主义|落地实验|活动回顾|赛事回顾|精彩回顾|'
+    r'圆满落幕|圆满收官|成功举办|活动纪实|活动侧记|闭幕|曲终|谢幕|落下帷幕|圆满结束|拍于|摄于|戏剧人|'
+    r'(?:亮相|赴|登陆|走进)(?:上海|北京|广州|深圳)国际|露营经济|露营产业|营地投资|营地招商|露营装备')
 LOCAL_NOISE = re.compile(r'散文|随笔|诗歌|抒怀|股价|股票|股市|财报|控股股东|学术活动|学术年会|举行纪念|揭牌|签约|主题党日|党支部|'
                          r'招聘|医保|社保|征集意见|工作会议|调研|开工|建设项目|融资|产值|市场规模|产业发展|游客量|客流量|接待游客|消费数据|'
                          r'圆满落幕|圆满收官|活动回顾|赛事回顾|精彩回顾|昨日.*(?:举行|举办)|去年|往年|招代理|加群|返现|'

@@ -103,10 +103,21 @@
     market: "市集节庆",
     culture: "展览演出",
     outdoor: "户外周边",
-    family: "亲子体验",
-    city: "城市漫游",
-    sport: "运动观赛",
+    camping: "露营",
   };
+  const outingExcluded =
+    /演唱[会會]|巡回演唱|歌友[会會]|幼儿园|(?:小学|中学|学校).{0,20}(?:秋游|研学|毅行)|家族办公室|周年庆|客户答谢|团建回顾|长期主义|落地实验|活动回顾|赛事回顾|精彩回顾|圆满落幕|圆满收官|成功举办|活动纪实|活动侧记|闭幕|曲终|谢幕|落下帷幕|圆满结束|拍于|摄于|戏剧人|(?:亮相|赴|登陆|走进)(?:上海|北京|广州|深圳)国际|露营经济|露营产业|营地投资|营地招商|露营装备/;
+  function outingInfo(article) {
+    const info = { ...article.outing };
+    if (/露营|营地|野营/.test(article.title)) info.type = "camping";
+    else if (!["market", "culture", "outdoor", "camping"].includes(info.type))
+      info.type = /手作|手工|工作坊|非遗|读书会|阅读会|讲座|展览|演出/.test(
+        article.title,
+      )
+        ? "culture"
+        : "outdoor";
+    return info;
+  }
   function outingWeekend() {
     const start = new Date(dayOf(Date.now()) + "T12:00:00Z");
     start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7) + 5);
@@ -123,8 +134,8 @@
     );
   }
   function outingMatches(article) {
-    if (/演唱[会會]|巡回演唱|歌友[会會]/.test(article.title)) return false;
-    const info = article.outing || {};
+    if (outingExcluded.test(article.title)) return false;
+    const info = outingInfo(article);
     const today = dayOf(Date.now());
     if (info.cancelled || (outingDates(info) && info.end < today)) return false;
     if (
@@ -156,10 +167,12 @@
     )
       return true;
     const age = Date.parse(today) - Date.parse(dayOf(article.publishedAt));
-    return age <= (info.type === "outdoor" ? 21 : 10) * 86400000;
+    return (
+      age <= (["outdoor", "camping"].includes(info.type) ? 21 : 10) * 86400000
+    );
   }
   function outingSummary(article) {
-    const info = article.outing || {};
+    const info = outingInfo(article);
     const dated = outingDates(info);
     const ended = dated && info.end < dayOf(Date.now());
     const when = dated
@@ -215,6 +228,22 @@
       search?.searchedAt && Number.isFinite(Date.parse(search.searchedAt))
         ? `最近专题检索 ${formatTime(search.searchedAt)}。`
         : "";
+    const camping = state.data.weekendGuide?.camping;
+    const campSources =
+      camping?.sources ||
+      state.data.sources.filter((s) =>
+        s.id.startsWith("gnews-hangzhou-camping"),
+      );
+    const checked = campSources
+      .map((s) => s.checkedAt)
+      .filter((v) => v && Number.isFinite(Date.parse(v)))
+      .sort()
+      .pop();
+    const failed = campSources.filter((s) => s.status !== "ok").length;
+    const campingNote =
+      state.outingType === "camping"
+        ? `<p class="outing-checked" id="camping-updates">露营消息每小时自动检查${checked ? `，最近检查 ${escape(formatTime(checked))}` : "，等待首次检查"}；${camping?.latestAt ? `最新消息 ${escape(formatTime(camping.latestAt))}。` : "暂无新消息时保留近期报道。"}${failed ? "部分来源暂不可用，保留已收录消息。" : ""} 下方营地为地点参考，停车和用炉条件请向营地确认。</p>`
+        : "";
     panel.innerHTML = `<div class="outing-ranges" role="group" aria-label="活动日期范围">
       <button data-outing-range="weekend" aria-pressed="${state.outingRange === "weekend"}">本周末 ${start.slice(5).replace("-", "/")}—${end.slice(5).replace("-", "/")}</button>
       <button data-outing-range="recent" aria-pressed="${state.outingRange === "recent"}">近期安排</button></div>
@@ -226,7 +255,7 @@
             `<button data-outing-type="${key}" aria-pressed="${state.outingType === key}">${escape(label)}</button>`,
         )
         .join("")}</div>
-      <p class="outing-checked">来源每小时检查；每天9点、16点补充检索（北京时间，可能延迟）。${escape(last)}</p>`;
+      <p class="outing-checked">来源每小时检查；每天9点、16点补充检索（北京时间，可能延迟）。${escape(last)}</p>${campingNote}`;
     return referenceCount;
   }
   const timeFormatter = new Intl.DateTimeFormat("zh-CN", {
@@ -484,6 +513,21 @@
     }
     return [...groups.values()];
   }
+  function housingIssue(status) {
+    const labels = {
+      rate_limited: "来源暂时限流",
+      access_restricted: "来源限制公开访问",
+      connection_failed: "部分来源连接失败",
+      not_public: "公开页面未提供完整数值",
+      unrecognized_report: "尚未提取到明确统计数据",
+    };
+    const reasons = [
+      ...new Set(
+        (status?.issues || []).map((code) => labels[code]).filter(Boolean),
+      ),
+    ];
+    return reasons.length ? reasons.join("；") : "本轮部分数据未能核实";
+  }
   function housingMarket(data) {
     const market = data.market || {};
     const note = (kind, r) => {
@@ -495,7 +539,7 @@
         <p class="price-published">${escape(r.scope)}${r.publishedAt ? ` · 发布于 ${escape(r.publishedAt)}` : ""}</p>
         <a href="${escape(safeUrl(r.url))}" target="_blank" rel="noopener noreferrer">${escape(r.source)} ↗</a>
         ${stale ? '<p class="price-status">统计期较早，等待来源发布可核实的新数据。</p>' : ""}
-        ${status && status.status !== "ok" ? '<p class="price-status">本轮部分来源未能核实，保留上次数据和原统计期。</p>' : ""}`;
+        ${status && status.status !== "ok" ? `<p class="price-status">${escape(housingIssue(status))}，保留已核实数据和原统计期。</p>` : ""}`;
     };
     const valid = (r) =>
       r && safeUrl(r.url) && /^\d{4}-\d{2}-\d{2}$/.test(r.periodEnd);
@@ -733,7 +777,7 @@
         <a href="${escape(safeUrl(record.url))}" target="_blank" rel="noopener noreferrer">${escape(record.source)} ↗</a>
         <p class="price-published">发布于 ${escape(record.publishedAt)}</p>
         ${stale ? `<p class="price-status">统计期已超过 ${kind === "new" ? 14 : 45} 天，请留意原站后续发布。</p>` : ""}
-        ${backup ? '<p class="price-status">中指云本轮暂未能核实，补充展示克而瑞公开周报，口径以原文为准。</p>' : status && status.status !== "ok" ? '<p class="price-status">本轮部分数据未能核实，保留已收录价格。</p>' : ""}</section>`;
+        ${backup ? '<p class="price-status">中指云本轮暂未能核实，补充展示克而瑞公开周报，口径以原文为准。</p>' : status && status.status !== "ok" ? `<p class="price-status">${escape(housingIssue(status))}，保留已收录价格。</p>` : ""}</section>`;
       })
       .join("");
     panel.innerHTML = `<a class="housing-home-book" href="/homes/live/"><span><strong>看房源 · 新房与二手房</strong><small>按预算和板块筛选，收藏后记录看房</small></span><span aria-hidden="true">→</span></a><h2 class="city-price-heading">杭州整体成交</h2><p class="price-intro">新房成交均价按周、二手房及其他月度统计按月发布。随网站自动检查，没有新数据时保留上次结果。</p>

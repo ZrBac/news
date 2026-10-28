@@ -46,13 +46,13 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         start: "2026-10-01",
         end: "2026-11-10",
       }),
-      make("weekend-outdoor", "安吉森林徒步与露营路线", "outdoor"),
+      make("weekend-outdoor", "安吉森林徒步路线", "outdoor"),
       make("weekend-family", "杭州亲子非遗手作工作坊", "family", {
         start: "2026-10-24",
         end: "2026-10-24",
       }),
       make("weekend-city", "杭州城市漫游夜游路线", "city"),
-      make("weekend-sport", "杭州桨板运动体验报名", "sport", {
+      make("weekend-camping", "杭州露营地周末预约", "camping", {
         start: "2026-10-25",
         end: "2026-10-25",
       }),
@@ -76,6 +76,13 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         end: "2026-10-25",
       }),
       make("weekend-fan-show", "杭州歌友会演出预告", "culture"),
+      make("weekend-school", "杭州市幼儿园举行亲子毅行秋游活动", "family"),
+      make(
+        "weekend-company",
+        "平安家族办公室周年庆暨公益音乐会在杭州举行",
+        "culture",
+      ),
+      make("weekend-retrospect", "从乌镇戏剧节看长期主义的落地实验", "culture"),
       {
         ...make("weekend-old", "杭州旧展览消息", "culture"),
         publishedAt: "2026-10-01T02:00:00Z",
@@ -90,6 +97,16 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       "2026-10-23T08:00:00Z";
     latest.weekendGuide = {
       search: { searchedAt: "2026-10-23T08:00:00Z", status: "ok" },
+      camping: {
+        sources: [
+          {
+            id: "gnews-hangzhou-camping",
+            status: "ok",
+            checkedAt: "2026-10-23T09:00:00Z",
+          },
+        ],
+        latestAt: "2026-10-23T02:00:00Z",
+      },
     };
     // Old caches and the full archive can still include outings among news.
     latest.articles.unshift(market);
@@ -203,7 +220,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       /普通车.*未写明/,
     );
     await page.fill("#search", "");
-    assert.equal(await page.locator("[data-outing-type]").count(), 7);
+    assert.equal(await page.locator("[data-outing-type]").count(), 5);
     assert.match(
       await page.locator("#weekend-tools").innerText(),
       /来源每小时检查.*每天9点、16点.*最近专题检索/s,
@@ -216,18 +233,15 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       await page.locator('[data-article-id="weekend-outdoor"]').innerText(),
       /活动时间见原文/,
     );
-    for (const type of [
-      "market",
-      "culture",
-      "outdoor",
-      "family",
-      "city",
-      "sport",
-    ]) {
+    assert.doesNotMatch(
+      await page.locator(".outing-types").innerText(),
+      /亲子体验|城市漫游|运动观赛/,
+    );
+    for (const type of ["market", "culture", "outdoor", "camping"]) {
       await page.locator(`[data-outing-type="${type}"]`).click();
       assert.equal(
         await page.locator("#camping-places").isVisible(),
-        type === "outdoor",
+        type === "camping",
       );
       assert.equal(
         await page.locator("#hiking-places").isVisible(),
@@ -235,15 +249,23 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       );
       assert.equal(
         await page.locator("#rainy-places").isVisible(),
-        ["culture", "family", "city", "sport"].includes(type),
+        type === "culture",
       );
-      if (["culture", "family", "city", "sport"].includes(type)) {
+      if (type === "culture") {
         assert.equal(
           await page.locator("#rainy-places .place-card:not([hidden])").count(),
-          { culture: 4, family: 2, city: 2, sport: 3 }[type],
+          4,
         );
       }
-      assert.equal(await page.locator(".article").count(), 1);
+      assert.equal(
+        await page.locator(".article").count(),
+        { market: 1, culture: 2, outdoor: 2, camping: 1 }[type],
+      );
+      if (type === "camping")
+        assert.match(
+          await page.locator("#camping-updates").innerText(),
+          /每小时自动检查.*最近检查.*最新消息/s,
+        );
       assert.equal(
         await page
           .locator(`[data-outing-type="${type}"]`)
@@ -270,6 +292,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       await page.locator('[data-article-id="weekend-fan-show"]').count(),
       0,
     );
+    await page.fill("#search", "露营地周末预约");
+    await page.locator('[data-save="weekend-camping"]').click();
     await page.fill("#search", "良渚暖村");
     await page.waitForFunction(
       () => document.querySelectorAll(".article").length === 1,
@@ -277,14 +301,25 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator('[data-save="weekend-market"]').click();
     await page.locator(".saved-link").click();
     assert.match(
-      await page.locator(".outing-summary").innerText(),
+      await page
+        .locator('[data-article-id="weekend-market"] .outing-summary')
+        .innerText(),
       /2026-10-24/,
     );
     await page.locator(".reading-options summary").click();
     const pending = page.waitForEvent("download");
     await page.locator("#export-bookmarks").click();
     const backup = await fs.readFile(await (await pending).path());
-    assert.equal(JSON.parse(backup).newsSaved[0].outing.venue, "良渚暖村草坪");
+    assert.equal(
+      JSON.parse(backup).newsSaved.find((a) => a.id === "weekend-market").outing
+        .venue,
+      "良渚暖村草坪",
+    );
+    assert.equal(
+      JSON.parse(backup).newsSaved.find((a) => a.id === "weekend-camping")
+        .outing.type,
+      "camping",
+    );
     await page.evaluate(() => localStorage.removeItem("zrbac-news-saved-v1"));
     await page.reload();
     await page.evaluate(() => window.newsInitialLoad);
@@ -296,6 +331,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     });
     await page.locator('[data-article-id="weekend-market"]').waitFor();
     assert.match(await page.locator(".outing-details").innerText(), /良渚暖村/);
+    assert.equal(
+      await page.locator('[data-article-id="weekend-camping"]').count(),
+      1,
+    );
     await page.locator('[data-view="brief"]').click();
     assert.equal(await page.locator("[data-place-group]:visible").count(), 0);
     assert.equal(

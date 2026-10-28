@@ -16,13 +16,12 @@ import collect_news as news
 
 ROOT = Path(__file__).resolve().parents[1]
 GROUPS = {
+    'camping': r'露营|营地|野营',
     'market': r'市集|集市|夜市|早市|庙会|生活节|美食节|咖啡节|啤酒节|游园会',
-    'family': r'亲子|遛娃|手作|手工|工作坊|非遗体验|社教|读书会|阅读会|讲座|体验课|研学|沙龙|科普',
-    'culture': r'展览|特展|新展|看展|博物馆|艺术|摄影展|书画|演出|音乐|戏剧|话剧|脱口秀|放映|电影节|漫展|文博会|宠物展|花展|车展|书展|茶博会',
-    'sport': r'运动体验|观赛|赛事|飞盘|桨板|皮划艇|攀岩',
-    'outdoor': r'露营|营地|徒步|登山|骑行|绿道|赏秋|赏桂|赏花|晒秋|银杏|红叶|花海|观鸟|采摘|温泉|秋游',
-    'city': r'夜游|灯光|喷泉|灯会|烟花|City\s*Walk|城市漫游|公园|街区',
+    'culture': r'展览|特展|新展|看展|博物馆|艺术|摄影展|书画|演出|音乐|戏剧|话剧|脱口秀|放映|电影节|漫展|文博会|宠物展|花展|车展|书展|茶博会|手作|手工|工作坊|非遗体验|读书会|阅读会|讲座|体验课|沙龙|科普',
+    'outdoor': r'徒步|登山|骑行|绿道|赏秋|赏桂|赏花|晒秋|银杏|红叶|花海|观鸟|采摘|温泉|秋游|夜游|灯光|喷泉|灯会|烟花|City\s*Walk|公园|街区|飞盘|桨板|皮划艇|攀岩',
 }
+RULE_REVISION = 'camping-and-useful-outings-v2'
 LABEL = r'(?:活动时间|活动日期|举办时间|市集时间|展览时间|展出时间|演出时间|展期|时间安排)\s*[：:]?\s*'
 DAY = r'(?:(\d{4})年)?(\d{1,2})月(\d{1,2})[日号]?'
 DATE_RANGE = re.compile(DAY + r'\s*[-—–~～至到]\s*(?:(\d{4})年)?(?:(\d{1,2})月)?(\d{1,2})[日号]?')
@@ -90,14 +89,14 @@ def infer_day(year, month, day, published):
 def outing_info(article, body=''):
     title = article['title'].rsplit(' - ', 1)[0]
     published = news.parse_date(article['publishedAt']).astimezone(news.BEIJING).date()
-    info = {'type': next((key for key, pattern in GROUPS.items() if re.search(pattern, title, re.I)), 'city')}
+    info = {'type': outing_type(title)}
     calendar = re.search(r'(?:(\d{4})年)?(\d{1,2})月.{0,20}(?:日历|时间安排|活动安排)', title)
     if calendar:
         try:
             info['month'] = infer_day(calendar[1], calendar[2], 1, published).isoformat()[:7]
         except ValueError:
             pass
-    if re.search(r'取消|延期|暂停|闭园|闭馆', title):
+    if re.search(r'取消|延期|暂停|闭园|闭馆', title) and info['type'] != 'camping':
         info['cancelled'] = True
     text = body or title + '\n' + article.get('excerpt', '')
     title_periods = list(DATE_RANGE.finditer(title))
@@ -157,8 +156,25 @@ def outing_info(article, body=''):
     return info
 
 
+def outing_type(title):
+    return next((key for key, pattern in GROUPS.items() if re.search(pattern, title, re.I)), 'outdoor')
+
+
+def camping_candidate(article):
+    return article.get('sourceId', '').startswith('gnews-hangzhou-camping') or outing_type(article['title']) == 'camping'
+
+
+def camping_details(article, info):
+    # A place roundup can mention a separate fair's dates, venue and ticket price.
+    # Only attach event details when the headline identifies a camping event.
+    if info.get('type') == 'camping' and not re.search(r'露营(?:节|活动|市集|体验|音乐节)|营地.{0,8}(?:活动|市集)', article['title']):
+        for key in ('start', 'end', 'until', 'month', 'when', 'venue', 'cost'):
+            info.pop(key, None)
+    return info
+
+
 def valid_info(info):
-    if not isinstance(info, dict) or info.get('type') not in GROUPS:
+    if not isinstance(info, dict) or info.get('type') not in (*GROUPS, 'family', 'city', 'sport'):
         return False
     try:
         if 'until' in info:
@@ -190,7 +206,8 @@ def search_weekend(sources, now, get=news.fetch):
     dates = f'(本周末 OR 周末 OR {start.month}月{start.day}日 OR {end.month}月{end.day}日)'
     def run(source):
         query = parse_qs(urlsplit(source['url']).query)['q'][0]
-        query = re.sub(r'when:\d+d', '', query) + ' ' + dates + ' when:14d'
+        query = re.sub(r'when:\d+d', '', query) + (
+            ' when:21d' if source.get('titleFilter') == 'hangzhou-camping' else ' ' + dates + ' when:14d')
         url = 'https://news.google.com/rss/search?' + urlencode({'q': query, 'hl': 'zh-CN', 'gl': 'CN', 'ceid': 'CN:zh-Hans'})
         try:
             items = news.parse_feed(get(url), source, now)
@@ -216,9 +233,14 @@ def fetch_page(url):
 def enrich(articles, previous, now, get=fetch_page, refresh=False):
     known = {a['id']: a.get('outing') for a in previous if isinstance(a, dict) and a.get('id')}
     queue = []
-    for article in articles:
+    for article in sorted(articles, key=lambda a: not camping_candidate(a)):
         old = known.get(article['id'])
         article['outing'] = dict(old) if valid_info(old) else outing_info(article)
+        # Reclassify cached records while retaining verified dates and locations.
+        article['outing']['type'] = outing_type(article['title'])
+        if camping_candidate(article) and old and old.get('type') == 'camping' and old.get('checkedAt'):
+            article['outing']['type'] = 'camping'
+        camping_details(article, article['outing'])
         attempted = news.parse_date(article['outing'].get('attemptedAt'))
         if len(queue) < 24 and (refresh or not attempted or now-attempted > timedelta(days=1)):
             queue.append(article)
@@ -229,14 +251,19 @@ def enrich(articles, previous, now, get=fetch_page, refresh=False):
         if urlsplit(url).hostname in ('news.google.com', 'consent.google.com'):
             return
         try:
-            info = outing_info(article, cached_get(url))
+            body = cached_get(url)
+            info = outing_info(article, body)
+            if camping_candidate(article) and re.search(r'(?:露营|营地).{0,60}(?:开放|预约|停车|用火|卡式炉|游玩|自驾|休闲)', re.sub(r'\s+', '', body)):
+                info['type'] = 'camping'
+            elif camping_candidate(article) and article['outing']['type'] == 'camping' and article['outing'].get('checkedAt'):
+                info['type'] = 'camping'
             if not any(key in info for key in ('end', 'until')):
                 # Unrecognized new markup must not resurrect a previously dated event.
                 for key in ('start', 'end', 'until', 'when'):
                     if key in article['outing']:
                         info[key] = article['outing'][key]
             info.update(attemptedAt=news.iso(now), checkedAt=news.iso(now))
-            article['outing'] = info
+            article['outing'] = camping_details(article, info)
         except Exception:
             pass
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
@@ -264,13 +291,15 @@ def select_articles(articles, now):
         if news.LOCAL_EXCLUDED.search(article['title']):
             continue
         info = article['outing']
+        if camping_candidate(article) and outing_type(article['title']) != 'camping' and not (info['type'] == 'camping' and info.get('checkedAt')):
+            continue
         if info.get('cancelled') or info.get('end', info.get('until', today.isoformat())) < today.isoformat():
             continue
         pub_day = news.parse_date(article['publishedAt']).astimezone(news.BEIJING).date().isoformat()
         if not info.get('end', info.get('until')) and event_key(article) in expired and pub_day <= expired[event_key(article)]:
             continue
         age = (today - news.parse_date(article['publishedAt']).astimezone(news.BEIJING).date()).days
-        if 'end' not in info and 'until' not in info and age > (21 if info['type'] == 'outdoor' else 10):
+        if 'end' not in info and 'until' not in info and age > (21 if info['type'] in ('outdoor', 'camping') else 10):
             continue
         selected.append(article)
     result, urls, events = [], set(), set()
@@ -284,9 +313,10 @@ def select_articles(articles, now):
         if key:
             events.add(key)
         result.append(article)
-        if len(result) == 48:
-            break
-    return result
+    # Reserve room for a lower-volume topic without pinning old reports first.
+    camping = [a for a in result if a['outing']['type'] == 'camping'][:12]
+    other = [a for a in result if a not in camping][:48-len(camping)]
+    return sorted(camping + other, key=lambda a: news.parse_date(a['publishedAt']), reverse=True)
 
 
 def main():
@@ -303,7 +333,7 @@ def main():
         old = json.loads(news.fetch(args.previous_url).decode('utf-8'))
     now = datetime.now(news.UTC)
     sources = [s for s in json.loads((ROOT / 'news/sources.json').read_text()) if s['category'] == 'local']
-    revision = hashlib.sha256(json.dumps(sources, sort_keys=True).encode()).hexdigest()[:12]
+    revision = hashlib.sha256((RULE_REVISION + json.dumps(sources, sort_keys=True)).encode()).hexdigest()[:12]
     previous = old.get('weekendArticles', [])
     search = old.get('weekendGuide', {}).get('search', {})
     incoming = []
@@ -324,13 +354,19 @@ def main():
         if article['category'] == 'local' and key not in seen:
             candidates.append(article)
             seen.add(key)
-        if len(candidates) == 100:
-            break
-    news.resolve_original_links(candidates, previous, limit=24, budget=14)
+    camping = [a for a in candidates if camping_candidate(a)][:20]
+    candidates = sorted(camping + [a for a in candidates if a not in camping][:100-len(camping)],
+                        key=lambda a: news.parse_date(a['publishedAt']), reverse=True)
+    news.resolve_original_links(sorted(candidates, key=lambda a: not camping_candidate(a)), previous, limit=24, budget=14)
     enrich(candidates, previous, now, refresh=did_search)
     data['weekendArticles'] = select_articles(candidates, now)
     start, end = weekend_days(now)
     data['weekendGuide'] = {'checkedAt': news.iso(now), 'weekendStart': start.isoformat(), 'weekendEnd': end.isoformat(), 'search': search}
+    camping_sources = [s for s in data.get('sources', []) if s['id'].startswith('gnews-hangzhou-camping')]
+    data['weekendGuide']['camping'] = {
+        'sources': [{k: s[k] for k in ('id', 'name', 'status', 'checkedAt', 'latestAt') if k in s} for s in camping_sources],
+        'latestAt': max((a['publishedAt'] for a in data['weekendArticles'] if a['outing']['type'] == 'camping'), default=None),
+    }
     path.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n')
     print(json.dumps({'outings': len(data['weekendArticles']), 'dated': sum('end' in a['outing'] for a in data['weekendArticles']),
                       'searched': did_search, 'searchStatus': search.get('status'), 'weekend': [str(start), str(end)]}, ensure_ascii=False))

@@ -1,5 +1,6 @@
 import importlib.util
 import unittest
+from urllib.error import HTTPError
 from datetime import date
 from pathlib import Path
 
@@ -9,6 +10,30 @@ spec.loader.exec_module(prices)
 
 
 class HousingPriceTests(unittest.TestCase):
+    def test_report_fetcher_stops_after_rate_limit_and_shares_failures(self):
+        calls = []
+        def get(url):
+            calls.append(url)
+            if 'limited.example' in url:
+                raise HTTPError(url, 429, 'Too Many Requests', {}, None)
+            return 'available report'
+        fetch = prices.ReportFetcher(get)
+        for path in ('one', 'one', 'two'):
+            with self.assertRaises(HTTPError):
+                fetch('https://limited.example/'+path)
+        self.assertEqual(fetch('https://other.example/report'), 'available report')
+        self.assertEqual(fetch('https://other.example/report'), 'available report')
+        self.assertEqual(len(calls), 2)
+        self.assertEqual(prices.failure_reason(HTTPError('', 429, '', {}, None)), 'rate_limited')
+
+    def test_source_failure_reports_reason_without_losing_verified_prices(self):
+        old, = prices.parse_new(self.week, self.url, self.today)
+        def fail(url):
+            raise HTTPError(url, 429, '', {}, None)
+        records, status = prices.collect_kind('new', [old], self.today, prices.ReportFetcher(fail))
+        self.assertEqual(status['issues'], ['rate_limited'])
+        self.assertEqual(prices.merge_records([old]+records, self.today), [old])
+
     def setUp(self):
         self.today = date(2026, 10, 9)
         self.url = 'https://www.cih-index.com/report/detail/123.html'
@@ -163,7 +188,8 @@ class HousingPriceTests(unittest.TestCase):
         incoming, status = prices.collect_kind('new', [old], date(2026, 10, 19), get)
         latest = prices.merge_records([old] + incoming, date(2026, 10, 19))[0]
         self.assertEqual((latest['price'], latest['periodEnd'], latest['url']), (41320, '2026-10-11', url))
-        self.assertEqual(status, {'kind': 'new', 'status': 'partial', 'usingFallback': True})
+        self.assertEqual(status, {'kind': 'new', 'status': 'partial', 'usingFallback': True,
+                                  'issues': ['connection_failed']})
         self.assertNotIn(prices.CRIC + '2', calls)
         # A backup outage keeps the successful record and never sends its URL to the CIH parser.
         incoming, status = prices.collect_kind('new', [latest], date(2026, 10, 19), lambda value: '')

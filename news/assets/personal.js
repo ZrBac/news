@@ -124,9 +124,15 @@
       if (
         !info ||
         typeof info !== "object" ||
-        !["market", "culture", "outdoor", "family", "city", "sport"].includes(
-          info.type,
-        ) ||
+        ![
+          "market",
+          "culture",
+          "outdoor",
+          "camping",
+          "family",
+          "city",
+          "sport",
+        ].includes(info.type) ||
         ["venue", "cost", "when"].some(
           (key) =>
             info[key] !== undefined &&

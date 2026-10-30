@@ -108,6 +108,44 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         latestAt: "2026-10-23T02:00:00Z",
       },
     };
+    latest.placeUpdates = {
+      schema: 1,
+      places: {
+        "cycle-xianghu": {
+          searchedAt: "2026-10-23T08:00:00Z",
+          status: "ok",
+          items: [
+            {
+              title: "湘湖三期骑行绿道开放提示",
+              url: "https://publisher.example/cycling",
+              publishedAt: "2026-10-23T07:00:00Z",
+              publisher: "本地媒体",
+            },
+            {
+              title: "湘湖旧骑行消息",
+              url: "https://publisher.example/old-cycling",
+              publishedAt: "2026-08-01T07:00:00Z",
+            },
+          ],
+        },
+        baoshi: {
+          searchedAt: "2026-10-22T08:00:00Z",
+          status: "unavailable",
+          items: [
+            {
+              title: "宝石山步道维修提示",
+              url: "https://publisher.example/hiking",
+              publishedAt: "2026-10-22T07:00:00Z",
+            },
+          ],
+        },
+        fengxiaoling: {
+          searchedAt: "2026-10-23T08:00:00Z",
+          status: "ok",
+          items: [],
+        },
+      },
+    };
     // Old caches and the full archive can still include outings among news.
     latest.articles.unshift(market);
     latest.briefArticles = [
@@ -155,7 +193,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.equal(await page.locator("[data-place-group][open]").count(), 0);
     assert.match(
       await page.locator("#result-count").innerText(),
-      /21 个地点参考/,
+      /38 个地点参考/,
     );
     // Searching opens just the matching reference group, without relying on feeds.
     await page.fill("#search", "宝石山");
@@ -163,6 +201,12 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.match(
       await page.locator(".place-card:visible").innerText(),
       /保俶塔.*初阳台/s,
+    );
+    assert.match(
+      await page
+        .locator('[data-place-id="baoshi"] [data-place-updates]')
+        .innerText(),
+      /本次检索暂未成功.*保留已收录消息.*宝石山步道维修提示/s,
     );
     assert.match(
       await page.locator("#result-count").innerText(),
@@ -173,7 +217,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.fill("#search", "");
     assert.equal(await page.locator("[data-place-group][open]").count(), 0);
     await page.fill("#search", "雨天");
-    assert.equal(await page.locator(".place-card:visible").count(), 7);
+    assert.equal(
+      await page.locator("#rainy-places .place-card:visible").count(),
+      7,
+    );
     assert.doesNotMatch(
       (await page.locator("#rainy-places h3").allTextContents()).join(" "),
       /博物馆|博物院|美术馆/,
@@ -199,15 +246,21 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       ),
     );
     await page.locator("#camping-places > summary").click();
-    assert.equal(await page.locator(".camping-place:visible").count(), 4);
+    assert.equal(await page.locator(".camping-place:visible").count(), 7);
     assert.equal(
       await page
         .locator('.camping-links a[href^="https://uri.amap.com/search?"]')
         .count(),
-      4,
+      7,
     );
     await page.fill("#search", "风笑岭");
     assert.equal(await page.locator(".camping-place:visible").count(), 1);
+    assert.match(
+      await page
+        .locator('[data-place-id="fengxiaoling"] [data-place-updates]')
+        .innerText(),
+      /未发现近 30 天的新消息/,
+    );
     assert.match(await page.locator("#camping-count").innerText(), /1 个地点/);
     await page.fill("#search", "");
     await page.fill("#search", "安吉 卡式炉");
@@ -245,6 +298,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       );
       assert.equal(
         await page.locator("#hiking-places").isVisible(),
+        type === "outdoor",
+      );
+      assert.equal(
+        await page.locator("#cycling-places").isVisible(),
         type === "outdoor",
       );
       assert.equal(
@@ -348,11 +405,36 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       0,
     );
     await page.locator('[data-view="local"]').click();
-    for (const group of ["hiking-places", "rainy-places", "camping-places"]) {
+    for (const group of [
+      "hiking-places",
+      "cycling-places",
+      "rainy-places",
+      "camping-places",
+    ]) {
       if (!(await page.locator("#" + group).evaluate((node) => node.open)))
         await page.locator("#" + group + " > summary").click();
     }
-    assert.equal(await page.locator(".place-card:visible").count(), 21);
+    assert.equal(await page.locator(".place-card:visible").count(), 38);
+    assert.equal(
+      await page.locator("#cycling-places .place-card:visible").count(),
+      8,
+    );
+    const cycling = page.locator('[data-place-id="cycle-xianghu"]');
+    assert.match(
+      await cycling.innerText(),
+      /7.6 公里环线.*湘湖三期骑行绿道开放提示.*报道.*最近检索/s,
+    );
+    assert.doesNotMatch(await cycling.innerText(), /湘湖旧骑行消息/);
+    assert.equal(
+      await cycling.locator("[data-place-updates] a").getAttribute("href"),
+      "https://publisher.example/cycling",
+    );
+    await page.fill("#search", "自行车");
+    assert.equal(
+      await page.locator("#cycling-places .place-card:visible").count(),
+      8,
+    );
+    await page.fill("#search", "");
     for (const width of [320, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 844 });
       assert(
@@ -382,11 +464,20 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       ["weekend-outdoor", "weekend-city"],
     );
     await page.locator("#camping-places > summary").click();
-    assert.equal(await page.locator(".camping-place:visible").count(), 4);
+    assert.equal(await page.locator(".camping-place:visible").count(), 7);
     await page.locator("#hiking-places > summary").click();
     assert.equal(
       await page.locator("#hiking-places .place-card:visible").count(),
-      10,
+      16,
+    );
+    await page.locator("#cycling-places > summary").click();
+    assert.equal(
+      await page.locator("#cycling-places .place-card:visible").count(),
+      8,
+    );
+    assert.match(
+      await page.locator('[data-place-id="cycle-xianghu"]').innerText(),
+      /湘湖三期骑行绿道开放提示/,
     );
     await page.fill("#search", "雨天 浙江图书馆");
     assert.equal(await page.locator(".place-card:visible").count(), 1);
@@ -398,7 +489,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.equal(await page.locator("#rainy-places[open]").count(), 0);
     assert.equal(
       await page.locator("#hiking-places .place-card:visible").count(),
-      10,
+      16,
     );
     assert.equal(
       await page.locator('[data-article-id="weekend-concert"]').count(),
@@ -423,7 +514,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: newest outings online/offline, hiking/rainy/camping references, search expansion/restoration, category filters, source/map links, dates/expiry, bookmarks, four widths, no archive downloads.",
+      "PASS: newest outings online/offline, hiking/cycling/rainy/camping references and refresh status, search expansion/restoration, category filters, source/map links, dates/expiry, bookmarks, four widths, no archive downloads.",
     );
   } finally {
     await browser.close();

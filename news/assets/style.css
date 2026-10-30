@@ -535,6 +535,12 @@ span[data-icon] {
   font-size: 12px;
   font-weight: 400;
 }
+.place-guide > summary h2 {
+  display: inline;
+  font-size: inherit;
+  font-weight: inherit;
+  margin: 0;
+}
 .place-intro,
 .place-note {
   color: var(--secondary);
@@ -581,6 +587,29 @@ span[data-icon] {
   font-size: 11px;
   color: var(--secondary);
   margin-top: 8px;
+}
+.place-card .place-reviewed {
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--secondary);
+}
+.place-updates {
+  border-left: 2px solid var(--line);
+  margin-top: 8px;
+  padding-left: 10px;
+  overflow-wrap: anywhere;
+}
+.place-updates a {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.place-updates span,
+.place-updates .place-news-time {
+  color: var(--secondary);
+  font-size: 11px;
+}
+.place-news-label {
+  color: var(--secondary);
 }
 @media (max-width: 600px) {
   .place-grid {

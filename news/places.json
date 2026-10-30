@@ -1,0 +1,1329 @@
+{
+  "schema": 1,
+  "places": [
+    {
+      "id": "baoshi",
+      "group": "hiking",
+      "name": "宝石山 · 保俶塔与初阳台",
+      "area": "西湖北线 · 较轻松 · 预留 1.5–2 小时",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路",
+      "aliases": ["宝石山", "保俶塔"],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "北山街保俶塔前山路 → 保俶塔 → 葛岭初阳台 → 原路返回。"
+        },
+        {
+          "label": "",
+          "text": "想登高看西湖、又不想走太久，可先选这条。以台阶为主，保俶塔只在外围观看，不登塔。"
+        },
+        {
+          "label": "出发前：",
+          "text": "地图定位到上山口，沿景区指示牌走；不攀爬裸岩。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E4%BF%9D%E4%BF%B6%E5%A1%94%E5%89%8D%E5%B1%B1%E8%B7%AF&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://hznews.hangzhou.com.cn/wghz/content/2021-10/14/content_8072195.htm",
+          "label": "杭州网路线参考"
+        }
+      ]
+    },
+    {
+      "id": "wushan",
+      "group": "hiking",
+      "name": "吴山 · 老城慢走",
+      "area": "上城 · 吴山 · 较轻松 · 预留 1–2 小时",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路",
+      "aliases": ["吴山", "城隍阁"],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "十五奎巷 → 伍公庙 → 东岳庙 → 江湖汇观亭，沿开放步道下山。"
+        },
+        {
+          "label": "",
+          "text": "老街巷和登高可以放在同一趟，适合边走边停，从江湖汇观亭看西湖与城景。"
+        },
+        {
+          "label": "出发前：",
+          "text": "从十五奎巷步行进山；若另进城隍阁等场所，票务单独查看。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E5%8D%81%E4%BA%94%E5%A5%8E%E5%B7%B7+%E4%BC%8D%E5%85%AC%E5%BA%99&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://wgly.hangzhou.gov.cn/art/2025/7/22/art_1229505585_58964270.html",
+          "label": "杭州文旅路线"
+        }
+      ]
+    },
+    {
+      "id": "banshan",
+      "group": "hiking",
+      "name": "半山 · 望宸阁",
+      "area": "拱墅 · 半山国家森林公园 · 中等 · 预留 2–3 小时",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路",
+      "aliases": ["半山国家森林公园", "半山公园", "望宸阁"],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "明园路南门 → 沿标识登山步道至望宸阁 → 原路返回。"
+        },
+        {
+          "label": "",
+          "text": "住城北可优先考虑。树林、台阶和山顶观景兼有，连续上坡比平地散步更费力。"
+        },
+        {
+          "label": "出发前：",
+          "text": "地图查询公园南门；登山与进入望宸阁的开放安排分别看现场公告。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E5%8D%8A%E5%B1%B1%E5%9B%BD%E5%AE%B6%E6%A3%AE%E6%9E%97%E5%85%AC%E5%9B%AD+%E5%8D%97%E9%97%A8+%E6%98%8E%E5%9B%AD%E8%B7%AF&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://www.hzzx.gov.cn/cshz/content/2025-10/28/content_9111624.htm",
+          "label": "公园路线与入口报道"
+        }
+      ]
+    },
+    {
+      "id": "yuhuang",
+      "group": "hiking",
+      "name": "玉皇山 · 紫来洞方向",
+      "area": "西湖南线 · 中等 · 预留 2–3 小时",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路",
+      "aliases": ["玉皇山"],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "玉皇山路入口 → 紫来洞 → 福星观方向 → 原路下山。"
+        },
+        {
+          "label": "",
+          "text": "古迹与山林一起看，适合留出半天慢爬。台阶有一定爬升，按体力决定是否继续登顶。"
+        },
+        {
+          "label": "出发前：",
+          "text": "地图定位玉皇山景区入口；购票、洞内及道观开放情况以景区当日安排为准。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E7%8E%89%E7%9A%87%E5%B1%B1%E6%99%AF%E5%8C%BA+%E7%8E%89%E7%9A%87%E5%B1%B1%E8%B7%AF%E5%85%A5%E5%8F%A3&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://hznews.hangzhou.com.cn/chengshi/content/2022-04/03/content_8217068.htm",
+          "label": "杭州网景点介绍"
+        }
+      ]
+    },
+    {
+      "id": "beigao",
+      "group": "hiking",
+      "name": "北高峰 · 灵隐往返",
+      "area": "西湖 · 灵隐 · 中等 · 预留 2–3 小时",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路",
+      "aliases": ["北高峰"],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "灵隐附近北高峰登山步道 → 北高峰山顶 → 原路返回。"
+        },
+        {
+          "label": "",
+          "text": "想爬得稍有运动量可选，主要是连续台阶。选择灵隐到山顶的往返段，预留沿途休息时间。"
+        },
+        {
+          "label": "出发前：",
+          "text": "地图查登山口并按现场标识走；索道、寺院是另行安排，周末预留进出景区时间。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E5%8C%97%E9%AB%98%E5%B3%B0%E7%99%BB%E5%B1%B1%E5%8F%A3+%E7%81%B5%E9%9A%90&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://ty.hangzhou.gov.cn/art/2020/1/2/art_1694286_41423254.html",
+          "label": "杭州市体育局路线参考"
+        }
+      ]
+    },
+    {
+      "id": "langdang",
+      "group": "hiking",
+      "name": "十里琅珰 · 茶山短线",
+      "area": "西湖 · 梅家坞—龙井 · 中等偏累 · 预留 3–4 小时",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路",
+      "aliases": ["十里琅珰", "十里郎当"],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "梅家坞 → 十里琅珰 → 三分叉 → 狮峰 → 龙井村。"
+        },
+        {
+          "label": "",
+          "text": "想看茶园与山脊选这条。上下坡较多，晴天也需带水；仅选官方茶园线路的登山段。"
+        },
+        {
+          "label": "出发前：",
+          "text": "起终点不同，先规划龙井村返程；自驾需另安排回梅家坞取车，不走茶田中的非开放小路。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E6%A2%85%E5%AE%B6%E5%9D%9E+%E5%8D%81%E9%87%8C%E7%90%85%E7%8F%B0%E5%85%A5%E5%8F%A3&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://wgly.hangzhou.gov.cn/attach/538/2307051510367229.pdf",
+          "label": "杭州文旅茶园路线（PDF）"
+        }
+      ]
+    },
+    {
+      "id": "jingshan",
+      "group": "hiking",
+      "name": "径山古道 · 桐桥往返",
+      "area": "余杭 · 径山 · 中等 · 预留 3–4 小时",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路 古道",
+      "aliases": ["径山古道"],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "桐桥入口 → 径山古道 → 径山寺外围 → 原路返回。"
+        },
+        {
+          "label": "",
+          "text": "喜欢林间石阶和古道氛围可选这条。连续上坡，沿途多留休息时间；这里选往返段，不接更长的九龙潭环线。"
+        },
+        {
+          "label": "出发前：",
+          "text": "定位桐桥停车场附近古道入口；登山与入寺分别安排，寺院预约、接驳及步道开放情况出发前再查。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E5%BE%84%E5%B1%B1%E5%8F%A4%E9%81%93+%E6%A1%90%E6%A1%A5%E5%81%9C%E8%BD%A6%E5%9C%BA&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://ty.hangzhou.gov.cn/art/2020/1/2/art_1694286_41423254.html",
+          "label": "杭州市体育局路线参考"
+        }
+      ]
+    },
+    {
+      "id": "linping",
+      "group": "hiking",
+      "name": "临平山 · 东来阁",
+      "area": "临平 · 较轻松至中等 · 预留 1.5–2.5 小时",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路",
+      "aliases": ["临平山", "临平公园"],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "临平公园南门 → 彩虹桥 → 沿步道至东来阁 → 原路返回。"
+        },
+        {
+          "label": "",
+          "text": "住临平或想换个城北方向，可把公园散步与登高合在一起。仍有台阶爬升，登高后在阁外观景即可。"
+        },
+        {
+          "label": "出发前：",
+          "text": "地图定位沿山路的公园南门；按园内标识行走，东来阁内部是否开放另看现场公告。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E4%B8%B4%E5%B9%B3%E5%85%AC%E5%9B%AD+%E5%8D%97%E9%97%A8+%E6%B2%BF%E5%B1%B1%E8%B7%AF&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://wgly.hangzhou.gov.cn/attach/538/2307051510367229.pdf",
+          "label": "杭州文旅登山路线（PDF）"
+        }
+      ]
+    },
+    {
+      "id": "gaoting",
+      "group": "hiking",
+      "name": "皋亭山 · 点将台短线",
+      "area": "上城 · 皋亭山 · 中等 · 预留 2–3 小时",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路",
+      "aliases": ["皋亭山"],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "点将台入口 → 耻春亭 → 龙穴亭 → 友梅轩出口。"
+        },
+        {
+          "label": "",
+          "text": "想走城东北的林间山路，可先选这段山腰短线。部分台阶较陡，不延伸到更长、更陡的山脊登顶路线。"
+        },
+        {
+          "label": "出发前：",
+          "text": "起终点不同，先安排回停车点的路线；依据当天开放标识调整，不从封闭入口进山。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E7%9A%8B%E4%BA%AD%E5%B1%B1+%E7%82%B9%E5%B0%86%E5%8F%B0&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://hznews.hangzhou.com.cn/chengshi/content/2024-03/30/content_8709050_0.htm",
+          "label": "杭州网短线与路况参考"
+        }
+      ]
+    },
+    {
+      "id": "fenghuang",
+      "group": "hiking",
+      "name": "凤凰山 · 凤凰亭",
+      "area": "上城 · 西湖南侧 · 中等 · 预留 2–3 小时",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路",
+      "aliases": ["凤凰山", "凤凰亭"],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "万松书院旁登山口 → 凤凰亭 → 原路返回。"
+        },
+        {
+          "label": "",
+          "text": "从南宋皇城一带的山林上行，把目标定在凤凰亭，走一个有爬升的半日往返。途中台阶与坡道交替，按体力折返。"
+        },
+        {
+          "label": "出发前：",
+          "text": "找万松书院旁的登山步道，沿凤凰山、凤凰亭标识走；不要把书院内部游览当成必经路线。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E4%B8%87%E6%9D%BE%E4%B9%A6%E9%99%A2+%E5%87%A4%E5%87%B0%E5%B1%B1%E7%99%BB%E5%B1%B1%E5%8F%A3&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://hznews.hangzhou.com.cn/wghz/content/2021-10/14/content_8072195.htm",
+          "label": "杭州网登山路线参考"
+        }
+      ]
+    },
+    {
+      "id": "climbing",
+      "group": "rainy",
+      "name": "香蕉攀岩 · 西溪天街店",
+      "area": "西溪天街 4F · 室内抱石 · 预留 1.5–2 小时",
+      "types": "",
+      "keywords": "下雨 雨天 室内 避雨 攀岩 抱石",
+      "aliases": [],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "想在雨天活动身体，可以试一节抱石入门课。低高度岩壁配落地区软垫，玩法是研究动作、尝试不同线路。"
+        },
+        {
+          "label": "体验：",
+          "text": "初次去先问入门指导和岩鞋租借，按教练要求练习下落；课程、入场和租鞋是否分开收费，订前看清。"
+        },
+        {
+          "label": "",
+          "text": "位于余杭塘路龙湖西溪天街 4F 46–47。先确认本店课程及余位，再安排出发。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E9%A6%99%E8%95%89%E6%94%80%E5%B2%A9+%E8%A5%BF%E6%BA%AA%E5%A4%A9%E8%A1%97%E5%BA%97&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://media.bananaclimbing.com/",
+          "label": "官方门店与课程"
+        }
+      ]
+    },
+    {
+      "id": "partyday",
+      "group": "rainy",
+      "name": "PARTYDAY · 杭州运动超乐场",
+      "area": "萧山 · 奥体中心 · 多项目运动 · 预留 3–4 小时",
+      "types": "",
+      "keywords": "下雨 雨天 室内 避雨 保龄球 卡丁车 运动乐园",
+      "aliases": [],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "想约朋友玩半天，可按兴趣挑卡丁车、保龄球等室内项目，不必把所有项目都赶一遍。"
+        },
+        {
+          "label": "体验：",
+          "text": "先核对套餐包含哪些项目、是否限次和需要另付费；周末热门项目可能排队。"
+        },
+        {
+          "label": "",
+          "text": "带孩子先查各项目的身高、年龄限制和成人陪同要求；选杭州奥体中心门店。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+PARTYDAY+%E8%BF%90%E5%8A%A8%E8%B6%85%E4%B9%90%E5%9C%BA+%E5%A5%A5%E4%BD%93%E4%B8%AD%E5%BF%83&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://www.partydaysport.com/en/hangzhou.html",
+          "label": "官方杭州门店介绍"
+        }
+      ]
+    },
+    {
+      "id": "skating",
+      "group": "rainy",
+      "name": "冰纷万象 · 万象城真冰场",
+      "area": "钱江新城 · 富春路万象城 L4 · 预留 1–2 小时",
+      "types": "",
+      "keywords": "下雨 雨天 室内 避雨 滑冰 真冰 溜冰",
+      "aliases": [],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "想学一项新运动，可以留一两个小时滑真冰。初次体验先约基础指导，也可以只练站稳、滑行和停下。"
+        },
+        {
+          "label": "体验：",
+          "text": "查当日公众滑冰场次，确认冰鞋、护具和教学是否包含；穿便于活动的衣服，按冰场要求佩戴护具。"
+        },
+        {
+          "label": "",
+          "text": "地址是富春路 701 号万象城 L4，导航时认准钱江新城这家商场。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E5%86%B0%E7%BA%B7%E4%B8%87%E8%B1%A1+%E5%AF%8C%E6%98%A5%E8%B7%AF+%E4%B8%87%E8%B1%A1%E5%9F%8E&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://you.ctrip.com/sight/hangzhou14/1489363.html",
+          "label": "场馆位置与营业信息"
+        }
+      ]
+    },
+    {
+      "id": "craft",
+      "group": "rainy",
+      "name": "自然造物 · 室内手作",
+      "area": "余杭 · 瓶窑老街 · 手工体验 · 预留 1.5–3 小时",
+      "types": "culture",
+      "keywords": "下雨 雨天 室内 避雨 手作 手工 拓印 泥塑 竹编",
+      "aliases": [],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "想亲手做点东西，可以询问木版拓印、泥塑彩绘或竹编等手作课，选当天能预约的项目。"
+        },
+        {
+          "label": "体验：",
+          "text": "先向门店确认开课日期、时长、材料费及成品能否当天带走；不要仅凭场地开放时间直接去等课程。"
+        },
+        {
+          "label": "",
+          "text": "位于瓶窑老街里窑街 60 号。以预约好的室内手作为主，停车后走到店里的路段仍需带伞。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E7%93%B6%E7%AA%91+%E8%87%AA%E7%84%B6%E9%80%A0%E7%89%A9+%E9%87%8C%E7%AA%91%E8%A1%9760%E5%8F%B7&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://you.ctrip.com/sight/hangzhou14/131912781.html",
+          "label": "体验项目与咨询方式"
+        }
+      ]
+    },
+    {
+      "id": "tsutaya",
+      "group": "rainy",
+      "name": "天目里茑屋书店 · 书与咖啡",
+      "area": "西湖 · 天目山路 398 号 · 预留 1.5–3 小时",
+      "types": "culture",
+      "keywords": "下雨 雨天 室内 避雨 书店 阅读 咖啡",
+      "aliases": [],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "不想运动就挑一本设计、摄影、文学或旅行书慢慢翻，再喝杯咖啡。适合一个人或两个人的松散半日。"
+        },
+        {
+          "label": "安排：",
+          "text": "书店和咖啡区在室内，天目里庭院及市集有室外区域，雨天不必把园区全部走完。购书、饮品另行消费。"
+        },
+        {
+          "label": "",
+          "text": "读书会等活动单独查当期报名，书店营业不代表当天一定有活动。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E5%A4%A9%E7%9B%AE%E9%87%8C+%E8%8C%91%E5%B1%8B%E4%B9%A6%E5%BA%97&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://www.ccc.co.jp/zh-cn/news/press/20201019_004996.html",
+          "label": "品牌官方书店介绍"
+        }
+      ]
+    },
+    {
+      "id": "theatre",
+      "group": "rainy",
+      "name": "杭州剧院 · 选一场话剧",
+      "area": "拱墅 · 武林广场 29 号 · 按演出场次安排",
+      "types": "culture",
+      "keywords": "下雨 雨天 室内 避雨 话剧 戏剧 舞台剧",
+      "aliases": [],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "想安稳坐下来度过一下午或晚上，可以从话剧、舞台剧中挑一场。先选剧目和日期，再安排周边吃饭。"
+        },
+        {
+          "label": "订票：",
+          "text": "查看近期排期，核对票面剧场、开场时间及退改规则；不是每个周末都有合适的剧目。"
+        },
+        {
+          "label": "",
+          "text": "这里是武林广场的杭州剧院，注意与钱江新城的杭州大剧院区分。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E%E5%89%A7%E9%99%A2+%E6%AD%A6%E6%9E%97%E5%B9%BF%E5%9C%BA29%E5%8F%B7&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://www.zjyyjt.com.cn/index.php/Home/Article/detailYcyx/menu_id/26.html",
+          "label": "剧院所属集团介绍"
+        },
+        {
+          "url": "https://www.zjyy99.com/",
+          "label": "演出排期与订票"
+        }
+      ]
+    },
+    {
+      "id": "library",
+      "group": "rainy",
+      "name": "浙江图书馆 · 之江馆",
+      "area": "之江文化中心 · 阅读与讲座 · 预留 2–4 小时",
+      "types": "culture",
+      "keywords": "下雨 雨天 室内 避雨",
+      "aliases": [],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "不想逛展时，找书读一下午，也可以查看当天是否有讲座。这里以阅读为主，适合安静待着。"
+        },
+        {
+          "label": "参观：",
+          "text": "书籍之殿及多数阅览区周二至周日 9:00–17:00；文学借阅区开放更久，各区时间不同。地铁 6 号线之江文化中心站。"
+        },
+        {
+          "label": "",
+          "text": "入馆与座位使用看官网服务指南；讲座另看报名。不要按文学借阅区的时间安排整馆参观。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E6%B5%99%E6%B1%9F%E5%9B%BE%E4%B9%A6%E9%A6%86+%E4%B9%8B%E6%B1%9F%E9%A6%86&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://www.zjlib.cn/service/museumAdmissionGuide",
+          "label": "官方入馆与分区开放指南"
+        }
+      ]
+    },
+    {
+      "id": "fengxiaoling",
+      "group": "camping",
+      "name": "FC CAMPING 风笑岭营地",
+      "area": "临安 · 青山湖",
+      "types": "camping",
+      "keywords": "杭州 露营 营地 自驾 停车 做饭 卡式炉 FC CAMPING 风笑岭营地 临安 · 青山湖",
+      "aliases": ["风笑岭"],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "青山湖街道洪村村风笑岭75号"
+        },
+        {
+          "label": "停车与搬运：",
+          "text": "设施页列有车辆入营、停车场及装备运送服务；具体停车点订前确认。"
+        },
+        {
+          "label": "卡式炉：",
+          "text": "天幕配备卡式炉、炊具，营地介绍支持自带食材做饭。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+FC+CAMPING+%E9%A3%8E%E7%AC%91%E5%B2%AD%E8%90%A5%E5%9C%B0&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://hotels.ctrip.com/hotels/130374508.html",
+          "label": "设施与餐食说明"
+        },
+        {
+          "url": "tel:13819103605",
+          "label": "电话咨询"
+        }
+      ]
+    },
+    {
+      "id": "zhongtiaoxi",
+      "group": "camping",
+      "name": "路隐那森·中苕溪营地",
+      "area": "余杭 · 径山",
+      "types": "camping",
+      "keywords": "杭州 露营 营地 自驾 停车 做饭 卡式炉 路隐那森·中苕溪营地 余杭 · 径山",
+      "aliases": ["中苕溪营地", "中笤溪营地"],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "径山镇中苕溪畔，优先询问栖鹭滩 / 息壤渚岛汽车营位"
+        },
+        {
+          "label": "停车与搬运：",
+          "text": "营位页列有汽车营位和停车场，设施页另列装备运送服务；搬运距离订前确认。"
+        },
+        {
+          "label": "卡式炉：",
+          "text": "汽车营位说明列明可用卡式炉，需预约并确认当日用火规定。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E8%B7%AF%E9%9A%90%E9%82%A3%E6%A3%AE+%E4%B8%AD%E8%8B%95%E6%BA%AA%E8%90%A5%E5%9C%B0&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://cms.umoutdoor.net/phone/hotels/show_663.html",
+          "label": "汽车营位与用炉说明"
+        },
+        {
+          "url": "https://hotels.ctrip.com/hotels/80525993.html",
+          "label": "车辆与搬运设施"
+        },
+        {
+          "url": "tel:15658845303",
+          "label": "电话咨询"
+        }
+      ]
+    },
+    {
+      "id": "shanhai",
+      "group": "camping",
+      "name": "路隐那森·安吉山海营",
+      "area": "杭州周边 · 安吉 · 天荒坪",
+      "types": "camping",
+      "keywords": "露营 营地 自驾 停车 做饭 卡式炉 安吉",
+      "aliases": ["安吉山海营", "路隐那森山海"],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "安吉县天荒坪镇五鹤村树景坞，可选自带装备的草坪或木平台营位。"
+        },
+        {
+          "label": "停车与搬运：",
+          "text": "设施页列有停车场、车辆入营和装备运送服务；订前确认所选营位的卸货点、搬运距离及服务费用。"
+        },
+        {
+          "label": "卡式炉：",
+          "text": "自带装备营位规则明确列出卡式炉。提前预约，日营或过夜、自带炉具与当日用火要求一并确认。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E5%AE%89%E5%90%89+%E8%B7%AF%E9%9A%90%E9%82%A3%E6%A3%AE+%E5%B1%B1%E6%B5%B7%E8%90%A5+%E4%BA%94%E9%B9%A4%E6%9D%91&city=%E6%B9%96%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://cms.umoutdoor.net/phone/hotels/show_654.html",
+          "label": "自带装备与用炉说明"
+        },
+        {
+          "url": "https://hotels.ctrip.com/hotels/107215865.html",
+          "label": "车辆与搬运设施"
+        }
+      ]
+    },
+    {
+      "id": "yehuanyuan",
+      "group": "camping",
+      "name": "安吉野欢原露营地",
+      "area": "杭州周边 · 安吉 · 天子湖",
+      "types": "camping",
+      "keywords": "露营 营地 自驾 停车 做饭 卡式炉 安吉 野欢原 自由王国",
+      "aliases": ["野欢原"],
+      "reviewedOn": "2026-10-23",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "安吉县天子湖镇，树林与湖边露营场景，可自带帐篷。"
+        },
+        {
+          "label": "停车与搬运：",
+          "text": "预订页列有停车场及房车营位。普通车能否到所选营位未写明，优先询问靠近停车区的营位及卸货距离。"
+        },
+        {
+          "label": "卡式炉：",
+          "text": "场地说明明确支持卡式炉。订前确认当天可用区域、日营或过夜费用；不要默认所有湖边位置都能停车和用炉。"
+        }
+      ],
+      "links": [
+        {
+          "url": "https://uri.amap.com/search?keyword=%E5%AE%89%E5%90%89+%E5%A4%A9%E5%AD%90%E6%B9%96+%E9%87%8E%E6%AC%A2%E5%8E%9F%E9%9C%B2%E8%90%A5%E5%9C%B0&city=%E6%B9%96%E5%B7%9E&view=map&callnative=0",
+          "label": "地图查询"
+        },
+        {
+          "url": "https://cms.umoutdoor.net/phone/hotels/show_648.html",
+          "label": "营位、停车与用炉说明"
+        }
+      ]
+    },
+    {
+      "id": "laoheshan",
+      "group": "hiking",
+      "name": "老和山 · 将军山短线",
+      "area": "西湖 · 城西 · 中等 · 预留 2–3 小时",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路",
+      "aliases": ["老和山", "将军山"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "老和山登山口 → 老和山 → 将军山，按体力原路折返。"
+        },
+        {
+          "label": "",
+          "text": "想在城西走一段山脊，可选这条。取经典老和山至北高峰路线的前段，不必一次走完全线。"
+        },
+        {
+          "label": "出发前：",
+          "text": "地图找公共登山口，不依赖穿越浙大校园；山路有连续台阶，沿景区标识行进。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E8%80%81%E5%92%8C%E5%B1%B1%E7%99%BB%E5%B1%B1%E5%8F%A3&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "杭州网路线参考",
+          "url": "https://hznews.hangzhou.com.cn/wghz/content/2021-10/14/content_8072195.htm"
+        }
+      ]
+    },
+    {
+      "id": "guirenge",
+      "group": "hiking",
+      "name": "虎跑后山 · 贵人阁",
+      "area": "西湖南线 · 中等 · 预留 2–3 小时",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路",
+      "aliases": ["贵人阁", "虎跑后山"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "虎跑公园 → 后山步道 → 贵人阁 → 原路返回。"
+        },
+        {
+          "label": "",
+          "text": "登高看西湖与钱塘江，适合把游园和爬山放在同一趟；不把九溪、六和塔长线全部串上。"
+        },
+        {
+          "label": "出发前：",
+          "text": "从虎跑公园进入按景区门票、开放时间安排，后山开放情况另看现场通知。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E8%99%8E%E8%B7%91%E5%85%AC%E5%9B%AD&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "杭州网路线参考",
+          "url": "https://hznews.hangzhou.com.cn/wghz/content/2021-10/14/content_8072195.htm"
+        }
+      ]
+    },
+    {
+      "id": "wuyunshan",
+      "group": "hiking",
+      "name": "五云山 · 九溪口往返",
+      "area": "西湖 · 之江 · 中等 · 预留 2–3 小时",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路",
+      "aliases": ["五云山", "真际院", "真际寺"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "九溪方向五云山登山口 → 真际院附近 → 原路返回。"
+        },
+        {
+          "label": "",
+          "text": "沿山路看茶田、古树，适合慢慢爬一座山。秋季是否转黄要看当年天气，不按老攻略推算最佳日。"
+        },
+        {
+          "label": "出发前：",
+          "text": "从九溪侧公共登山口走；若改从云栖竹径进入，另看景区票务，不走溪沟野路抄近道。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E4%BA%94%E4%BA%91%E5%B1%B1%E7%99%BB%E5%B1%B1%E5%8F%A3&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "交通与入口参考",
+          "url": "https://hz.bendibao.com/tour/20201119/96564.shtm"
+        }
+      ]
+    },
+    {
+      "id": "yuewangcheng",
+      "group": "hiking",
+      "name": "越王城山 · 湘湖登高",
+      "area": "萧山 · 湘湖 · 较轻松 · 预留 1–2 小时",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路",
+      "aliases": ["越王城山"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "城山广场 → 登山古道 → 越王城遗址方向 → 原路下山。"
+        },
+        {
+          "label": "",
+          "text": "适合不想走远的半天安排，下山可在湘湖边休息。海拔不高，但连续台阶仍需要留体力。"
+        },
+        {
+          "label": "出发前：",
+          "text": "导航城山广场，沿开放古道走；遗址和支路按现场开放范围参观。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E6%B9%98%E6%B9%96+%E5%9F%8E%E5%B1%B1%E5%B9%BF%E5%9C%BA&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "萧山发布地点介绍",
+          "url": "https://m.thepaper.cn/newsDetail_forward_17995775"
+        }
+      ]
+    },
+    {
+      "id": "dadoushan",
+      "group": "hiking",
+      "name": "龙坞大斗山 · 茶村往返",
+      "area": "西湖 · 龙坞 · 中等 · 预留 2–3 小时",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路",
+      "aliases": ["大斗山"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "龙坞上城埭村 → 大斗山开放游步道 → 原路返回。"
+        },
+        {
+          "label": "",
+          "text": "茶村、茶园和山林放在一趟，爬完可在村里吃饭；比市区小山更适合留半天慢走。"
+        },
+        {
+          "label": "出发前：",
+          "text": "在村内按公共登山指示找入口，不穿行生产茶地；遇游步道维修时折返。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E4%B8%8A%E5%9F%8E%E5%9F%AD%E6%9D%91+%E5%A4%A7%E6%96%97%E5%B1%B1&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "杭州网茶山与步道介绍",
+          "url": "https://hznews.hangzhou.com.cn/chengshi/content/2023-12/14/content_8659398.htm"
+        }
+      ]
+    },
+    {
+      "id": "luniao",
+      "group": "hiking",
+      "name": "鸬鸟山古道 · 东段",
+      "area": "余杭 · 鸬鸟 · 进阶 · 留足一天",
+      "types": "outdoor",
+      "keywords": "爬山 登山 徒步 山路",
+      "aliases": ["鸬鸟山"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "鸬鸟希尔顿花园酒店南侧古道入口 → 东段古道，按体力折返。"
+        },
+        {
+          "label": "",
+          "text": "公开资料介绍东段至千亩杜鹃林约 6.2 公里，这是单程长度。完整往返爬升较多，不当作轻松小环线。"
+        },
+        {
+          "label": "出发前：",
+          "text": "只走已开放的古道，不沿旧户外轨迹走未开发山脊；提前定好折返时间，山顶无固定补给承诺。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E9%B8%AC%E9%B8%9F%E5%B1%B1%E5%8F%A4%E9%81%93+%E4%B8%9C%E6%AE%B5&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "杭州网古道介绍",
+          "url": "https://pic.hangzhou.com.cn/hzyx/content/content_9067259.html"
+        },
+        {
+          "label": "余杭时报 2026 年古道资料",
+          "url": "https://yhcb.eyh.cn/resfile/2026-01-04/01/yhsb-20260104-001.pdf"
+        }
+      ]
+    },
+    {
+      "id": "langlinggu",
+      "group": "camping",
+      "name": "郎岭谷营地",
+      "area": "杭州周边 · 湖州吴兴 · 用炉套餐可查",
+      "types": "camping",
+      "keywords": "露营 营地 自驾 停车 做饭 卡式炉",
+      "aliases": ["郎岭谷", "郞岭谷"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "妙西镇五星村郎村31号，帐篷和山村环境，适合轻装去营地吃一顿户外餐。"
+        },
+        {
+          "label": "停车与搬运：",
+          "text": "公开预订页未写清卸货点与营位距离；预约时问能否少量搬运，优先选择场地提供装备的套餐。"
+        },
+        {
+          "label": "卡式炉：",
+          "text": "营地火锅套餐列有卡式炉；这不等于允许自带炉具和食材，需单独确认。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%B9%96%E5%B7%9E+%E9%83%8E%E5%B2%AD%E8%B0%B7%E8%90%A5%E5%9C%B0&city=%E6%B9%96%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "营地套餐与设备",
+          "url": "https://cms.umoutdoor.net/hotels/show_455.html"
+        }
+      ]
+    },
+    {
+      "id": "woxiaoniu",
+      "group": "camping",
+      "name": "千岛湖蜗小牛房车营地",
+      "area": "淳安 · 千岛湖 · 自驾备选",
+      "types": "camping",
+      "keywords": "露营 营地 自驾 停车 做饭 卡式炉",
+      "aliases": ["蜗小牛"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "千岛湖中心湖区客运西站附近，有自驾车、房车营位和露营装备租赁，适合安排一晚。"
+        },
+        {
+          "label": "停车与搬运：",
+          "text": "公开介绍包含自驾车停宿营位和访客停车区。预约自驾营位时确认帐篷能否紧邻车辆，以及卸货方式。"
+        },
+        {
+          "label": "卡式炉：",
+          "text": "现有可靠资料没有写明自带卡式炉规则；先向营地确认，再带做饭装备，不按房车可入营推断可用火。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E5%8D%83%E5%B2%9B%E6%B9%96+%E8%9C%97%E5%B0%8F%E7%89%9B%E6%88%BF%E8%BD%A6%E8%90%A5%E5%9C%B0&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "营位与配套资料",
+          "url": "https://www.jinrifangche.com/luyingdi.php?id=505"
+        },
+        {
+          "label": "场地与联系信息",
+          "url": "https://you.ctrip.com/sight/chunan2249/150260879.html"
+        }
+      ]
+    },
+    {
+      "id": "anyu",
+      "group": "camping",
+      "name": "安屿露营公园",
+      "area": "建德 · 钦堂 · 新近报道备选",
+      "types": "camping",
+      "keywords": "露营 营地 自驾 停车 做饭 卡式炉",
+      "aliases": ["安屿露营"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "杭州文广旅游发布近期介绍的草坪营地，周围有茶山、水库，可把露营和建德周边游组合。"
+        },
+        {
+          "label": "停车与搬运：",
+          "text": "公开报道未写明停车到营位距离，出发前问清卸货点、推车及是否可自搭。联系：13967165003。"
+        },
+        {
+          "label": "卡式炉：",
+          "text": "尚未查到明确用炉说明；先确认当天指定区域是否可用，不能把露营公园当作可随意生火的草坪。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E5%BB%BA%E5%BE%B7+%E9%92%A6%E5%A0%82+%E5%AE%89%E5%B1%BF%E9%9C%B2%E8%90%A5%E5%85%AC%E5%9B%AD&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "杭州文广旅游发布介绍",
+          "url": "https://tidenews.com.cn/tmh_news.html?id=6abfa4b47e97d4000100b694"
+        }
+      ]
+    },
+    {
+      "id": "cycle-westlake",
+      "group": "cycling",
+      "name": "西湖西线 · 杨公堤",
+      "area": "西湖 · 休闲 · 预留 1–2 小时",
+      "types": "outdoor",
+      "keywords": "自行车 骑行 单车 绿道 路线",
+      "aliases": ["杨公堤", "曙光路"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "黄龙洞 → 曙光路 → 杨公堤 → 太子湾外围，按体力折返。"
+        },
+        {
+          "label": "适合：",
+          "text": "想看湖景、试试城市骑游。走开放道路的非机动车道，桥坡和人多处下车推行。"
+        },
+        {
+          "label": "出发前：",
+          "text": "目的地为公园外围，不把公园步道当骑行道；路口、节假日临时交通组织看现场指示。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E9%BB%84%E9%BE%99%E6%B4%9E&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "城报骑行参考",
+          "url": "https://jrsh.hangzhou.com.cn/content/2024-04/13/content_8714816.html"
+        }
+      ]
+    },
+    {
+      "id": "cycle-binjiang",
+      "group": "cycling",
+      "name": "滨江闻涛路 · 沿江慢骑",
+      "area": "滨江 · 平路休闲 · 可分段往返",
+      "types": "outdoor",
+      "keywords": "自行车 骑行 单车 绿道 路线",
+      "aliases": ["闻涛路", "滨江樱花跑道"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "华家排灌站 → 闻涛路 → 奥体中心方向；不必骑到终点。"
+        },
+        {
+          "label": "里程：",
+          "text": "公开推荐全线约 17.4 公里，单程口径；轻松玩可选其中一段原路折返。"
+        },
+        {
+          "label": "出发前：",
+          "text": "沿标识骑行道慢行，避让行人；不驶入步行专用段，江风大或有临时封闭就缩短路线。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E9%97%BB%E6%B6%9B%E8%B7%AF+%E5%8D%8E%E5%AE%B6%E6%8E%92%E7%81%8C%E7%AB%99&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "杭州发布骑行参考",
+          "url": "https://hznews.hangzhou.com.cn/chengshi/content/2021-03/21/content_7931687.html"
+        }
+      ]
+    },
+    {
+      "id": "cycle-xianghu",
+      "group": "cycling",
+      "name": "湘湖三期 · 环湖绿道",
+      "area": "萧山 · 平路休闲 · 约 7.6 公里环线",
+      "types": "outdoor",
+      "keywords": "自行车 骑行 单车 绿道 路线",
+      "aliases": ["湘湖三期", "湘湖绿道", "湘湖骑行"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "老虎洞游客服务中心出发，沿三期环湖绿道绕行，回到起点。"
+        },
+        {
+          "label": "适合：",
+          "text": "初次骑游或想轻松看湖，预留 1–2 小时含休息。沿线租车是否营业、价格和归还点当天确认。"
+        },
+        {
+          "label": "出发前：",
+          "text": "按景区骑行导向走；桥面、人车混行处减速，禁骑标识处推行。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E6%B9%98%E6%B9%96+%E8%80%81%E8%99%8E%E6%B4%9E%E6%B8%B8%E5%AE%A2%E6%9C%8D%E5%8A%A1%E4%B8%AD%E5%BF%83&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "萧山日报路线与里程",
+          "url": "https://hznews.hangzhou.com.cn/wenti/content/2023-08/14/content_8600081.htm"
+        }
+      ]
+    },
+    {
+      "id": "cycle-tongjian",
+      "group": "cycling",
+      "name": "铜鉴湖 · 环湖短线",
+      "area": "西湖 · 双浦 · 约 7.6 公里环线",
+      "types": "outdoor",
+      "keywords": "自行车 骑行 单车 绿道 路线",
+      "aliases": ["铜鉴湖"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "花海码头附近出发，沿景区允许骑行的环湖路线返回。"
+        },
+        {
+          "label": "适合：",
+          "text": "想骑一小圈、沿湖停留。体育部门体验活动使用的环湖线为 7.58 公里，不是三十多公里的绿道全线。"
+        },
+        {
+          "label": "出发前：",
+          "text": "活动报道只作路线参考，非持续举办的骑行团；现场游线或开放区域变化时按指示调整。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E9%93%9C%E9%89%B4%E6%B9%96+%E8%8A%B1%E6%B5%B7%E7%A0%81%E5%A4%B4&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "杭州日报环湖路线",
+          "url": "https://pic.hangzhou.com.cn/hzyx/content/content_8812717.html"
+        }
+      ]
+    },
+    {
+      "id": "cycle-qingshan",
+      "group": "cycling",
+      "name": "青山湖 · 环湖绿道",
+      "area": "临安 · 长距离休闲 · 可先骑半程",
+      "types": "outdoor",
+      "keywords": "自行车 骑行 单车 绿道 路线",
+      "aliases": ["青山湖"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "望湖公园附近进入环湖绿道，沿湖选择已开放骑行段；新手采用折返线。"
+        },
+        {
+          "label": "里程：",
+          "text": "公开资料绿道全线约 42.2 公里，有坡道；另有不同里程的环湖骑法，先看当天路线，不把所有攻略当同一圈。"
+        },
+        {
+          "label": "出发前：",
+          "text": "水上森林景区与绿道分别看票务及骑行范围；木栈道湿滑、人多或禁骑处下车，环线留足补水与体力。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E9%9D%92%E5%B1%B1%E6%B9%96+%E6%9C%9B%E6%B9%96%E5%85%AC%E5%9B%AD&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "杭州发布骑行参考",
+          "url": "https://hznews.hangzhou.com.cn/chengshi/content/2021-03/21/content_7931687.html"
+        },
+        {
+          "label": "2026 年青山湖报道",
+          "url": "https://hznews.hangzhou.com.cn/wghz/content/2026-01/09/content_9159794.htm"
+        }
+      ]
+    },
+    {
+      "id": "cycle-liangzhu",
+      "group": "cycling",
+      "name": "良渚古城外围 · 田园绿道",
+      "area": "余杭 · 休闲 · 按体力折返",
+      "types": "outdoor",
+      "keywords": "自行车 骑行 单车 绿道 路线",
+      "aliases": ["良渚"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "良渚古城遗址公园外围绿道 → 杭州国家版本馆外围方向，沿开放骑行道路折返。"
+        },
+        {
+          "label": "适合：",
+          "text": "想看田园、把骑行和户外休息放在一起。公开活动曾设置 12 公里连线，仅作路线方向参考。"
+        },
+        {
+          "label": "出发前：",
+          "text": "推荐的是园外道路，不包含骑车进入遗址公园或场馆；不穿农田、施工便道，按现场绿道标识行进。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E8%89%AF%E6%B8%9A%E5%8F%A4%E5%9F%8E%E9%81%97%E5%9D%80%E5%85%AC%E5%9B%AD+%E8%A5%BF%E9%97%A8&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "2025 年骑行路线报道",
+          "url": "https://apiv4.cst123.cn/cst/news/shareDetail?ic=ttj3&id=1100773070764769280"
+        }
+      ]
+    },
+    {
+      "id": "cycle-longjing",
+      "group": "cycling",
+      "name": "龙井 · 杨梅岭茶山线",
+      "area": "西湖 · 坡道进阶 · 有道路骑行经验再选",
+      "types": "outdoor",
+      "keywords": "自行车 骑行 单车 绿道 路线",
+      "aliases": ["龙井", "杨梅岭", "满觉陇"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "茅家埠 → 龙井路 → 龙井村 → 杨梅岭 → 满觉陇方向。"
+        },
+        {
+          "label": "适合：",
+          "text": "想体验爬坡与茶山风景的骑友；不按新手平路标准安排，预留半天慢慢骑。"
+        },
+        {
+          "label": "出发前：",
+          "text": "连续坡弯与机动车混行，先检查刹车，下坡控速；雨天改选平路，人多或禁骑处推行。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E8%8C%85%E5%AE%B6%E5%9F%A0&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "城报茶山骑行参考",
+          "url": "https://jrsh.hangzhou.com.cn/content/2024-04/13/content_8714816.html"
+        }
+      ]
+    },
+    {
+      "id": "cycle-jiande",
+      "group": "cycling",
+      "name": "建德绿道 · 乾潭至梅城方向",
+      "area": "建德 · 周边一日游 · 单程约 18 公里",
+      "types": "outdoor",
+      "keywords": "自行车 骑行 单车 绿道 路线",
+      "aliases": ["建德绿道", "乾潭", "子胥渡"],
+      "reviewedOn": "2026-10-30",
+      "paragraphs": [
+        {
+          "label": "路线：",
+          "text": "乾潭驿站 → 溪西畈 → 子胥渡 → 严东关、梅城方向。"
+        },
+        {
+          "label": "适合：",
+          "text": "想沿江骑久一点的周末安排；资料所列 18 公里为绿道单程，若原路返回要预留双倍路程。"
+        },
+        {
+          "label": "出发前：",
+          "text": "自带车先安排返程接驳，租车问清异地归还；不默认沿线服务站始终营业，雨后查看栈道开放情况。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E5%BB%BA%E5%BE%B7+%E4%B9%BE%E6%BD%AD%E9%A9%BF%E7%AB%99&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "杭州发布骑行参考",
+          "url": "https://hznews.hangzhou.com.cn/chengshi/content/2021-03/21/content_7931687.html"
+        }
+      ]
+    }
+  ]
+}

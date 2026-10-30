@@ -16,6 +16,34 @@ from xml.sax.saxutils import escape
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def build_places(template):
+    """Keep place references readable in the HTML and in the offline shell."""
+    places = json.loads((ROOT / 'news/places.json').read_text())['places']
+    for group in ('hiking', 'cycling', 'rainy', 'camping'):
+        selected = [p for p in places if p['group'] == group]
+        cards = []
+        for place in selected:
+            esc = html_escape
+            camping = group == 'camping'
+            paragraphs = ''.join('<p>' + (f'<strong>{esc(p["label"])}</strong>' if p['label'] else '')
+                                 + esc(p['text']) + '</p>' for p in place['paragraphs'])
+            links = ''.join(f'<a href="{esc(link["url"], quote=True)}" target="_blank" rel="noopener noreferrer"'
+                            + (f' aria-label="在高德地图查询{esc(place["name"], quote=True)}"' if 'uri.amap.com/' in link['url'] else '')
+                            + f'>{esc(link["label"])} ↗</a>' for link in place['links'])
+            update = (f'<p class="place-reviewed">基础资料查阅 {esc(place["reviewedOn"])}</p>'
+                      '<div class="place-updates" data-place-updates>近期消息等待首次检索。</div>') if place['aliases'] else ''
+            cards.append(f'<li class="{"camping-place " if camping else ""}place-card"'
+                         f' data-place-id="{esc(place["id"], quote=True)}" data-place-types="{esc(place["types"], quote=True)}"'
+                         f' data-search="{esc(place["keywords"], quote=True)}">'
+                         f'<span class="{"camping-area " if camping else ""}place-area">{esc(place["area"])}</span>'
+                         f'<h3>{esc(place["name"])}</h3>{paragraphs}'
+                         f'<div class="{"camping-links " if camping else ""}place-links">{links}</div>{update}</li>')
+        listing = f'<ul class="{"camping-grid " if group == "camping" else ""}place-grid">' + ''.join(cards) + '</ul>'
+        template = template.replace(f'__{group.upper()}_PLACES__', listing)
+        template = template.replace(f'__{group.upper()}_COUNT__', str(len(selected)))
+    return template
+
+
 def build_guide_reader(output):
     """Render a usable first page and split remaining bodies into small chapters."""
     book = json.loads((output / 'guide/book.json').read_text())
@@ -231,7 +259,7 @@ def main():
     digest = hashlib.sha256(old_book).hexdigest()[:12]
     (output / f'assets/news/guide-book.{digest}.json').write_bytes(old_book)
     # New HTML always requests the matching assets, even with cached older releases.
-    homepage = (output / 'index.html').read_text()
+    homepage = build_places((output / 'index.html').read_text())
     skeleton = ('<div class="article-placeholder skeleton" aria-hidden="true"><div class="article-body">'
                 '<span class="skeleton-line short"></span><span class="skeleton-line title"></span>'
                 '<span class="skeleton-line title"></span><span class="skeleton-line"></span>'

@@ -187,9 +187,74 @@
     return `<p class="outing-summary"><span>${escape(outingTypes[info.type] || "出游消息")}</span><span>${escape(when)}${ended ? " · 已结束" : ""}</span></p>
       ${info.venue || info.cost ? `<p class="outing-details">${[info.venue, info.cost].filter(Boolean).map(escape).join(" · ")}</p>` : ""}`;
   }
+  function renderPlaceUpdates() {
+    const records = state.data.placeUpdates?.places || {};
+    const dateOK = (value) =>
+      typeof value === "string" && Number.isFinite(Date.parse(value));
+    $$("[data-place-updates-summary]").forEach((summary) => {
+      const cards = [
+        ...summary
+          .closest("[data-place-group]")
+          .querySelectorAll("[data-place-id]"),
+      ];
+      const statuses = cards
+        .map((card) => records[card.dataset.placeId])
+        .filter(Boolean);
+      const latest = statuses
+        .map((record) => record.searchedAt)
+        .filter(dateOK)
+        .sort()
+        .pop();
+      const failed = statuses.some((record) => record.status === "unavailable");
+      summary.textContent =
+        "近期消息每小时随资讯检查；每天 9 点、16 点按地点补充检索。" +
+        (latest ? `最近检索 ${formatTime(latest)}。` : "等待首次检索。") +
+        (failed ? "部分检索暂未成功，已有消息继续保留。" : "") +
+        (summary.dataset.placeUpdatesSummary === "camping"
+          ? "检索时间不代表现场开放或用炉许可已核实。"
+          : "检索结果不代表路线当天全线开放。");
+      cards.forEach((card) => {
+        const panel = card.querySelector("[data-place-updates]");
+        if (!panel) return;
+        const record = records[card.dataset.placeId] || {};
+        const items = (Array.isArray(record.items) ? record.items : [])
+          .filter(
+            (item) =>
+              item &&
+              typeof item.title === "string" &&
+              dateOK(item.publishedAt) &&
+              Date.parse(item.publishedAt) >= Date.now() - 30 * 86400000 &&
+              Date.parse(item.publishedAt) <= Date.now() + 600000 &&
+              safeUrl(item.originalUrl || item.url),
+          )
+          .slice(0, 2);
+        const checked = dateOK(record.searchedAt)
+          ? `最近检索 ${formatTime(record.searchedAt)}`
+          : "尚无成功检索记录";
+        const status =
+          record.status === "unavailable"
+            ? "本次检索暂未成功" + (items.length ? "，保留已收录消息" : "")
+            : items.length
+              ? "近期消息"
+              : dateOK(record.searchedAt)
+                ? "上次检索未发现近 30 天的新消息"
+                : "等待首次检索";
+        panel.innerHTML =
+          `<p class="place-news-label">${escape(status)}</p>` +
+          items
+            .map(
+              (item) =>
+                `<p><a href="${escape(safeUrl(item.originalUrl || item.url))}" target="_blank" rel="noopener noreferrer">${escape(item.title.replace(/ - [^-]+$/, ""))} ↗</a><br><span>${escape(item.publisher || "来源原文")} · 报道 ${escape(formatTime(item.publishedAt))}</span></p>`,
+            )
+            .join("") +
+          `<p class="place-news-time">${escape(checked)}</p>`;
+      });
+    });
+  }
   function renderWeekendTools() {
     const panel = $("#weekend-tools");
     panel.hidden = state.view !== "local";
+    if (!panel.hidden) renderPlaceUpdates();
     const words = state.query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
     let referenceCount = 0;
     $$("[data-place-group]").forEach((group) => {

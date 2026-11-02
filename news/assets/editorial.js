@@ -55,6 +55,10 @@
   function render(data, state, formatTime) {
     const panel = document.querySelector("#outing-recommendations");
     if (!panel) return;
+    const expanded = new Set(Array.from(panel.querySelectorAll(".trip-details[open]"),
+      (details) => details.closest("li").dataset.tripKey));
+    const moreOpen = panel.querySelector("[data-trip-more]")?.getAttribute("aria-expanded") === "true";
+    const attributionOpen = panel.querySelector(".trip-attribution")?.open;
     panel.hidden = true;
     panel.innerHTML = "";
     const trip = data.editorial && data.editorial.trip;
@@ -84,21 +88,23 @@
     panel.hidden = false;
     const updated = esc(formatTime(trip.updatedAt));
     panel.innerHTML = `<div class="trip-heading"><h2>本周出行</h2><span>${esc(trip.weekendStart.slice(5).replace("-", "/"))}—${esc(trip.weekendEnd.slice(5).replace("-", "/"))}</span></div>
-      <p class="trip-note">结合天气与已收录资料挑选 · ${updated} 整理${stale ? " · 更新暂未完成，以下为上次建议" : ""}</p>
+      <p class="trip-note">结合天气挑选 · ${updated} 整理${stale ? " · 更新暂未完成，以下为上次建议" : ""}</p>
       <ul class="trip-list">${picks.map((p, index) => {
         const w = forecast(trip, p), region = trip.weather.regions[p.region];
         const links = (Array.isArray(p.sources) ? p.sources : []).filter((s) => url(s.url)).slice(0, 2);
         const reference = p.placeId && /^[a-z0-9-]+$/.test(p.placeId)
           ? `<button class="text-button" data-trip-place="${esc(p.placeId)}">路线与条件</button>` : "";
         const newsLinks = (Array.isArray(p.news) ? p.news : []).filter((n) => url(n.url) && validDate(n.publishedAt)).slice(0, 1);
-        return `<li${index > 1 ? ' data-trip-extra hidden' : ''}><p class="trip-kind">${esc(types[p.type] || "出游")}${p.type === "rainy" ? "" : " · " + esc(p.day.slice(5).replace("-", "/"))}</p>
-          <h3>${esc(p.name)}</h3><p>${esc(p.reason)}</p>
+        const key = JSON.stringify([p.id || p.name, p.day]);
+        return `<li data-trip-key="${esc(key)}"${index > 1 ? ` data-trip-extra${moreOpen ? "" : " hidden"}` : ""}><p class="trip-kind">${esc(types[p.type] || "出游")}${p.type === "rainy" ? "" : " · " + esc(p.day.slice(5).replace("-", "/"))}</p>
+          <h3>${esc(p.name)}</h3><p class="trip-reason">${esc(p.reason)}</p>
           <p class="trip-weather">${esc(region.name)} · ${esc(p.day.slice(5))} ${esc(weatherNames[w.code] || "天气预报")} ${esc(Math.round(w.low))}—${esc(Math.round(w.high))}℃ · 降水概率 ${esc(w.rainProbability)}%</p>
+          <details class="trip-details"${expanded.has(key) ? " open" : ""}><summary>查看建议、路线与来源</summary><p>${esc(p.reason)}</p>
           ${p.reviewedOn ? `<p class="trip-note">地点参考 · 基础资料 ${esc(p.reviewedOn)}；开放与预约以当天公告为准。</p>` : `<p class="trip-note">活动日期 ${esc(p.start)}—${esc(p.end)}</p>`}
           ${newsLinks.map((n) => `<p class="trip-news"><a href="${esc(url(n.url))}" target="_blank" rel="noopener noreferrer">${esc(n.title)} ↗</a><span>报道 ${esc(formatTime(n.publishedAt))}</span></p>`).join("")}
-          <div class="trip-links">${reference}${p.mapUrl && url(p.mapUrl) ? `<a href="${esc(url(p.mapUrl))}" target="_blank" rel="noopener noreferrer">地图 ↗</a>` : ""}${links.map((s) => `<a href="${esc(url(s.url))}" target="_blank" rel="noopener noreferrer">${esc(s.label || "来源原文")} ↗</a>`).join("")}</div></li>`;
-      }).join("")}</ul>${picks.length > 2 ? `<button class="text-button" data-trip-more aria-expanded="false">再看 ${picks.length - 2} 个建议</button>` : ""}
-      <p class="trip-note">AI 辅助整理，来源可核对。<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">天气：Open-Meteo</a> · ${esc(formatTime(trip.weather.updatedAt))} 获取；预报为区域参考，山地天气可能不同。</p>`;
+          <div class="trip-links">${reference}${p.mapUrl && url(p.mapUrl) ? `<a href="${esc(url(p.mapUrl))}" target="_blank" rel="noopener noreferrer">地图 ↗</a>` : ""}${links.map((s) => `<a href="${esc(url(s.url))}" target="_blank" rel="noopener noreferrer">${esc(s.label || "来源原文")} ↗</a>`).join("")}</div></details></li>`;
+      }).join("")}</ul>${picks.length > 2 ? `<button class="text-button" data-trip-more aria-expanded="${moreOpen}">${moreOpen ? "收起" : `再看 ${picks.length - 2} 个建议`}</button>` : ""}
+      <details class="trip-attribution"${attributionOpen ? " open" : ""}><summary>推荐依据 · AI 辅助整理</summary><p class="trip-note">结合已收录资料与天气预报挑选，来源见各条建议。<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">天气：Open-Meteo</a> · ${esc(formatTime(trip.weather.updatedAt))} 获取；预报为区域参考，山地天气可能不同。</p></details>`;
   }
   document.addEventListener("click", (event) => {
     const more = event.target.closest("[data-trip-more]");
@@ -110,13 +116,6 @@
       more.textContent = expanded ? `再看 ${extra.length} 个建议` : "收起";
       return;
     }
-    const button = event.target.closest("[data-trip-place]");
-    if (!button) return;
-    const card = Array.from(document.querySelectorAll("[data-place-id]")).find((el) => el.dataset.placeId === button.dataset.tripPlace);
-    if (!card || card.hidden) return;
-    const section = card.closest("details");
-    if (section) section.open = true;
-    card.scrollIntoView({ behavior: "smooth", block: "start" });
   });
   window.NewsEditorial = { metadata, group, render };
 })();

@@ -244,93 +244,105 @@
             hidden
           ></section>
           <section id="outing-recommendations" aria-label="本周出行推荐" hidden></section>
-          <details
-            id="hiking-places"
-            class="place-guide"
-            data-place-group
-            hidden
-          >
-            <summary><h2>
-              杭州爬山 <span data-place-count>__HIKING_COUNT__ 个地点参考</span>
-            </h2></summary>
-            <p class="place-note" data-place-updates-summary="hiking">
-              近期消息等待首次检索。
-            </p>
-            <p class="place-intro">
-              先挑强度，再定路线。下列时长为步行加停留的粗略预留，强度为本站相对判断；不含往返交通。下雨、雷电或景区封山时不安排登山，可改看「下雨去哪」。
-            </p>
-            __HIKING_PLACES__
-            <p class="place-note">
-              基础资料查阅日期见各卡片。依据文旅部门与本地媒体的路线资料整理，部分原文较早，不代表实时开放情况。只走开放步道，临时管制以景区公告为准。地点参考不随活动日期筛选。
-            </p>
-          </details>
-          <details
-            id="cycling-places"
-            class="place-guide"
-            data-place-group
-            hidden
-          >
-            <summary><h2>
-              骑行路线
-              <span data-place-count>__CYCLING_COUNT__ 个地点参考</span>
-            </h2></summary>
-            <p class="place-note" data-place-updates-summary="cycling">
-              近期消息等待首次检索。
-            </p>
-            <p class="place-intro">
-              先选平路休闲，再尝试茶山爬坡。里程注明单程或环线，预留时间为本站建议、不含交通；地图只定位起点，不是完整骑行轨迹。沿开放骑行道行进，禁骑处下车推行。
-            </p>
-            __CYCLING_PLACES__
-            <p class="place-note">
-              基础资料查阅：2026-10-30。近期消息自动检索，路线资料不代表全线当天开放。出发前查看交通、施工与天气通知；已缓存的路线可离线读，地图与来源页需联网。
-            </p>
-          </details>
-          <details
-            id="rainy-places"
-            class="place-guide"
-            data-place-group
-            hidden
-          >
-            <summary><h2>
-              下雨去哪 <span data-place-count>__RAINY_COUNT__ 个地点参考</span>
-            </h2></summary>
-            <p class="place-intro">
-              攀岩、滑冰、手作、书店和话剧，按兴趣挑一两项。时长为本站粗略预留，不含交通；需要课程或场次的先预约，停车与地铁接驳仍可能淋雨。
-            </p>
-            __RAINY_PLACES__
-            <p class="place-note">
-              资料查阅：2026-10-23，依据经营者官网与公开场馆资料。以下为常设地点参考，课程、场次、费用和营业安排请在出发前向场地确认。地点资料可离线读，地图和来源页需联网。
-            </p>
-          </details>
-          <details
-            id="camping-places"
-            class="camping-places place-guide"
-            data-place-group
-            hidden
-          >
-            <summary><h2>
-              露营去哪里
-              <span id="camping-count" data-place-count
-                >__CAMPING_COUNT__ 个地点参考</span
+          <section id="outing-places" aria-labelledby="outing-places-title" hidden>
+            <div class="outing-section-heading">
+              <h2 id="outing-places-title">按玩法找地方</h2>
+              <span>选一类，慢慢挑</span>
+            </div>
+            <div class="place-groups">
+              <details
+                id="hiking-places"
+                class="place-guide"
+                data-place-group
+                hidden
               >
-            </h2></summary>
-            <p class="place-note" data-place-updates-summary="camping">
-              近期消息等待首次检索。
-            </p>
-            <p class="camping-intro place-intro">
-              优先选“停车后少量搬运、能用卡式炉做饭”的营地，另列需确认用炉或卸货条件的备选。杭州与周边分开标注，订前按卡片说明确认。地点参考不随活动日期筛选。
-            </p>
-            __CAMPING_PLACES__
-            <p class="camping-note place-note">
-              基础资料查阅日期见各卡片，依据公开预订页。日营、自带炉具、停车到营位距离及运送费用请订前电话确认；用炉按营地当日规定。
-            </p>
-          </details>
+                <summary><h2>
+                  杭州爬山 <span data-place-count>__HIKING_COUNT__ 个地点参考</span>
+                </h2></summary>
+                <p class="place-note" data-place-updates-summary="hiking">
+                  近期消息等待首次检索。
+                </p>
+                <p class="place-intro">
+                  先挑强度，再定路线。下列时长为步行加停留的粗略预留，强度为本站相对判断；不含往返交通。下雨、雷电或景区封山时不安排登山，可改看「下雨去哪」。
+                </p>
+                __HIKING_PLACES__
+                <p class="place-note">
+                  基础资料查阅日期见各卡片。依据文旅部门与本地媒体的路线资料整理，部分原文较早，不代表实时开放情况。只走开放步道，临时管制以景区公告为准。地点参考不随活动日期筛选。
+                </p>
+              </details>
+              <details
+                id="cycling-places"
+                class="place-guide"
+                data-place-group
+                hidden
+              >
+                <summary><h2>
+                  骑行路线
+                  <span data-place-count>__CYCLING_COUNT__ 个地点参考</span>
+                </h2></summary>
+                <p class="place-note" data-place-updates-summary="cycling">
+                  近期消息等待首次检索。
+                </p>
+                <p class="place-intro">
+                  先选平路休闲，再尝试茶山爬坡。里程注明单程或环线，预留时间为本站建议、不含交通；地图只定位起点，不是完整骑行轨迹。沿开放骑行道行进，禁骑处下车推行。
+                </p>
+                __CYCLING_PLACES__
+                <p class="place-note">
+                  基础资料查阅：2026-10-30。近期消息自动检索，路线资料不代表全线当天开放。出发前查看交通、施工与天气通知；已缓存的路线可离线读，地图与来源页需联网。
+                </p>
+              </details>
+              <details
+                id="rainy-places"
+                class="place-guide"
+                data-place-group
+                hidden
+              >
+                <summary><h2>
+                  下雨去哪 <span data-place-count>__RAINY_COUNT__ 个地点参考</span>
+                </h2></summary>
+                <p class="place-intro">
+                  攀岩、滑冰、手作、书店和话剧，按兴趣挑一两项。时长为本站粗略预留，不含交通；需要课程或场次的先预约，停车与地铁接驳仍可能淋雨。
+                </p>
+                __RAINY_PLACES__
+                <p class="place-note">
+                  资料查阅：2026-10-23，依据经营者官网与公开场馆资料。以下为常设地点参考，课程、场次、费用和营业安排请在出发前向场地确认。地点资料可离线读，地图和来源页需联网。
+                </p>
+              </details>
+              <details
+                id="camping-places"
+                class="camping-places place-guide"
+                data-place-group
+                hidden
+              >
+                <summary><h2>
+                  露营去哪里
+                  <span id="camping-count" data-place-count
+                    >__CAMPING_COUNT__ 个地点参考</span
+                  >
+                </h2></summary>
+                <p class="place-note" data-place-updates-summary="camping">
+                  近期消息等待首次检索。
+                </p>
+                <p class="camping-intro place-intro">
+                  优先选“停车后少量搬运、能用卡式炉做饭”的营地，另列需确认用炉或卸货条件的备选。杭州与周边分开标注，订前按卡片说明确认。地点参考不随活动日期筛选。
+                </p>
+                __CAMPING_PLACES__
+                <p class="camping-note place-note">
+                  基础资料查阅日期见各卡片，依据公开预订页。日营、自带炉具、停车到营位距离及运送费用请订前电话确认；用炉按营地当日规定。
+                </p>
+              </details>
+            </div>
+          </section>
           <section
             id="exchange-rates"
             aria-label="外币兑人民币汇率"
             hidden
           ></section>
           <section id="housing-prices" aria-label="杭州房价" hidden></section>
+          <div id="outing-news-heading" class="outing-section-heading" hidden>
+            <h2>近期动态</h2>
+            <span id="outing-news-count"></span>
+          </div>
           <div
             id="articles"
             class="article-list"
@@ -341,7 +353,7 @@
             __NEWS_SKELETON__
           </div>
           <button id="load-more" class="load-more" hidden>
-            加载更多 <span data-icon="arrow-down"></span>
+            <span id="load-more-label">加载更多</span> <span data-icon="arrow-down"></span>
           </button>
           <p id="archive-notice" class="view-note" role="status" hidden></p>
           <p id="list-end" class="list-end" hidden>已显示全部结果。</p>

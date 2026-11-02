@@ -15,21 +15,28 @@
 .housing-home-book { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 18px; margin-bottom: 24px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .housing-home-book strong { font-size: 16px; }
 .housing-home-book small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
-#outing-recommendations { margin: 18px 0 26px; padding: 18px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+#outing-recommendations { margin: 16px 0 24px; padding: 16px 0 0; border-top: 1px solid var(--line); }
 .trip-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
 .trip-heading h2 { margin: 0; font-size: 18px; }
 .trip-heading > span, .trip-note { color: var(--muted); font-size: 12px; line-height: 1.7; }
-.trip-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); list-style: none; padding: 0; margin: 14px 0; gap: 0 24px; }
-.trip-list li { min-width: 0; padding: 14px 0; border-top: 1px solid var(--line); }
+.trip-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); list-style: none; padding: 0; margin: 10px 0 0; gap: 0 24px; }
+.trip-list li { min-width: 0; padding: 10px 0; border-top: 1px solid var(--line); }
 .trip-list h3 { margin: 4px 0 8px; font-size: calc(16px * var(--reading-scale)); line-height: 1.5; }
 .trip-list p { margin: 6px 0; overflow-wrap: anywhere; }
-.trip-list li > p:not([class]) { font-size: calc(14px * var(--reading-scale)); line-height: 1.7; }
+.trip-reason { font-size: calc(14px * var(--reading-scale)); line-height: 1.7; display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
 .trip-kind { color: var(--accent); font-size: 12px; }
 .trip-weather { color: var(--secondary); font-size: 12px; line-height: 1.7; }
 .trip-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; font-size: 13px; }
 .trip-links a, .trip-links button { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; overflow-wrap: anywhere; }
 .trip-news { font-size: 12px; line-height: 1.7; }
 .trip-news span { display: block; color: var(--muted); }
+.trip-details, .place-details { font-size: 12px; line-height: 1.8; color: var(--secondary); }
+.trip-details > summary, .place-details > summary { cursor: pointer; padding: 10px 0; min-height: 44px; }
+.trip-details[open] { padding-bottom: 8px; }
+.trip-details > p:not([class]) { font-size: 13px; }
+.trip-attribution, .outing-update-info { font-size: 11px; color: var(--muted); }
+.trip-attribution > summary, .outing-update-info > summary { cursor: pointer; padding: 8px 0; }
+[data-trip-more] { min-height: 44px; }
 .outing-facts { margin: 10px 0; color: var(--secondary); font-size: 13px; line-height: 1.7; }
 .outing-facts summary { cursor: pointer; min-height: 36px; padding: 7px 0; }
 .outing-facts p { font-size: 13px; }
@@ -486,8 +493,12 @@ span[data-icon] {
   margin: 12px 0 0;
 }
 #weekend-tools {
-  margin: 16px 0 4px;
+  margin: 10px 0 4px;
 }
+.outing-section-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 10px; margin: 24px 0 12px; }
+.outing-section-heading h2 { margin: 0; font-size: 17px; }
+.outing-section-heading > span { color: var(--muted); font-size: 12px; }
+.place-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
 .outing-ranges,
 .outing-types {
   display: flex;
@@ -521,27 +532,35 @@ span[data-icon] {
   color: var(--secondary);
 }
 .place-guide {
-  margin: 12px 0;
-  border-top: 1px solid var(--line);
+  min-width: 0;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  scroll-margin-top: 85px;
 }
+.place-guide[open] { grid-column: 1 / -1; background: var(--paper); }
 .place-guide > summary {
-  padding: 12px 0;
+  padding: 14px 0;
   cursor: pointer;
   font-size: 14px;
   font-weight: 600;
 }
 .place-guide > summary span {
-  margin-left: 8px;
+  display: block;
+  margin-top: 4px;
   color: var(--secondary);
   font-size: 12px;
   font-weight: 400;
 }
 .place-guide > summary h2 {
-  display: inline;
+  display: inline-block;
+  vertical-align: top;
   font-size: inherit;
   font-weight: inherit;
   margin: 0;
 }
+.place-more { display: block; margin: 0 auto 12px; min-height: 44px; padding: 8px 14px; border: 1px solid var(--line); border-radius: 5px; color: var(--secondary); font-size: 12px; }
 .place-intro,
 .place-note {
   color: var(--secondary);
@@ -561,6 +580,7 @@ span[data-icon] {
   list-style: none;
   padding: 0;
   margin: 0 0 12px;
+  align-items: start;
 }
 .place-card {
   min-width: 0;
@@ -645,6 +665,12 @@ span[data-icon] {
 .article h3 a:hover {
   text-decoration: underline;
   text-underline-offset: 3px;
+}
+.outings-view .article h3 {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
 }
 .article p {
   color: var(--secondary);

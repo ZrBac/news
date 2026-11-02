@@ -133,7 +133,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         category === "local"
           ? latest.weekendArticles
           : full.articles.filter((article) => article.category === category);
-      const expected = Math.min(12, pool.length);
+      const expected = Math.min(category === "local" ? 3 : 12, pool.length);
       assert(expected > 0, "usable initial content for " + category);
       await page.locator(".brand").click();
       await page

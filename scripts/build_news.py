@@ -25,20 +25,26 @@ def build_places(template):
         for place in selected:
             esc = html_escape
             camping = group == 'camping'
-            paragraphs = ''.join('<p>' + (f'<strong>{esc(p["label"])}</strong>' if p['label'] else '')
-                                 + esc(p['text']) + '</p>' for p in place['paragraphs'])
+            paragraphs = ['<p>' + (f'<strong>{esc(p["label"])}</strong>' if p['label'] else '')
+                          + esc(p['text']) + '</p>' for p in place['paragraphs']]
             links = ''.join(f'<a href="{esc(link["url"], quote=True)}" target="_blank" rel="noopener noreferrer"'
                             + (f' aria-label="在高德地图查询{esc(place["name"], quote=True)}"' if 'uri.amap.com/' in link['url'] else '')
                             + f'>{esc(link["label"])} ↗</a>' for link in place['links'])
             update = (f'<p class="place-reviewed">基础资料查阅 {esc(place["reviewedOn"])}</p>'
                       '<div class="place-updates" data-place-updates>近期消息等待首次检索。</div>') if place['aliases'] else ''
+            detail_label = ('停车、用炉与近期消息' if camping else
+                            '路线、条件与近期消息' if place['aliases'] else '地点详情与来源')
             cards.append(f'<li class="{"camping-place " if camping else ""}place-card"'
                          f' data-place-id="{esc(place["id"], quote=True)}" data-place-types="{esc(place["types"], quote=True)}"'
                          f' data-search="{esc(place["keywords"], quote=True)}">'
                          f'<span class="{"camping-area " if camping else ""}place-area">{esc(place["area"])}</span>'
-                         f'<h3>{esc(place["name"])}</h3>{paragraphs}'
-                         f'<div class="{"camping-links " if camping else ""}place-links">{links}</div>{update}</li>')
-        listing = f'<ul class="{"camping-grid " if group == "camping" else ""}place-grid">' + ''.join(cards) + '</ul>'
+                         f'<h3>{esc(place["name"])}</h3>{paragraphs[0] if paragraphs else ""}'
+                         f'<details class="place-details"><summary>{detail_label}</summary>'
+                         + ''.join(paragraphs[1:])
+                         + f'<div class="{"camping-links " if camping else ""}place-links">{links}</div>{update}</details></li>')
+        listing = (f'<ul id="{group}-list" class="{"camping-grid " if group == "camping" else ""}place-grid">'
+                   + ''.join(cards) + '</ul>'
+                   + f'<button class="place-more" data-place-more aria-controls="{group}-list" hidden></button>')
         template = template.replace(f'__{group.upper()}_PLACES__', listing)
         template = template.replace(f'__{group.upper()}_COUNT__', str(len(selected)))
     return template

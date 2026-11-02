@@ -174,7 +174,11 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     assert(await page.locator(".filter-tabs").isHidden());
     assert(await page.locator(".sidebar").isHidden());
+    assert.equal(await page.locator(".article").count(), 3);
+    assert.equal(await page.locator("#load-more-label").innerText(), "查看更多动态");
+    await page.locator("#load-more").click();
     assert.equal(await page.locator(".article").count(), 6);
+    assert(await page.locator("#load-more").isHidden());
     assert.deepEqual(
       await page
         .locator(".article")
@@ -246,7 +250,12 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       ),
     );
     await page.locator("#camping-places > summary").click();
+    assert.equal(await page.locator(".camping-place:visible").count(), 4);
+    assert.equal(await page.locator(".camping-place .place-details[open]").count(), 0);
+    await page.locator("#camping-places [data-place-more]").click();
     assert.equal(await page.locator(".camping-place:visible").count(), 7);
+    await page.locator("#camping-places [data-place-more]").click();
+    assert.equal(await page.locator(".camping-place:visible").count(), 4);
     assert.equal(
       await page
         .locator('.camping-links a[href^="https://uri.amap.com/search?"]')
@@ -274,6 +283,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     await page.fill("#search", "");
     assert.equal(await page.locator("[data-outing-type]").count(), 5);
+    assert.equal(await page.locator(".outing-update-info[open]").count(), 0);
+    await page.locator(".outing-update-info > summary").click();
     assert.match(
       await page.locator("#weekend-tools").innerText(),
       /来源每小时检查.*每天9点、16点.*最近专题检索/s,
@@ -332,6 +343,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     }
     await page.locator('[data-outing-type="all"]').click();
     await page.locator('[data-outing-range="recent"]').click();
+    assert.equal(await page.locator(".article").count(), 3);
+    await page.locator("#load-more").click();
+    assert.equal(await page.locator(".article").count(), 6);
+    await page.locator("#load-more").click();
     assert.equal(await page.locator(".article").count(), 9);
     const recentTimes = await page
       .locator(".article time")
@@ -393,6 +408,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       1,
     );
     await page.locator('[data-view="brief"]').click();
+    assert(await page.locator("#outing-places").isHidden());
+    assert(await page.locator("#outing-news-heading").isHidden());
     assert.equal(await page.locator("[data-place-group]:visible").count(), 0);
     assert.equal(
       await page.locator('[data-article-id="weekend-market"]').count(),
@@ -413,6 +430,9 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     ]) {
       if (!(await page.locator("#" + group).evaluate((node) => node.open)))
         await page.locator("#" + group + " > summary").click();
+      assert.equal(await page.locator("#" + group + " .place-card:visible").count(), 4);
+      while (Number(await page.locator("#" + group + " [data-place-more]").getAttribute("data-remaining")))
+        await page.locator("#" + group + " [data-place-more]").click();
     }
     assert.equal(await page.locator(".place-card:visible").count(), 38);
     assert.equal(
@@ -420,6 +440,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       8,
     );
     const cycling = page.locator('[data-place-id="cycle-xianghu"]');
+    await cycling.locator(".place-details > summary").click();
     assert.match(
       await cycling.innerText(),
       /7.6 公里环线.*湘湖三期骑行绿道开放提示.*报道.*最近检索/s,
@@ -454,7 +475,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await context.setOffline(true);
     await page.reload();
     await page.evaluate(() => window.newsInitialLoad);
-    assert.equal(await page.locator(".article").count(), 6);
+    assert.equal(await page.locator(".article").count(), 3);
     assert.deepEqual(
       await page
         .locator(".article")
@@ -464,17 +485,24 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       ["weekend-outdoor", "weekend-city"],
     );
     await page.locator("#camping-places > summary").click();
+    assert.equal(await page.locator(".camping-place:visible").count(), 4);
+    await page.locator("#camping-places [data-place-more]").click();
     assert.equal(await page.locator(".camping-place:visible").count(), 7);
     await page.locator("#hiking-places > summary").click();
+    assert.equal(await page.locator("#hiking-places .place-card:visible").count(), 4);
+    for (let i = 0; i < 3; i++) await page.locator("#hiking-places [data-place-more]").click();
     assert.equal(
       await page.locator("#hiking-places .place-card:visible").count(),
       16,
     );
     await page.locator("#cycling-places > summary").click();
+    assert.equal(await page.locator("#cycling-places .place-card:visible").count(), 4);
+    await page.locator("#cycling-places [data-place-more]").click();
     assert.equal(
       await page.locator("#cycling-places .place-card:visible").count(),
       8,
     );
+    await page.locator('[data-place-id="cycle-xianghu"] .place-details > summary').click();
     assert.match(
       await page.locator('[data-place-id="cycle-xianghu"]').innerText(),
       /湘湖三期骑行绿道开放提示/,

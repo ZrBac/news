@@ -85,6 +85,8 @@
     outingRange: "weekend",
     saved: new Map(),
   };
+  const pageSize = () => (state.view === "local" ? 3 : 12);
+  const placePageSize = 4;
   const dayFormatter = new Intl.DateTimeFormat("en-CA", {
     timeZone: "Asia/Shanghai",
     year: "numeric",
@@ -259,34 +261,53 @@
     panel.hidden = state.view !== "local";
     if (!panel.hidden) renderPlaceUpdates();
     const words = state.query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    const searchExpansion = (details, searching) => {
+      if (searching) {
+        if (details.dataset.beforeSearch === undefined)
+          details.dataset.beforeSearch = String(details.open);
+        details.open = true;
+      } else if (details.dataset.beforeSearch !== undefined) {
+        details.open = details.dataset.beforeSearch === "true";
+        delete details.dataset.beforeSearch;
+      }
+    };
     let referenceCount = 0;
     $$("[data-place-group]").forEach((group) => {
       const places = [...group.querySelectorAll("[data-place-types]")];
-      places.forEach((place) => {
-        place.hidden =
-          (state.outingType !== "all" &&
-            !place.dataset.placeTypes.split(" ").includes(state.outingType)) ||
-          !words.every((word) =>
+      const matches = places.filter(
+        (place) =>
+          (state.outingType === "all" ||
+            place.dataset.placeTypes.split(" ").includes(state.outingType)) &&
+          words.every((word) =>
             `${place.dataset.search} ${place.textContent}`
               .toLocaleLowerCase()
               .includes(word),
-          );
+          ),
+      );
+      const limit = Number(group.dataset.placeLimit) || placePageSize;
+      places.forEach((place) => {
+        const index = matches.indexOf(place);
+        place.hidden = index < 0 || (!words.length && index >= limit);
+        searchExpansion(
+          place.querySelector(".place-details"),
+          words.length && !panel.hidden && !place.hidden,
+        );
       });
-      const visible = places.filter((place) => !place.hidden).length;
-      group.hidden = panel.hidden || !visible;
+      group.hidden = panel.hidden || !matches.length;
       group.querySelector("[data-place-count]").textContent =
-        `${visible} 个地点参考`;
-      if (!group.hidden) referenceCount += visible;
-      // Search exposes matching places, then restores the reader's expansion choice.
-      if (words.length && !group.hidden) {
-        if (group.dataset.beforeSearch === undefined)
-          group.dataset.beforeSearch = String(group.open);
-        group.open = true;
-      } else if (group.dataset.beforeSearch !== undefined) {
-        group.open = group.dataset.beforeSearch === "true";
-        delete group.dataset.beforeSearch;
-      }
+        `${matches.length} 个地点参考`;
+      if (!group.hidden) referenceCount += matches.length;
+      // Search reaches every matching place, then restores the reader's choices.
+      searchExpansion(group, words.length && !group.hidden);
+      const more = group.querySelector("[data-place-more]");
+      const remaining = Math.max(0, matches.length - limit);
+      more.hidden = !!words.length || matches.length <= placePageSize;
+      more.dataset.remaining = String(remaining);
+      more.textContent = remaining
+        ? `再看 ${Math.min(placePageSize, remaining)} 个地点 · 还有 ${remaining} 个`
+        : `收起到 ${placePageSize} 个地点`;
     });
+    $("#outing-places").hidden = panel.hidden || !referenceCount;
     $("#search").placeholder =
       state.view === "local" ? "搜索活动、地点或玩法" : "搜索资讯";
     if (panel.hidden) return 0;
@@ -316,6 +337,7 @@
       state.outingType === "camping"
         ? `<p class="outing-checked" id="camping-updates">露营消息每小时自动检查${checked ? `，最近检查 ${escape(formatTime(checked))}` : "，等待首次检查"}；${camping?.latestAt ? `最新消息 ${escape(formatTime(camping.latestAt))}。` : "暂无新消息时保留近期报道。"}${failed ? "部分来源暂不可用，保留已收录消息。" : ""} 下方营地为地点参考，停车和用炉条件请向营地确认。</p>`
         : "";
+    const updatesOpen = panel.querySelector(".outing-update-info")?.open;
     panel.innerHTML = `<div class="outing-ranges" role="group" aria-label="活动日期范围">
       <button data-outing-range="weekend" aria-pressed="${state.outingRange === "weekend"}">本周末 ${start.slice(5).replace("-", "/")}—${end.slice(5).replace("-", "/")}</button>
       <button data-outing-range="recent" aria-pressed="${state.outingRange === "recent"}">近期安排</button></div>
@@ -327,7 +349,8 @@
             `<button data-outing-type="${key}" aria-pressed="${state.outingType === key}">${escape(label)}</button>`,
         )
         .join("")}</div>
-      <p class="outing-checked">来源每小时检查；每天9点、16点补充检索（北京时间，可能延迟）。${escape(researched || last)}</p>${campingNote}`;
+      <details class="outing-update-info"${updatesOpen ? " open" : ""}><summary>更新说明</summary>
+      <p class="outing-checked">来源每小时检查；每天9点、16点补充检索（北京时间，可能延迟）。${escape(researched || last)}活动时间与报名以原文为准。</p></details>${campingNote}`;
     return referenceCount;
   }
   const timeFormatter = new Intl.DateTimeFormat("zh-CN", {
@@ -924,6 +947,7 @@
     $(".filter-tabs").hidden = outings;
     $(".sidebar").hidden = outings;
     $(".main-layout").classList.toggle("outings-view", outings);
+    $("#outing-news-heading").hidden = !outings;
     $$("[data-view]").forEach((el) => {
       const active =
         el.dataset.view === state.view ||
@@ -944,7 +968,6 @@
       "saved",
       "brief",
       "finance",
-      "local",
       "livelihood",
       "models",
       "tech",
@@ -956,9 +979,6 @@
     if (state.view === "finance")
       note.textContent =
         "经济政策、金融市场与企业经营消息，按报道发布时间更新。";
-    if (state.view === "local")
-      note.textContent =
-        "杭州及周边的近期玩法，按消息发布时间从新到旧排列。活动日期单独标注，具体时间及报名以原文为准。";
     if (state.view === "livelihood")
       note.textContent =
         "社保医保、补贴、就业与消费提醒，附官方辟谣消息。各地政策的适用范围和办理时间见原报道。";
@@ -998,6 +1018,7 @@
     const referenceCount = renderWeekendTools();
     window.NewsEditorial?.render(state.data, state, formatTime);
     const articles = matchingArticles();
+    $("#outing-news-count").textContent = `${articles.length} 条消息 · 按发布时间`;
     const partial =
       hasArchive() &&
       state.view !== "saved" &&
@@ -1034,6 +1055,7 @@
       articles.length <= state.limit &&
       (!partial || (state.view === "brief" && articles.length >= 10));
     $("#load-more").disabled = archiveJob?.data === state.data;
+    $("#load-more-label").textContent = outings ? "查看更多动态" : "加载更多";
     $("#list-end").hidden =
       partial || !articles.length || articles.length > state.limit;
   }
@@ -1081,7 +1103,7 @@
     ].includes(state.view)
       ? state.view
       : "all";
-    state.limit = 12;
+    state.limit = pageSize();
     state.housingLimit = 6;
     state.outingType = "all";
     state.outingRange = "weekend";
@@ -1503,7 +1525,7 @@
   let searchTimer;
   $("#search").addEventListener("input", (e) => {
     state.query = e.target.value.trim();
-    state.limit = 12;
+    state.limit = pageSize();
     clearTimeout(searchTimer);
     render();
     searchTimer = setTimeout(() => {
@@ -1514,7 +1536,7 @@
   });
   $("#source-filter").addEventListener("change", (e) => {
     state.source = e.target.value;
-    state.limit = 12;
+    state.limit = pageSize();
     render();
     ensureArticles();
   });
@@ -1526,7 +1548,7 @@
   });
   $("#date-filter").addEventListener("change", (e) => {
     state.date = e.target.value;
-    state.limit = 12;
+    state.limit = pageSize();
     render();
     ensureArticles();
   });
@@ -1537,7 +1559,7 @@
     ensureArticles();
   });
   $("#load-more").addEventListener("click", () => {
-    state.limit += 12;
+    state.limit += pageSize();
     render();
     ensureArticles();
   });
@@ -1580,6 +1602,46 @@
     if (e.target.closest("[data-housing-more]")) {
       state.housingLimit += 6;
       renderHousingPrices();
+      return;
+    }
+    const placeMore = e.target.closest("[data-place-more]");
+    if (placeMore) {
+      const group = placeMore.closest("[data-place-group]");
+      const collapse = Number(placeMore.dataset.remaining) === 0;
+      group.dataset.placeLimit = String(
+        collapse ? placePageSize :
+          (Number(group.dataset.placeLimit) || placePageSize) + placePageSize,
+      );
+      renderWeekendTools();
+      if (collapse) {
+        group.querySelector("summary").focus({ preventScroll: true });
+        group.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      return;
+    }
+    const tripPlace = e.target.closest("[data-trip-place]");
+    if (tripPlace) {
+      const card = $$("[data-place-id]").find(
+        (place) => place.dataset.placeId === tripPlace.dataset.tripPlace,
+      );
+      if (!card) return;
+      const group = card.closest("[data-place-group]");
+      const index = [...group.querySelectorAll("[data-place-id]")].indexOf(card);
+      group.dataset.placeLimit = String(Math.max(
+        Number(group.dataset.placeLimit) || placePageSize, index + 1,
+      ));
+      renderWeekendTools();
+      // A recommendation may match its reason while its reference uses different words.
+      if (card.hidden || group.hidden) {
+        clearTimeout(searchTimer);
+        state.query = "";
+        state.outingType = "all";
+        $("#search").value = "";
+        render();
+      }
+      group.open = true;
+      card.querySelector(".place-details").open = true;
+      card.scrollIntoView({ behavior: "smooth", block: "start" });
       return;
     }
     const currency = e.target.closest("[data-fx-currency]");
@@ -1625,7 +1687,7 @@
         ["weekend", "recent"].includes(outingRange.dataset.outingRange)
       )
         state.outingRange = outingRange.dataset.outingRange;
-      state.limit = 12;
+      state.limit = pageSize();
       render();
       return;
     }
@@ -1641,11 +1703,11 @@
     }
     if (filter) {
       state.filter = filter.dataset.filter;
-      state.limit = 12;
       if (!["saved", "brief"].includes(state.view)) {
         state.view = state.filter;
         history.replaceState(null, "", "#" + state.view);
       }
+      state.limit = pageSize();
       render();
       ensureArticles();
     }

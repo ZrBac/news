@@ -34,6 +34,7 @@ jobs:
           node --check news/assets/archive.js
           node --check news/assets/personal.js
           node --check news/assets/exchange-core.js
+          node --check news/assets/editorial.js
           node --test tests/exchange-core.cjs
           node --check news/assets/pwa.js
           node --check news/assets/homes.js
@@ -63,6 +64,26 @@ jobs:
         run: python scripts/collect_housing_prices.py --previous-url https://news.zacai.fun/data/latest.json
       - name: Update foreign currency to CNY reference rates
         run: python scripts/collect_exchange_rates.py --previous-url https://news.zacai.fun/data/latest.json
+      - name: Restore editorial results and usage ledger
+        id: ai-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/news-ai
+          key: news-ai-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: news-ai-v1-
+      - name: Prepare news summaries, outing research and weekend picks
+        id: ai-editor
+        continue-on-error: true
+        timeout-minutes: 5
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python scripts/ai_editor.py --previous-url https://news.zacai.fun/data/latest.json
+      - name: Save editorial usage even if a later build fails
+        if: always() && steps.ai-editor.outcome != 'skipped'
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/news-ai
+          key: news-ai-v1-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Sync life guide with its upstream revision
         run: python scripts/sync_life_guide.py
       - name: Build news portal

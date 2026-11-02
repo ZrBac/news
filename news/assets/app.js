@@ -184,8 +184,11 @@
         : info.until
           ? `持续至 ${info.until}，开始时间见原文`
           : "活动时间见原文";
+    const labels = { date: "日期", venue: "地点", cost: "费用", parking: "停车", stove: "用炉", booking: "预约", closure: "开放安排" };
+    const facts = Array.isArray(article.facts) ? article.facts.filter((f) => labels[f.kind] && typeof f.text === "string").slice(0, 5) : [];
     return `<p class="outing-summary"><span>${escape(outingTypes[info.type] || "出游消息")}</span><span>${escape(when)}${ended ? " · 已结束" : ""}</span></p>
-      ${info.venue || info.cost ? `<p class="outing-details">${[info.venue, info.cost].filter(Boolean).map(escape).join(" · ")}</p>` : ""}`;
+      ${info.venue || info.cost ? `<p class="outing-details">${[info.venue, info.cost].filter(Boolean).map(escape).join(" · ")}</p>` : ""}
+      ${facts.length ? `<details class="outing-facts"><summary>实用信息 · 原文摘录</summary>${facts.map((f) => `<p><strong>${labels[f.kind]}：</strong>${escape(f.text)}</p>`).join("")}</details>` : ""}`;
   }
   function renderPlaceUpdates() {
     const records = state.data.placeUpdates?.places || {};
@@ -289,6 +292,10 @@
     if (panel.hidden) return 0;
     const [start, end] = outingWeekend();
     const search = state.data.weekendGuide?.search;
+    const research = state.data.editorial?.research;
+    const researched = research?.searchedAt && Number.isFinite(Date.parse(research.searchedAt)) && Date.parse(research.searchedAt) <= Date.now() + 300000
+      ? `补充资料核对 ${formatTime(research.searchedAt)}${research.status !== "ok" ? "（本次更新暂未完成）" : ""}。`
+      : "";
     const last =
       search?.searchedAt && Number.isFinite(Date.parse(search.searchedAt))
         ? `最近专题检索 ${formatTime(search.searchedAt)}。`
@@ -320,7 +327,7 @@
             `<button data-outing-type="${key}" aria-pressed="${state.outingType === key}">${escape(label)}</button>`,
         )
         .join("")}</div>
-      <p class="outing-checked">来源每小时检查；每天9点、16点补充检索（北京时间，可能延迟）。${escape(last)}</p>${campingNote}`;
+      <p class="outing-checked">来源每小时检查；每天9点、16点补充检索（北京时间，可能延迟）。${escape(researched || last)}</p>${campingNote}`;
     return referenceCount;
   }
   const timeFormatter = new Intl.DateTimeFormat("zh-CN", {
@@ -378,6 +385,8 @@
     $("#saved-count").hidden = !state.saved.size;
   }
   function sourceFor(article) {
+    if (article.sourceId === "web-discovery" && article.sourceName)
+      return { name: article.sourceName };
     return (
       state.data?.sources.find((s) => s.id === article.sourceId) || {
         name: article.sourceName || article.sourceId,
@@ -439,16 +448,21 @@
       aggregated &&
       excerptKey.length >= 8 &&
       textKey(article.title).startsWith(excerptKey);
+    const summary = state.view === "brief" && window.NewsEditorial?.metadata(article)?.summary;
+    const publishedLabel = article.dateOnly ? dayOf(article.publishedAt) : relativeTime(article.publishedAt);
+    const publishedTitle = article.dateOnly ? dayOf(article.publishedAt) + "（来源仅提供日期）" : "北京时间 " + formatTime(article.publishedAt);
     return `<article class="article${read ? " read" : ""}" data-article-id="${escape(article.id)}"><div class="article-body">
       ${state.view === "brief" ? `<span class="article-number">${String(index + 1).padStart(2, "0")}</span>` : ""}
       <h3><a href="${escape(articleUrl(article))}" aria-label="${escape(article.title)}" target="_blank" rel="noopener noreferrer">${headline}</a></h3>
       ${article.category === "local" ? outingSummary(article) : ""}
-      ${article.excerpt ? `<p${repeatsTitle ? ' class="repeated-excerpt"' : ""}>${escape(article.excerpt)}</p>` : ""}
-      <div class="article-meta"><span>${escape(source.name)}</span><time datetime="${escape(article.publishedAt)}" title="北京时间 ${escape(formatTime(article.publishedAt))}">${escape(relativeTime(article.publishedAt))}</time><span class="category-label ${escape(article.category)}">${categoryNames[article.category]}</span>${read ? '<span class="read-label">已读</span>' : ""}</div>
+      ${summary ? `<p class="editorial-summary">${escape(summary)}</p>` : article.excerpt ? `<p${repeatsTitle ? ' class="repeated-excerpt"' : ""}>${escape(article.excerpt)}</p>` : ""}
+      <div class="article-meta"><span>${escape(source.name)}</span><time datetime="${escape(article.publishedAt)}" title="${escape(publishedTitle)}">${escape(publishedLabel)}</time><span class="category-label ${escape(article.category)}">${categoryNames[article.category]}</span>${read ? '<span class="read-label">已读</span>' : ""}</div>
       ${article.reports?.length ? `<details class="article-reports"><summary>其他 ${article.reports.length} 篇报道</summary>${article.reports.map((a) => `<a href="${escape(articleUrl(a))}" target="_blank" rel="noopener noreferrer">${escape(sourceFor(a).name)} · ${escape(a.title)}</a>`).join("")}</details>` : ""}
       </div><button class="save-button${saved ? " saved" : ""}" data-save="${escape(article.id)}" aria-label="${saved ? "取消收藏" : "收藏"}：${escape(article.title)}" aria-pressed="${saved}" title="${saved ? "取消收藏" : "收藏文章"}">${icon("bookmark")}</button></article>`;
   }
   function selectBrief(articles) {
+    if (window.NewsEditorial)
+      articles = window.NewsEditorial.group(articles, (a) => a.title.replace(/ - [^-]+$/, "").replace(/[\s\p{P}]/gu, "").toLowerCase());
     const seen = new Set();
     articles = articles.filter((a) => {
       const title = a.title
@@ -471,7 +485,14 @@
       "sports",
       "housing",
     ]
-      .map((category) => articles.filter((a) => a.category === category))
+      .map((category) => articles.filter((a) => a.category === category).sort((a, b) => {
+        const rank = (article) => {
+          const meta = window.NewsEditorial?.metadata(article);
+          if (meta?.isBackground === true) return -1;
+          return Number.isInteger(meta?.priority) && meta.priority >= 0 && meta.priority <= 3 ? meta.priority : 1;
+        };
+        return rank(b) - rank(a);
+      }))
       .filter((queue) => queue.length);
     // If more than ten categories have news, rotate the starting category by
     // calendar date so the last section is not permanently left out.
@@ -564,6 +585,12 @@
       articles = articles.filter((a) => !window.NewsPersonal.isRead(a.id));
     if (state.view === "brief") return selectBrief(articles);
     if (state.view === "saved") return articles;
+    if (window.NewsEditorial)
+      return window.NewsEditorial.group(articles, (article) => {
+        const title = /^https?:\/\/news\.google\.com\//.test(article.url)
+          ? article.title.replace(/ - [^-]+$/, "") : article.title;
+        return title.replace(/[\s“”‘’"'《》【】「」。，、：:!?！？]/gu, "").toLowerCase();
+      });
     const groups = new Map();
     for (const article of articles) {
       const title = /^https?:\/\/news\.google\.com\//.test(article.url)
@@ -957,7 +984,9 @@
       note.textContent =
         "收藏保存在当前浏览器，可保留已超出资讯归档期限的条目。清除浏览器数据会移除收藏，不会自动跨设备同步。";
     if (state.view === "brief")
-      note.textContent = "按分类和来源选取，可切换日期回看。";
+      note.textContent = state.data?.editorial?.news?.processed
+        ? "部分要点由 AI 整理，原文可核对。"
+        : "按分类和来源选取，可切换日期回看。";
     $("#date-trigger").classList.toggle("active", !!state.date);
     $("#date-trigger span:last-child").textContent = state.date
       ? state.date.slice(5).replace("-", "/")
@@ -967,6 +996,7 @@
     renderHousingPrices();
     renderExchangeRates();
     const referenceCount = renderWeekendTools();
+    window.NewsEditorial?.render(state.data, state, formatTime);
     const articles = matchingArticles();
     const partial =
       hasArchive() &&

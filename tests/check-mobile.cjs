@@ -45,6 +45,7 @@ const server = http.createServer(async (request, response) => {
       "indexed-news-browser.cjs",
       "local-livelihood-browser.cjs",
       "weekend-browser.cjs",
+      "editorial-browser.cjs",
       "housing-browser.cjs",
       "homes-browser.cjs",
       "home-finder-browser.cjs",

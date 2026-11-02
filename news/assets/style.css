@@ -15,6 +15,29 @@
 .housing-home-book { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 18px; margin-bottom: 24px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .housing-home-book strong { font-size: 16px; }
 .housing-home-book small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }
+#outing-recommendations { margin: 18px 0 26px; padding: 18px 0; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.trip-heading { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.trip-heading h2 { margin: 0; font-size: 18px; }
+.trip-heading > span, .trip-note { color: var(--muted); font-size: 12px; line-height: 1.7; }
+.trip-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); list-style: none; padding: 0; margin: 14px 0; gap: 0 24px; }
+.trip-list li { min-width: 0; padding: 14px 0; border-top: 1px solid var(--line); }
+.trip-list h3 { margin: 4px 0 8px; font-size: calc(16px * var(--reading-scale)); line-height: 1.5; }
+.trip-list p { margin: 6px 0; overflow-wrap: anywhere; }
+.trip-list li > p:not([class]) { font-size: calc(14px * var(--reading-scale)); line-height: 1.7; }
+.trip-kind { color: var(--accent); font-size: 12px; }
+.trip-weather { color: var(--secondary); font-size: 12px; line-height: 1.7; }
+.trip-links { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 16px; font-size: 13px; }
+.trip-links a, .trip-links button { display: inline-flex; align-items: center; min-height: 44px; max-width: 100%; overflow-wrap: anywhere; }
+.trip-news { font-size: 12px; line-height: 1.7; }
+.trip-news span { display: block; color: var(--muted); }
+.outing-facts { margin: 10px 0; color: var(--secondary); font-size: 13px; line-height: 1.7; }
+.outing-facts summary { cursor: pointer; min-height: 36px; padding: 7px 0; }
+.outing-facts p { font-size: 13px; }
+.place-card { scroll-margin-top: 85px; }
+@media (max-width: 600px) {
+  .trip-list { grid-template-columns: minmax(0, 1fr); gap: 0; }
+  #outing-recommendations { padding: 14px 0; }
+}
 :root[data-reading-size="large"] {
   --reading-scale: 1.12;
 }

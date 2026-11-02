@@ -199,8 +199,13 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     await page.evaluate(() => caches.open("unrelated-test-cache"));
     async function waitRevision(tab, expected) {
       await waitForBrowser(tab, async expected => {
+        const registration = await navigator.serviceWorker.getRegistration();
         const controller = navigator.serviceWorker.controller;
-        if (!controller || controller.state !== "activated") return false;
+        // Version messages can wake the retiring worker while Chromium is
+        // stopping it. Observe activation before asking the new controller.
+        if (registration?.installing || registration?.waiting ||
+            !controller || controller !== registration?.active ||
+            controller.state !== "activated") return false;
         return new Promise(resolve => {
           const channel = new MessageChannel();
           channel.port1.onmessage = e => { channel.port1.close(); resolve(e.data.cacheName?.endsWith("test" + expected)); };

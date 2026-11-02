@@ -1,4 +1,8 @@
 // Run against a locally built site: NEWS_TEST_SITE=/tmp/news-pwa-preview node tests/pwa-browser.cjs
+// DevTools network instrumentation can restart a retiring Chromium worker and
+// stall activation. Keep lifecycle workers uninstrumented; the HTTP fixture
+// also disconnects during outages so offline assertions still lose the network.
+process.env.PLAYWRIGHT_DISABLE_SERVICE_WORKER_NETWORK = "1";
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 const assert = require("node:assert/strict");
 const http = require("node:http");
@@ -8,11 +12,13 @@ const waitForBrowser = require("./browser-poll.cjs");
 const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
 
 (async () => {
+  let networkOffline = false;
   let revision = 1;
   let appRevision = 1;
   let dataTime;
   let blockInstall = false;
   const server = http.createServer(async (request, response) => {
+    if (networkOffline) return request.destroy();
     const pathname = new URL(request.url, "http://localhost").pathname;
     if (blockInstall && /\/archive\.[a-f0-9]+\.js$/.test(pathname))
       return response.writeHead(503).end("temporarily unavailable");
@@ -75,6 +81,10 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     const context = await browser.newContext({
       viewport: { width: 390, height: 844 },
     });
+    async function setOffline(offline) {
+      networkOffline = offline;
+      await context.setOffline(offline);
+    }
     // Exercise manual installation instructions without opening a native OS dialog.
     await context.addInitScript(() =>
       window.addEventListener("beforeinstallprompt", (event) => {
@@ -136,7 +146,7 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
       () => JSON.parse(localStorage.getItem("zrbac-news-cache-v1")).updatedAt,
     );
 
-    await context.setOffline(true);
+    await setOffline(true);
     await page.reload({ waitUntil: "networkidle" });
     // Chromium's navigator emulation can reset across a service-worker navigation.
     // Keep both the transport and the simulated OS connectivity state offline.
@@ -166,7 +176,7 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     assert.match(await page.locator("#refresh-notice").innerText(), /当前离线/);
 
     dataTime = new Date(Date.parse(before) + 3_600_000).toISOString();
-    await context.setOffline(false);
+    await setOffline(false);
     await cdp.send("Network.overrideNetworkState", {
       offline: false,
       latency: 0,
@@ -241,12 +251,12 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
     await waitForBrowser(page, async () => !(await navigator.serviceWorker.getRegistration()).installing);
     await waitRevision(page, 2);
-    await context.setOffline(true);
+    await setOffline(true);
     await page.reload({waitUntil: "networkidle"});
     assert.equal(await page.locator("body").getAttribute("data-test-revision"), "2");
     await page.locator(".article").first().waitFor();
     blockInstall = false;
-    await context.setOffline(false);
+    await setOffline(false);
     await page.reload({waitUntil: "networkidle"});
     assert.equal(await page.locator("body").getAttribute("data-test-revision"), "3");
     await waitRevision(page, 3);
@@ -271,10 +281,10 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     assert.equal(await page.evaluate(() => window.openReaderMarker), "keep-reading");
     assert.equal(await game.evaluate(() => window.playingMarker), "keep-playing");
     assert.equal(await page.locator("#pwa-update, #apply-update").count(), 0);
-    await context.setOffline(true);
+    await setOffline(true);
     assert.equal(await game.evaluate(async () => (await fetch("/assets/news/kept.111111111111.js")).text()), "older open game resource");
     await game.locator("#offline-status.ready").waitFor({ state: "attached" });
-    await context.setOffline(false);
+    await setOffline(false);
     await game.close();
     await page.reload({waitUntil: "networkidle"});
     assert.equal(await page.locator("body").getAttribute("data-test-revision"), "4");
@@ -298,7 +308,7 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
         "service worker must not rewrite removed or missing pages into the news app",
       );
     }
-    await context.setOffline(true);
+    await setOffline(true);
     await page.goto(base + "/#saved", { waitUntil: "networkidle" });
     await page.locator(".article").first().waitFor();
     assert.equal(

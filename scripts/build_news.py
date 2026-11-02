@@ -286,11 +286,6 @@ def main():
         shell_files.append(f'/assets/news/{versioned.name}')
     for path, page in pages.items():
         (output / path.lstrip('/') / 'index.html').write_text(page)
-    # Older installed workers only intercept known navigation paths. Keep an
-    # independent entrance for readers stuck on the original manual notebook.
-    live_homes = output / 'homes/live'
-    live_homes.mkdir(parents=True, exist_ok=True)
-    (live_homes / 'index.html').write_text(pages['/homes/'])
     shutil.copy2(ROOT / 'news/manifest.webmanifest', output / 'manifest.webmanifest')
     worker = (ROOT / 'news/sw.js').read_text()
     shell_digest = hashlib.sha256(pages['/'].encode() + worker.encode())
@@ -304,8 +299,20 @@ def main():
         shell_digest.update(body)
         if path != '/guide/' and not re.search(r'/guide-index\.[a-f0-9]{12}\.json$', path):
             app_digest.update(body)
-    worker = worker.replace('__BUILD_ID__', shell_digest.hexdigest()[:16])
+    build_id = shell_digest.hexdigest()[:16]
+    worker = worker.replace('__BUILD_ID__', build_id)
     worker = worker.replace('__APP_BUILD_ID__', app_digest.hexdigest()[:16])
+    # Bind each open document to its coherent offline edition, without making
+    # content-only updates part of the UI digest or forcing a document reload.
+    for path in pages:
+        pages[path] = pages[path].replace('__NEWS_SHELL_CACHE__', 'news-shell-' + build_id)
+        (output / path.lstrip('/') / 'index.html').write_text(pages[path])
+    # These routes also work through older cache-first workers, without clearing
+    # browser data or asking readers to use the retired update button.
+    for alias, page in (('live', '/'), ('homes/live', '/homes/')):
+        folder = output / alias
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / 'index.html').write_text(pages[page])
     news_shell = list(dict.fromkeys(['/', '/manifest.webmanifest',
         '/assets/news/icon-180.png', '/assets/news/icon-192.png', '/assets/news/icon-512.png',
         *re.findall(r'/assets/news/[\w.-]+\.[a-f0-9]{12}\.(?:json|js|css|svg)\b', pages['/'])]))

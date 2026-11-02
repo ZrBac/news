@@ -209,28 +209,6 @@ span[data-icon] {
   text-decoration: underline;
   text-underline-offset: 5px;
 }
-.pwa-update {
-  position: fixed;
-  bottom: calc(16px + env(safe-area-inset-bottom));
-  left: 18px;
-  right: 18px;
-  width: fit-content;
-  max-width: calc(100% - 36px);
-  margin: auto;
-  padding: 12px 16px;
-  border: 1px solid var(--line);
-  border-radius: 4px;
-  background: var(--paper);
-  color: var(--ink);
-  box-shadow: 0 2px 12px #0002;
-  z-index: 50;
-  font-size: 13px;
-}
-.pwa-update button {
-  padding: 4px 8px;
-  color: var(--accent);
-  text-decoration: underline;
-}
 .saved-link b {
   font-size: 10px;
   font-weight: 500;

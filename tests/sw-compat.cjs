@@ -37,10 +37,14 @@ const source = fs
       "/guide/chapters/2.aaaaaaaaaaaa.json",
     ]),
   )
-  .replace("__GUIDE_REVISION__", JSON.stringify("a".repeat(40)));
+  .replace("__GUIDE_REVISION__", JSON.stringify("a".repeat(40)))
+  .replace("__BUILD_ID__", "a".repeat(16));
 function worker(options = {}) {
   const handlers = {},
-    matches = [];
+    matches = [],
+    buckets = options.buckets || new Map(),
+    clients = options.clients || [];
+  const key = (path) => typeof path === "string" ? path : new URL(path.url).pathname;
   const scope = vm.createContext({
     URL,
     Response,
@@ -57,18 +61,25 @@ function worker(options = {}) {
       navigator: { onLine: options.online !== false },
       addEventListener: (type, handler) => (handlers[type] = handler),
       skipWaiting: options.skipWaiting || (async () => {}),
+      registration: options.registration || {},
+      clients: { claim: async () => {}, matchAll: async () => clients },
     },
     caches: {
-      open: async () => ({
-        match: async (path) => {
-          matches.push(path);
-          return options.entries
-            ? options.entries.get(path)?.clone()
-            : new Response("cached " + path);
-        },
-        put: async (path, response) =>
-          options.entries.set(path, response.clone()),
-      }),
+      keys: async () => [...buckets.keys()],
+      delete: async (name) => buckets.delete(name),
+      open: async (name) => {
+        if (!buckets.has(name)) buckets.set(name, options.entries || new Map());
+        const entries = buckets.get(name);
+        return {
+          match: async (path) => {
+            matches.push(key(path));
+            return options.entries || options.buckets ? entries.get(key(path))?.clone() : new Response("cached " + key(path));
+          },
+          put: async (path, response) => entries.set(key(path), response.clone()),
+          keys: async () => [...entries.keys()].map(path => new Request(new URL(path, "https://news.test"))),
+          delete: async (path) => entries.delete(key(path)),
+        };
+      },
     },
     fetch:
       options.fetch ||
@@ -86,23 +97,30 @@ function worker(options = {}) {
     });
     return response;
   }
-  async function message(type, paths, page, reply = true) {
+  async function message(type, paths, page, reply = true, extra = {}, client) {
     let result, work;
     handlers.message({
-      data: { type, paths, page },
+      data: { type, paths, page, ...extra },
+      source: client,
       ports: reply ? [{ postMessage: (value) => (result = value) }] : [],
       waitUntil: (value) => (work = value),
     });
     await work;
     return result;
   }
-  return { request, matches, message };
+  async function lifecycle(type) {
+    let work;
+    handlers[type]({waitUntil: value => { work = value; }});
+    await work;
+  }
+  return { request, matches, message, lifecycle };
 }
 test("Offline navigation aliases return their matching HTML without Object.hasOwn", async () => {
   const { request } = worker();
   for (const [path, expected] of [
     ["/", "/"],
     ["/index.html", "/"],
+    ["/live/", "/"],
     ["/games", "/games/"],
     ["/games/", "/games/"],
     ["/games/index.html", "/games/"],
@@ -149,6 +167,72 @@ test("Update activation accepts both legacy messages and acknowledged requests",
   assert.equal((await w.message("ACTIVATE_UPDATE")).accepted, true);
   assert.equal(activations, 2);
 });
+test("A complete offline install activates automatically; a failed install cannot replace it", async () => {
+  let activated = 0;
+  const complete = worker({entries: new Map(), fetch: async () => new Response("page or asset"), skipWaiting: async () => activated++});
+  await complete.lifecycle("install");
+  assert.equal(activated, 1);
+  const broken = worker({entries: new Map(), fetch: async () => { throw new Error("unavailable"); }, skipWaiting: async () => activated++});
+  await assert.rejects(broken.lifecycle("install"));
+  assert.equal(activated, 1);
+  const mixed = worker({entries: new Map(), fetch: async () => new Response('<meta name="news-shell-cache" content="news-shell-another">'), skipWaiting: async () => activated++});
+  await assert.rejects(mixed.lifecycle("install"));
+  assert.equal(activated, 1, "a partial CDN publication cannot activate a mixed edition");
+});
+test("An open older tab keeps its exact assets until it closes; unrelated caches survive", async () => {
+  const current = "news-shell-" + "a".repeat(16), old = "news-shell-old";
+  const path = "/assets/news/old.111111111111.js";
+  const buckets = new Map([[old, new Map([[path, new Response("old script")]])],
+    ["news-shell-unused", new Map()], [current, new Map()],
+    ["unrelated-cache", new Map()], ["news-shell-next-install", new Map()]]);
+  const clients = [{id:"old-tab",url:"https://news.test/games/"}, {id:"new-tab",url:"https://news.test/"}];
+  const w = worker({buckets, clients});
+  await w.message("CLIENT_VERSION", undefined, undefined, false, {cacheName: old}, clients[0]);
+  assert(buckets.has("news-shell-unused"), "an unidentified client prevents premature cleanup");
+  await w.message("CLIENT_VERSION", undefined, undefined, false, {cacheName: current}, clients[1]);
+  assert(buckets.has(old));
+  assert(!buckets.has("news-shell-unused"));
+  assert.equal(await (await w.request(path, "cors")).text(), "old script");
+  clients.shift();
+  await w.message("CLIENT_VERSION", undefined, undefined, false, {cacheName: current}, clients[0]);
+  assert(!buckets.has(old));
+  assert(buckets.has("unrelated-cache"));
+  assert(buckets.has("news-shell-next-install"), "an older worker cannot delete a concurrently installing edition");
+});
+test("An automatic update keeps a previously prepared guide complete before activation", async () => {
+  const first = "/guide/chapters/1.aaaaaaaaaaaa.json", second = "/guide/chapters/2.aaaaaaaaaaaa.json";
+  const buckets = new Map([["news-shell-old", new Map([
+    ["/guide/", new Response("saved guide")],
+    [first, new Response("unchanged chapter")],
+  ])]]);
+  let blocked = true, activated = 0;
+  const fetched = [];
+  const w = worker({buckets, skipWaiting: async () => activated++, fetch: async request => {
+    const path = new URL(request.url).pathname;
+    fetched.push(path);
+    if (path === second) {
+      if (blocked) throw new Error("unavailable chapter");
+      return Response.json({schema: 1, revision: "a".repeat(40), entries: [{chapter: 2, body: "new chapter"}]});
+    }
+    return new Response("page or asset");
+  }});
+  await assert.rejects(w.lifecycle("install"));
+  assert.equal(activated, 0, "an incomplete new guide cannot replace the saved edition");
+  blocked = false;
+  fetched.length = 0;
+  await w.lifecycle("install");
+  assert.equal(activated, 1);
+  assert.deepEqual(fetched, [second], "unchanged and completed downloads are reused");
+  assert.equal((await w.message("CHECK_OFFLINE", ["/guide/"], "guide")).ready, true);
+});
+test("Offline navigation never falls back to an unfinished installation", async () => {
+  const buckets = new Map([
+    ["news-shell-complete", new Map([["/guide/", new Response("saved guide")], ["/__news_shell_version__", Response.json({})]])],
+    ["news-shell-incomplete", new Map([["/guide/", new Response("unfinished guide")]])],
+  ]);
+  const w = worker({buckets, online: false});
+  assert.equal(await (await w.request("/guide/")).text(), "saved guide");
+});
 test("Offline shell assets load and unrelated routes still bypass the worker", async () => {
   const { request, matches } = worker();
   assert.equal(
@@ -167,9 +251,10 @@ test("Offline shell assets load and unrelated routes still bypass the worker", a
   assert.deepEqual(matches, ["/assets/news/compat.test.js"]);
 });
 
-test("Cached navigation never waits on a stalled network request", async () => {
+test("Offline navigation never waits on a stalled network request", async () => {
   let fetches = 0;
   const w = worker({
+    online: false,
     fetch: () => {
       fetches++;
       return new Promise(() => {});
@@ -178,13 +263,13 @@ test("Cached navigation never waits on a stalled network request", async () => {
   assert.equal(await (await w.request("/games/")).text(), "cached /games/");
   assert.equal(fetches, 0);
 });
-test("Home navigation reads new HTML online without replacing the installed fallback", async () => {
+test("Every entry reads new HTML online without replacing the installed fallback", async () => {
   const entries = new Map([["/homes/", new Response("installed notebook")]]);
   const w = worker({
     entries,
     fetch: async () => new Response("new candidates"),
   });
-  for (const path of ["/homes/", "/homes/live/", "/homes/index.html"])
+  for (const path of ["/", "/live/", "/index.html", "/games/", "/guide/", "/homes/", "/homes/live/", "/homes/index.html"])
     assert.equal(await (await w.request(path)).text(), "new candidates");
   assert.equal(await entries.get("/homes/").text(), "installed notebook");
 });

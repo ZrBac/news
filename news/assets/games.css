@@ -417,7 +417,6 @@ body.playing {
 body.playing > header,
 body.playing > footer,
 body.playing .connection,
-body.playing #pwa-update,
 body.playing #offline-tools {
   display: none;
 }

@@ -51,13 +51,10 @@
     isHomes = !!document.querySelector("#home-book"),
     hasOfflineTools = isGames || isGuide || isHomes;
   let registration,
-    applyingUpdate = false,
     checking,
     starting,
     automaticRepair = false;
-  let updateCheck = 0;
-  const workerVersions = new WeakMap();
-  const notice = document.querySelector("#pwa-update");
+  const pageCache = document.querySelector('meta[name="news-shell-cache"]')?.content;
   const messages = {
     ready: isGuide
       ? "已准备好，可离线阅读"
@@ -67,10 +64,9 @@
     checking: "正在检查离线资源…",
     downloading: "正在准备离线资源，请保持联网…",
     controller: "还未完成离线准备，请保持联网后重试。",
-    version: "本页与离线版本不同，请先点“更新页面”。",
+    version: "正在同步离线版本，请保持联网；稍后可刷新页面重新检查。",
     missing: "离线资源不完整，请联网后点“准备离线使用”。",
-    download:
-      "离线资源未下载完整，请保持联网后重试；如有新版本，请先更新页面。",
+    download: "离线资源未下载完整，请保持联网后重试。",
     storage:
       "浏览器未能读写离线资源，请在普通标签页中重试，并检查设备可用空间。",
     timeout: "离线检查未完成，请点“重新检查”。",
@@ -80,10 +76,7 @@
   };
   function status(reason) {
     if (!offlineStatus) return;
-    offlineStatus.textContent =
-      reason === "version" && registration?.waiting?.state !== "installed"
-        ? "离线版本尚未更新，请保持联网后点“重新检查”。"
-        : messages[reason] || messages.registration;
+    offlineStatus.textContent = messages[reason] || messages.registration;
     offlineStatus.classList.toggle("ready", reason === "ready");
     offlineStatus.dataset.state = reason;
     if (offlineTools) offlineTools.hidden = !hasOfflineTools;
@@ -123,67 +116,22 @@
     }
     return true;
   }
-  function versionOf(worker) {
-    if (!workerVersions.has(worker))
-      workerVersions.set(worker, askWorker(worker, "GET_VERSION"));
-    return workerVersions.get(worker);
-  }
-  async function showUpdate() {
-    // The first install briefly enters "waiting" before activating. Only an
-    // existing controller being replaced is an update, and clear stale notices
-    // when that waiting worker has activated (including in another tab).
-    const check = ++updateCheck;
+  function activateWaiting() {
     const waiting = registration?.waiting;
-    const controller = navigator.serviceWorker.controller;
-    notice.hidden = true;
-    if (waiting?.state !== "installed" || !registration.active || !controller)
-      return;
-    const current = await versionOf(controller);
-    let contentOnly = false;
-    try {
-      if (current.appVersion && current.cacheName) {
-        const editions = await Promise.all(
-          (await caches.keys())
-            .filter(
-              (name) =>
-                name.startsWith("news-shell-") && name !== current.cacheName,
-            )
-            .map(async (name) => {
-              const response = await (
-                await caches.open(name)
-              ).match("/__news_shell_version__");
-              return response ? response.json() : null;
-            }),
-        );
-        const complete = editions.filter(Boolean);
-        contentOnly =
-          complete.length > 0 &&
-          complete.every(
-            (edition) => edition.appVersion === current.appVersion,
-          );
-      }
-    } catch {
-      // Unknown older editions and unavailable cache metadata keep the update
-      // visible. Do not wake a waiting worker just to inspect its version.
-    }
-    if (
-      check !== updateCheck ||
-      registration.waiting !== waiting ||
-      waiting.state !== "installed"
-    )
-      return;
-    notice.querySelector("[data-update-text]").textContent = contentOnly
-      ? "生活指南内容有更新。"
-      : "网站有新版本。";
-    // A waiting guide edition activates normally when existing tabs close.
-    // Readers can also apply it immediately from the guide, without interrupting
-    // news browsing or a game in progress elsewhere.
-    notice.hidden = contentOnly && !isGuide;
+    if (waiting?.state === "installed")
+      waiting.postMessage({ type: "SKIP_WAITING" });
+  }
+  function keepPageVersion() {
+    if (pageCache && navigator.serviceWorker.controller)
+      navigator.serviceWorker.controller.postMessage({
+        type: "CLIENT_VERSION",
+        cacheName: pageCache,
+      });
   }
   function watch(worker) {
     if (!worker) return;
     const changed = () => {
-      showUpdate();
+      activateWaiting();
       if (worker.state === "activated") checkOffline();
       if (worker.state === "redundant" && !navigator.serviceWorker.controller)
         status("download");
@@ -227,6 +175,7 @@
           {
             type,
             paths,
+            cacheName: pageCache,
             page: isGuide ? "guide" : isHomes ? "homes" : "games",
           },
           [channel.port2],
@@ -268,11 +217,6 @@
       // Older installed workers understand CHECK_OFFLINE only. Always negotiate
       // through that message before asking a capable worker to repair its cache.
       let result = await askWorker(controller, "CHECK_OFFLINE", paths);
-      if (isGuide && !result.ready && registration?.waiting) {
-        await showUpdate();
-        status("version");
-        return;
-      }
       if (
         !result.ready &&
         result.reason === "missing" &&
@@ -283,7 +227,7 @@
         status("downloading");
         result = await askWorker(controller, "PREPARE_OFFLINE", paths);
       }
-      showUpdate();
+      activateWaiting();
       status(
         result.ready
           ? "ready"
@@ -308,11 +252,16 @@
           scope: "/",
           updateViaCache: "none",
         });
-        showUpdate();
+        keepPageVersion();
+        activateWaiting();
         watch(registration.installing);
         registration.addEventListener("updatefound", () =>
           watch(registration.installing),
         );
+        // A normal refresh also retries a previously failed offline update;
+        // register() alone may reuse the browser's recent worker check.
+        if (navigator.onLine && registration.active)
+          registration.update().catch(() => {});
         navigator.serviceWorker.ready
           .then(() => checkOffline())
           .catch(() => status("registration"));
@@ -321,6 +270,7 @@
         // A cold offline launch may reject register() while a saved controller
         // and its cache are already usable. Check that installed version first.
         if (navigator.serviceWorker.controller) {
+          keepPageVersion();
           await checkOffline();
           return;
         }
@@ -352,53 +302,25 @@
         /* Existing cached files may still work. */
       }
     }
-    if (registration?.waiting) {
-      await showUpdate();
-      if (!notice.hidden) {
-        status("version");
-        return;
-      }
-    }
+    activateWaiting();
     await checkOffline(true);
-    showUpdate();
+    activateWaiting();
   });
-  document
-    .querySelector("#apply-update")
-    .addEventListener("click", async (event) => {
-      if (!registration?.waiting || applyingUpdate) return;
-      applyingUpdate = true;
-      event.currentTarget.disabled = true;
-      event.currentTarget.textContent = "正在更新…";
-      // Complete cache preparation before switching away from that worker.
-      await Promise.resolve(checking).catch(() => {});
-      const waiting = registration.waiting;
-      if (!waiting) return;
-      try {
-        await registration.update();
-      } catch {}
-      let attempts = 0;
-      const activate = () => {
-        if (registration.waiting !== waiting || waiting.state !== "installed")
-          return;
-        waiting.postMessage({ type: "SKIP_WAITING" });
-        if (++attempts < 10) setTimeout(activate, 750);
-      };
-      activate();
-    });
   if (support()) {
     window.addEventListener("guide-index-ready", () => {
       if (registration) checkOffline();
     });
     navigator.serviceWorker.addEventListener("controllerchange", () => {
-      showUpdate();
-      if (applyingUpdate) window.location.reload();
-      else Promise.resolve(checking).then(() => checkOffline());
+      activateWaiting();
+      keepPageVersion();
+      Promise.resolve(checking).then(() => checkOffline());
     });
     // News waits for its first data check; the games page starts immediately.
     start();
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) {
         automaticRepair = false;
+        keepPageVersion();
         checkOffline();
         if (navigator.onLine && registration)
           registration.update().catch(() => {});

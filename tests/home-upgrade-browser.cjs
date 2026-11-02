@@ -6,6 +6,7 @@ const assert = require("node:assert/strict");
 const http = require("node:http");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const waitForBrowser = require("./browser-poll.cjs");
 const H = require("../news/assets/homes-core.js");
 const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
 const legacyHTML = `<!doctype html><meta charset="utf-8"><title>旧版我的看房</title>
@@ -17,12 +18,13 @@ const legacyWorker = `const CACHE='news-shell-home-upgrade-legacy';
   self.addEventListener('install', e=>e.waitUntil((async()=>{
     const c=await caches.open(CACHE);
     await c.put('/homes/',new Response(${JSON.stringify(legacyHTML)},{headers:{'Content-Type':'text/html'}}));
+    await c.put('/',new Response(${JSON.stringify(legacyHTML)},{headers:{'Content-Type':'text/html'}}));
   })()));
   self.addEventListener('activate',e=>e.waitUntil(self.clients.claim()));
   self.addEventListener('fetch',e=>{
     const u=new URL(e.request.url);
-    if(e.request.mode==='navigate'&&u.pathname==='/homes/')
-      e.respondWith(caches.open(CACHE).then(c=>c.match('/homes/')));
+    if(e.request.mode==='navigate'&&['/','/homes/'].includes(u.pathname))
+      e.respondWith(caches.open(CACHE).then(c=>c.match(u.pathname)));
   });
   self.addEventListener('message',e=>{
     if(e.data.type==='GET_VERSION') e.ports[0].postMessage({appVersion:'manual-only',cacheName:CACHE});
@@ -53,7 +55,7 @@ async function readBook(page) {
     markNetwork = false;
   const server = http.createServer(async (request, response) => {
     const pathname = new URL(request.url, "http://local").pathname;
-    if (legacy && ["/homes/", "/sw.js"].includes(pathname)) {
+    if (legacy && ["/", "/homes/", "/sw.js"].includes(pathname)) {
       return response
         .writeHead(200, {
           "Content-Type":
@@ -158,6 +160,13 @@ async function readBook(page) {
       0,
       "ordinary reload still uses the old installed page",
     );
+    const news = await context.newPage();
+    await news.goto(base);
+    assert.equal(await news.locator("h1").innerText(), "我的看房", "legacy navigation still uses the saved document");
+    await news.goto(base + "/live/");
+    assert.equal(await news.locator('meta[name="news-shell-cache"]').count(), 1, "the fresh news document bypasses legacy cached HTML");
+    assert.equal(await news.locator("#pwa-update, #apply-update").count(), 0, "the fresh news entrance needs no manual update");
+    await news.close();
     await page.goto(base + "/homes/live/");
     await page.evaluate(() =>
       window.homeCandidatesReady,
@@ -177,7 +186,7 @@ async function readBook(page) {
       blockedDownloads >= 2,
       "the offline update genuinely encountered a download failure",
     );
-    await page.waitForFunction(
+    await waitForBrowser(page,
       async () => !(await navigator.serviceWorker.getRegistration()).installing,
     );
     assert.equal(
@@ -198,30 +207,16 @@ async function readBook(page) {
     assert.equal(await page.locator(".candidate-card").count(), 12);
     blockInstall = false;
     await page.locator("#prepare-offline").click();
-    await page
-      .locator("#pwa-update")
-      .waitFor({ state: "visible" })
-      .catch(async (error) => {
-        console.error(
-          "Upgrade diagnostics",
-          workerErrors,
-          await page.evaluate(async () => {
-            const reg = await navigator.serviceWorker.getRegistration();
-            return {
-              active: reg.active?.state,
-              waiting: reg.waiting?.state,
-              installing: reg.installing?.state,
-              status: document.querySelector("#offline-status").textContent,
-              caches: await caches.keys(),
-            };
-          }),
-        );
-        throw error;
+    await waitForBrowser(page, async () => {
+      const controller = navigator.serviceWorker.controller;
+      if (!controller || controller.state !== "activated") return false;
+      return new Promise(resolve => {
+        const channel = new MessageChannel();
+        channel.port1.onmessage = e => { channel.port1.close(); resolve(e.data.cacheName === document.querySelector('meta[name="news-shell-cache"]').content); };
+        controller.postMessage({type: "GET_VERSION"}, [channel.port2]);
       });
-    await Promise.all([
-      page.waitForNavigation(),
-      page.locator("#apply-update").click(),
-    ]);
+    });
+    assert.equal(await page.locator("#pwa-update, #apply-update").count(), 0);
     await page.evaluate(() => window.homeCandidatesReady);
     assert.deepEqual(
       await readBook(page),

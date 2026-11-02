@@ -65,8 +65,8 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     await page.reload({ waitUntil: "domcontentloaded" });
     assert.equal(
       documents,
-      before,
-      "installed shell avoids document network fetch",
+      before + 1,
+      "online refresh revalidates the latest document",
     );
     const damaged = await page.evaluate(async () => {
       const name = (await caches.keys()).find((k) =>

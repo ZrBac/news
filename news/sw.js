@@ -8,9 +8,19 @@ const GUIDE_SHELL = __GUIDE_SHELL__;
 const HOMES_SHELL = __HOMES_SHELL__;
 const GUIDE_FILES = __GUIDE_FILES__;
 const GUIDE_REVISION = __GUIDE_REVISION__;
+const CLIENT_CACHE = "news-reader-versions-v1";
+const PAGE_SHELLS = {
+  news: NEWS_SHELL,
+  games: GAMES_SHELL,
+  guide: GUIDE_SHELL,
+  homes: HOMES_SHELL,
+};
 const PAGES = {
   "/": "/",
   "/index.html": "/",
+  "/live": "/",
+  "/live/": "/",
+  "/live/index.html": "/",
   "/games": "/games/",
   "/games/": "/games/",
   "/games/index.html": "/games/",
@@ -20,7 +30,64 @@ const PAGES = {
   "/homes": "/homes/",
   "/homes/": "/homes/",
   "/homes/index.html": "/homes/",
+  "/homes/live": "/homes/",
+  "/homes/live/": "/homes/",
+  "/homes/live/index.html": "/homes/",
 };
+
+const shellName = (name) =>
+  typeof name === "string" && /^news-shell-[a-zA-Z0-9-]{1,100}$/.test(name);
+const clientKey = (id) => "/__news_reader__/" + encodeURIComponent(id);
+async function pruneShells() {
+  // A different edition may still be installing. Its cache is not disposable.
+  if (self.registration?.installing || self.registration?.waiting) return;
+  const clients = (
+    await self.clients.matchAll({ type: "window", includeUncontrolled: true })
+  ).filter((client) => {
+    const url = new URL(client.url);
+    return url.origin === self.location.origin &&
+      Object.prototype.hasOwnProperty.call(PAGES, url.pathname);
+  });
+  const state = await caches.open(CLIENT_CACHE),
+    keep = new Set([CACHE]);
+  const live = new Set(clients.map((client) => clientKey(client.id)));
+  for (const client of clients) {
+    const record = await state.match(clientKey(client.id));
+    // Older readers cannot identify their edition. Preserve their cache until
+    // they close or refresh; automatic activation must not break an open game.
+    if (!record) return;
+    const name = (await record.json()).cacheName;
+    if (!shellName(name)) return;
+    keep.add(name);
+  }
+  // CacheStorage lists editions in creation order. An older worker finishing a
+  // message must never delete a newer edition that just started installing.
+  const editions = await caches.keys();
+  for (const name of editions.slice(0, Math.max(0, editions.indexOf(CACHE))))
+    if (name.startsWith("news-shell-") && !keep.has(name))
+      await caches.delete(name);
+  for (const request of await state.keys())
+    if (!live.has(new URL(request.url).pathname)) await state.delete(request);
+}
+
+async function savedResource(path) {
+  const current = await (await caches.open(CACHE)).match(path);
+  if (current) return current;
+  // Exact immutable paths only: an older open document keeps its own scripts
+  // and guide chapters even after another tab has upgraded the worker.
+  const previous = (await caches.keys())
+    .filter((key) => key.startsWith("news-shell-") && key !== CACHE)
+    .reverse();
+  for (const name of previous) {
+    const cache = await caches.open(name);
+    if (
+      Object.prototype.hasOwnProperty.call(PAGES, path) &&
+      !(await cache.match("/__news_shell_version__"))
+    ) continue;
+    const saved = await cache.match(path);
+    if (saved) return saved;
+  }
+}
 
 async function validateShell(
   read,
@@ -36,6 +103,9 @@ async function validateShell(
       }),
     )
   ).join("\n");
+  const editions = [...html.matchAll(/name="news-shell-cache"\s+content="([^"]+)"/g)];
+  if (editions.some((match) => match[1] !== CACHE))
+    throw new Error("Page belongs to another offline edition");
   for (const asset of html.match(
     /\/assets\/news\/[\w.-]+\.[a-f0-9]{12}\.(?:json|js|css|svg)\b/g,
   ) || []) {
@@ -173,12 +243,23 @@ self.addEventListener("install", (event) => {
           if (saved) await cache.put(path, saved);
         }
       }
+      if (pages.has("/guide/")) {
+        const chapters = await stageMissing(cache, GUIDE_FILES);
+        if (chapters.failed) throw new Error("Incomplete offline guide");
+      }
       await cache.put(
         "/__news_shell_version__",
-        new Response(JSON.stringify({ appVersion: APP_VERSION }), {
-          headers: { "Content-Type": "application/json" },
-        }),
+        new Response(
+          JSON.stringify({
+            appVersion: APP_VERSION,
+            pageShells: PAGE_SHELLS,
+            guideFiles: GUIDE_FILES,
+          }),
+          { headers: { "Content-Type": "application/json" } },
+        ),
       );
+      // The complete offline edition is ready; no update banner or click needed.
+      await self.skipWaiting();
     })(),
   );
 });
@@ -216,18 +297,30 @@ async function repairShell(page = "games", report) {
 self.addEventListener("activate", (event) => {
   event.waitUntil(
     (async () => {
-      const keys = await caches.keys();
-      await Promise.all(
-        keys
-          .filter((key) => key.startsWith("news-shell-") && key !== CACHE)
-          .map((key) => caches.delete(key)),
-      );
       await self.clients.claim();
+      await pruneShells().catch(() => {});
     })(),
   );
 });
 
 self.addEventListener("message", (event) => {
+  if (
+    event.data?.type === "CLIENT_VERSION" && event.source?.id &&
+    shellName(event.data.cacheName)
+  ) {
+    event.waitUntil(
+      (async () => {
+        await (await caches.open(CLIENT_CACHE)).put(
+          clientKey(event.source.id),
+          new Response(JSON.stringify({ cacheName: event.data.cacheName }), {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+        await pruneShells();
+      })().catch(() => {}),
+    );
+    return;
+  }
   if (event.data?.type === "GET_VERSION" && event.ports[0]) {
     event.waitUntil(
       Promise.resolve().then(() =>
@@ -253,20 +346,29 @@ self.addEventListener("message", (event) => {
     (async () => {
       try {
         const paths = Array.isArray(event.data.paths) ? event.data.paths : [];
+        const edition = shellName(event.data.cacheName)
+          ? event.data.cacheName
+          : CACHE;
+        const cache = await caches.open(edition);
+        const metadata = edition === CACHE
+          ? { pageShells: PAGE_SHELLS, guideFiles: GUIDE_FILES }
+          : await (await cache.match("/__news_shell_version__"))?.json();
+        const page = ["guide", "homes"].includes(event.data.page)
+          ? event.data.page
+          : "games";
+        const required = metadata?.pageShells?.[page];
         if (
           !paths.length ||
           paths.length > 64 ||
-          !paths.every((path) => SHELL.includes(path))
+          !required ||
+          !paths.every((path) => required.includes(path))
         ) {
           event.ports[0].postMessage({ ready: false, reason: "version" });
           return;
         }
-        const page = ["guide", "homes"].includes(event.data.page)
-          ? event.data.page
-          : "games";
         const guide = page === "guide";
         let repairFailed = false;
-        if (event.data.type === "PREPARE_OFFLINE") {
+        if (event.data.type === "PREPARE_OFFLINE" && edition === CACHE) {
           try {
             await repairShell(page, (value) =>
               event.ports[0].postMessage(value),
@@ -275,21 +377,18 @@ self.addEventListener("message", (event) => {
             repairFailed = true;
           }
         }
-        const cache = await caches.open(CACHE),
-          missing = [];
+        const missing = [];
         // The Home Screen start URL is '/', even when installation starts in /games/.
         // Check the entire launch shell, not just assets of the currently open page.
-        const required = guide
-          ? [...GUIDE_SHELL, ...GUIDE_FILES]
-          : page === "homes"
-            ? HOMES_SHELL
-            : GAMES_SHELL;
-        for (const path of required)
+        const complete = guide
+          ? [...required, ...(metadata.guideFiles || [])]
+          : required;
+        for (const path of complete)
           if (!(await cache.match(path))) missing.push(path);
         event.ports[0].postMessage({
           ready: !missing.length,
           missing: missing.length,
-          total: required.length,
+          total: complete.length,
           reason: repairFailed
             ? "download"
             : missing.length
@@ -304,10 +403,9 @@ self.addEventListener("message", (event) => {
 });
 
 async function navigation(request, page) {
-  // Home candidates should not be hidden behind an old manual-only notebook.
-  // Keep the installed HTML and its assets together for the offline fallback;
-  // do not write a newer network page into the older worker's cache.
-  if (page === "/homes/" && self.navigator?.onLine !== false) {
+  // A normal navigation/reload reads the latest published HTML. Keep saved HTML
+  // paired with its own assets instead of overwriting it with another edition.
+  if (self.navigator?.onLine !== false) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3500);
     try {
@@ -320,14 +418,13 @@ async function navigation(request, page) {
         return response;
       }
     } catch {
-      // A failed or slow network still permits the saved notebook to open.
+      // Offline, failed or slow connections still open the saved edition.
     } finally {
       clearTimeout(timer);
     }
   }
-  // Other entrances keep their installed version until an explicit update.
   try {
-    const cached = await (await caches.open(CACHE)).match(page);
+    const cached = await savedResource(page);
     if (cached) return cached;
   } catch {
     /* Online browsing remains available when cache access is denied. */
@@ -341,25 +438,19 @@ self.addEventListener("fetch", (event) => {
   if (request.method !== "GET" || url.origin !== self.location.origin) return;
   if (
     request.mode === "navigate" &&
-    ["/homes/live", "/homes/live/", "/homes/live/index.html"].includes(
-      url.pathname,
-    )
-  ) {
-    event.respondWith(navigation(request, "/homes/"));
-    return;
-  }
-  if (
-    request.mode === "navigate" &&
     Object.prototype.hasOwnProperty.call(PAGES, url.pathname)
   ) {
     event.respondWith(navigation(request, PAGES[url.pathname]));
   } else if (
-    (SHELL.includes(url.pathname) || GUIDE_FILES.includes(url.pathname)) &&
+    (SHELL.includes(url.pathname) ||
+      GUIDE_FILES.includes(url.pathname) ||
+      /^\/assets\/news\/[\w.-]+\.[a-f0-9]{12}\.(?:json|js|css|svg)$/.test(url.pathname) ||
+      /^\/guide\/chapters\/\d+\.[a-f0-9]{12}\.json$/.test(url.pathname)) &&
     !Object.prototype.hasOwnProperty.call(PAGES, url.pathname)
   ) {
     event.respondWith(
       (async () =>
-        (await (await caches.open(CACHE)).match(url.pathname)) ||
+        (await savedResource(url.pathname)) ||
         (GUIDE_FILES.includes(url.pathname)
           ? (async () => {
               const response = await download(url.pathname);

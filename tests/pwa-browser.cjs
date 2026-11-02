@@ -4,14 +4,18 @@ const assert = require("node:assert/strict");
 const http = require("node:http");
 const fs = require("node:fs/promises");
 const path = require("node:path");
+const waitForBrowser = require("./browser-poll.cjs");
 const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
 
 (async () => {
   let revision = 1;
   let appRevision = 1;
   let dataTime;
+  let blockInstall = false;
   const server = http.createServer(async (request, response) => {
     const pathname = new URL(request.url, "http://localhost").pathname;
+    if (blockInstall && /\/archive\.[a-f0-9]+\.js$/.test(pathname))
+      return response.writeHead(503).end("temporarily unavailable");
     const target = path.resolve(
       root,
       "." + (pathname.endsWith("/") ? pathname + "index.html" : pathname),
@@ -20,11 +24,15 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
       return response.writeHead(404).end();
     try {
       let body = await fs.readFile(target);
+      if (target.endsWith("index.html"))
+        body = Buffer.from(body.toString()
+          .replace(/news-shell-([a-f0-9]{16})/, "news-shell-$1-test" + revision)
+          .replace("<body", '<body data-test-revision="' + revision + '"'));
       if (pathname === "/sw.js")
         body = Buffer.from(
           body
             .toString()
-            .replace(/news-shell-([a-f0-9]+)/, "news-shell-$1-test" + revision)
+            .replace(/news-shell-([a-f0-9]{16})/, "news-shell-$1-test" + revision)
             .replace(/news-app-([a-f0-9]+)/, "news-app-$1-test" + appRevision),
         );
       if (pathname === "/sw.js" && process.env.NEWS_LEGACY_SAFARI)
@@ -189,97 +197,87 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     assert(!cachedUrls.some((url) => /news\.json|news-refresh/.test(url)));
 
     await page.evaluate(() => caches.open("unrelated-test-cache"));
-    // A new guide edition changes the offline cache, but not the website UI.
-    // Keep a tab open to exercise a pending content update across reopenings.
+    async function waitRevision(tab, expected) {
+      await waitForBrowser(tab, async expected => {
+        const controller = navigator.serviceWorker.controller;
+        if (!controller || controller.state !== "activated") return false;
+        return new Promise(resolve => {
+          const channel = new MessageChannel();
+          channel.port1.onmessage = e => { channel.port1.close(); resolve(e.data.cacheName?.endsWith("test" + expected)); };
+          controller.postMessage({type: "GET_VERSION"}, [channel.port2]);
+        });
+      }, expected);
+    }
+    // Content updates activate silently without reloading a reader's open page.
+    await page.evaluate(() => { window.openReaderMarker = "keep-reading"; });
     revision = 2;
-    await page.evaluate(async () =>
-      (await navigator.serviceWorker.getRegistration()).update(),
-    );
-    await page.waitForFunction(
-      async () =>
-        (await navigator.serviceWorker.getRegistration()).waiting?.state ===
-        "installed",
-    );
+    await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
+    await waitRevision(page, 2);
+    assert.equal(await page.evaluate(() => window.openReaderMarker), "keep-reading");
+    assert.equal(await page.locator("#pwa-update, #apply-update").count(), 0);
     for (const width of [390, 1440]) {
-      await page.setViewportSize({ width, height: 844 });
-      await page.reload({ waitUntil: "networkidle" });
-      assert(
-        await page.locator("#pwa-update").isHidden(),
-        "guide content updates must not prompt news readers on mobile or desktop",
-      );
+      await page.setViewportSize({width, height: 844});
+      await page.reload({waitUntil: "networkidle"});
+      assert.equal(await page.locator("body").getAttribute("data-test-revision"), "2");
     }
     const guide = await context.newPage();
-    await guide.goto(base + "/guide/", { waitUntil: "networkidle" });
-    await guide.locator("#pwa-update").waitFor({ state: "visible" });
-    assert.match(
-      await guide.locator("#pwa-update").innerText(),
-      /生活指南内容有更新/,
-    );
-    assert(await page.locator("#pwa-update").isHidden());
-    await Promise.all([
-      guide.waitForNavigation({ waitUntil: "networkidle" }),
-      guide.click("#apply-update"),
-    ]);
+    await guide.goto(base + "/guide/", {waitUntil: "networkidle"});
+    assert.equal(await guide.locator("#pwa-update, #apply-update").count(), 0);
+    await guide.locator("#offline-status.ready").waitFor();
     await guide.close();
-    await page.reload({ waitUntil: "networkidle" });
-    assert(await page.locator("#pwa-update").isHidden());
 
-    // Actual UI updates still notify readers and apply atomically.
+    // Refresh gets new HTML even when offline-package installation fails. The
+    // previous complete edition remains usable offline until the retry succeeds.
     revision = 3;
     appRevision = 2;
-    await page.evaluate(async () =>
-      (await navigator.serviceWorker.getRegistration()).update(),
-    );
-    await page
-      .locator("#pwa-update")
-      .waitFor({ state: "visible", timeout: 15000 });
-    await Promise.all([
-      page.waitForNavigation({ waitUntil: "networkidle" }),
-      page.click("#apply-update"),
-    ]);
+    blockInstall = true;
+    await page.reload({waitUntil: "networkidle"});
+    assert.equal(await page.locator("body").getAttribute("data-test-revision"), "3");
+    await page.evaluate(async () => (await navigator.serviceWorker.getRegistration()).update());
+    await waitForBrowser(page, async () => !(await navigator.serviceWorker.getRegistration()).installing);
+    await waitRevision(page, 2);
+    await context.setOffline(true);
+    await page.reload({waitUntil: "networkidle"});
+    assert.equal(await page.locator("body").getAttribute("data-test-revision"), "2");
     await page.locator(".article").first().waitFor();
-    const keys = await page.evaluate(() => caches.keys());
-    assert.deepEqual(
-      keys
-        .filter((k) => k.startsWith("news-shell-"))
-        .map((k) => k.endsWith("test3")),
-      [true],
-    );
-    assert(keys.includes("unrelated-test-cache"));
-    assert(await page.locator("#pwa-update").isHidden());
-    await page.reload({ waitUntil: "networkidle" });
-    assert(
-      await page.locator("#pwa-update").isHidden(),
-      "reopening the current application version must not repeat the update prompt",
-    );
-    const other = await context.newPage();
-    await other.goto(base, { waitUntil: "networkidle" });
-    await page.evaluate(() => {
-      window.openReaderMarker = "keep-reading";
+    blockInstall = false;
+    await context.setOffline(false);
+    await page.reload({waitUntil: "networkidle"});
+    assert.equal(await page.locator("body").getAttribute("data-test-revision"), "3");
+    await waitRevision(page, 3);
+
+    const game = await context.newPage();
+    game.on("pageerror", error => errors.push(error.message));
+    await game.goto(base + "/games/#mines");
+    await game.locator("#offline-status.ready").waitFor({ state: "attached" });
+    await game.evaluate(async () => {
+      window.playingMarker = "keep-playing";
+      const cache = document.querySelector('meta[name="news-shell-cache"]').content;
+      await (await caches.open(cache)).put("/assets/news/kept.111111111111.js", new Response("older open game resource"));
     });
+    const other = await context.newPage();
+    await other.goto(base, {waitUntil: "networkidle"});
+    await page.evaluate(() => { window.openReaderMarker = "keep-reading"; });
     revision = 4;
     appRevision = 3;
-    await page.evaluate(async () =>
-      (await navigator.serviceWorker.getRegistration()).update(),
-    );
-    await page
-      .locator("#pwa-update")
-      .waitFor({ state: "visible", timeout: 15000 });
-    await other
-      .locator("#pwa-update")
-      .waitFor({ state: "visible", timeout: 15000 });
-    await Promise.all([
-      other.waitForNavigation({ waitUntil: "networkidle" }),
-      other.click("#apply-update"),
-    ]);
-    await page
-      .locator("#pwa-update")
-      .waitFor({ state: "hidden", timeout: 15000 });
-    assert.equal(
-      await page.evaluate(() => window.openReaderMarker),
-      "keep-reading",
-      "an update accepted in another tab clears the notice without reloading the reader",
-    );
+    await other.reload({waitUntil: "networkidle"});
+    assert.equal(await other.locator("body").getAttribute("data-test-revision"), "4");
+    await waitRevision(other, 4);
+    assert.equal(await page.evaluate(() => window.openReaderMarker), "keep-reading");
+    assert.equal(await game.evaluate(() => window.playingMarker), "keep-playing");
+    assert.equal(await page.locator("#pwa-update, #apply-update").count(), 0);
+    await context.setOffline(true);
+    assert.equal(await game.evaluate(async () => (await fetch("/assets/news/kept.111111111111.js")).text()), "older open game resource");
+    await game.locator("#offline-status.ready").waitFor({ state: "attached" });
+    await context.setOffline(false);
+    await game.close();
+    await page.reload({waitUntil: "networkidle"});
+    assert.equal(await page.locator("body").getAttribute("data-test-revision"), "4");
+    await waitForBrowser(page, async () => {
+      const keys = (await caches.keys()).filter(k => k.startsWith("news-shell-"));
+      return keys.length === 1 && keys[0].endsWith("test4");
+    });
+    assert((await page.evaluate(() => caches.keys())).includes("unrelated-test-cache"));
     await other.close();
     for (const path of [
       "/blog/",
@@ -317,7 +315,7 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
       fullPage: true,
     });
     console.log(
-      "PASS: installability, offline reopening/search/bookmarks, guide-only updates stay silent on mobile/desktop news, actual UI updates apply once, multi-tab updates, cache cleanup, scoped routing, responsive layout.",
+      "PASS: refresh loads the latest HTML without prompts, automatic activation, failed-install offline fallback, uninterrupted readers/games, old asset retention, cache cleanup, bookmarks and mobile layout.",
     );
     await context.close();
   } finally {

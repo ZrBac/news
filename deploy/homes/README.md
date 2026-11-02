@@ -1,4 +1,16 @@
-# 私人看房本服务
+# 已停用的私人看房服务
+
+当前房源自动采集已迁到 GitHub Actions，结果发布到 GitHub Pages 的 `/data/home-candidates.json`；网站不再调用 `/api/homes/`，也不加载私人同步和笔记编辑代码。以下旧部署文档保留用于恢复；私人数据库、访问凭据和备份均不能复制到仓库或 Pages。
+
+迁移验收后，先用 `systemctl start zrbac-homes-backup.service` 创建 SQLite 一致性备份，再执行：
+
+```sh
+systemctl disable --now zrbac-home-candidates.timer zrbac-homes-backup.timer zrbac-homes.service
+```
+
+保留 `/var/lib/zrbac-homes/`、`/etc/zrbac-homes.env` 与现有备份。不要删除数据库、清空浏览器 IndexedDB，或把备份当成公开候选数据发布。停用旧采集定时器须在 Actions 实际成功采集并上线之后；不依赖旧接口即可浏览的页面不是迁移采集已完成的证据。原 Nginx 代理配置保留用于恢复，旧 API 停止后返回不可用；不影响同机其他网站。
+
+## 旧部署（仅供恢复）
 
 前端 `/homes/` 仍由 GitHub Pages 发布。现有阿里云服务器运行独立 WSGI 服务，监听 `127.0.0.1:8094`，由 `zacai.fun` 的 Nginx 代理 `/api/homes/`。不会新建收费云资源。
 

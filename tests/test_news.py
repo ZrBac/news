@@ -624,10 +624,33 @@ class BuildTests(unittest.TestCase):
                 self.assertNotIn('__HOMES_SHELL__', worker)
                 homes_shell = json.loads(re.search(r'const HOMES_SHELL = (\[.*?\]);', worker, re.S).group(1))
                 self.assertIn('/homes/', homes_shell)
-                for filename in ('homes.js', 'homes-core.js', 'homes.css'):
+                for filename in ('home-finder.js', 'homes-core.js', 'homes.css'):
                     stem, ext = filename.rsplit('.', 1)
                     asset = re.search(r'/assets/news/' + stem + r'\.[0-9a-f]{12}\.' + ext, homes).group(0)
                     self.assertIn(asset, homes_shell)
+                self.assertIn('/data/home-candidates.json', homes)
+                self.assertNotIn('homes-api', homes)
+                self.assertNotIn('homes-sync', homes)
+                self.assertNotIn('id="saved-homes"', homes)
+                self.assertFalse((output / 'assets/news/homes.js').exists())
+                self.assertFalse((output / 'assets/news/homes-sync.js').exists())
+                self.assertNotIn('/data/home-candidates.json', shell)
+                candidate_source = ROOT / 'news/data/home-candidates.json'
+                candidate_original = candidate_source.read_bytes() if candidate_source.exists() else None
+                try:
+                    listing_data = json.loads((output / 'data/home-candidates.json').read_text())
+                    listing_data['updatedAt'] = '2026-11-04T08:01:00Z'
+                    listing_data['items'][0]['total'] = 321
+                    candidate_source.write_text(json.dumps(listing_data))
+                    subprocess.run([sys.executable, str(ROOT / 'scripts/build_news.py'), '--output', str(output)], check=True, capture_output=True)
+                    self.assertEqual((output / 'sw.js').read_text(), worker,
+                                     'automatic listing changes must not trigger an application update')
+                    self.assertEqual(json.loads((output / 'data/home-candidates.json').read_text())['items'][0]['total'], 321)
+                finally:
+                    if candidate_original is not None:
+                        candidate_source.write_bytes(candidate_original)
+                    else:
+                        candidate_source.unlink(missing_ok=True)
                 guide = (output / 'guide/index.html').read_text()
                 guide_data = re.search(r'/assets/news/guide-index\.[0-9a-f]{12}\.json', guide).group(0)
                 self.assertIn(guide_data, shell)

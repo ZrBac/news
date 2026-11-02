@@ -1,4 +1,5 @@
 import copy
+import datetime as dt
 import hashlib
 import io
 import json
@@ -21,6 +22,57 @@ def empty_book():
 
 
 class CandidateTests(unittest.TestCase):
+    def test_pages_schedule_checks_at_nine_and_sixteen_beijing(self):
+        previous = {'scheduleRevision': collector.REVISION, 'updatedAt': '2026-11-02T01:01:00Z', 'sources': [{'ok': True}]}
+        def due(stamp):
+            return collector.refresh_due(previous, dt.datetime.fromisoformat(stamp.replace('Z', '+00:00')))
+        self.assertFalse(due('2026-11-02T07:59:00Z'))
+        self.assertTrue(due('2026-11-02T08:00:00Z'))
+        previous['updatedAt'] = '2026-11-02T08:01:00Z'
+        self.assertFalse(due('2026-11-03T00:59:00Z'))
+        self.assertTrue(due('2026-11-03T01:00:00Z'))
+        previous['sources'] = [{'ok': False}]
+        self.assertFalse(due('2026-11-02T08:59:00Z'))
+        self.assertTrue(due('2026-11-02T09:01:00Z'))
+
+    def test_public_snapshot_never_publishes_notebook_fields(self):
+        value = json.loads((Path(__file__).resolve().parents[1] / 'news/assets/home-candidates.json').read_text())
+        value.update(homes=['private'], profile={'private': True}, token='private', notebook='private')
+        value['items'][0].update(notes='private', photos=['private'], visits=['private'])
+        value['sources'][0]['token'] = 'private'
+        public = collector.public_snapshot(value)
+        self.assertNotIn('private', json.dumps(public))
+        self.assertTrue(all(collector.candidate_fits(item) for item in public['items']))
+        self.assertEqual(public['updatedAt'], value['updatedAt'])
+        with self.assertRaises(ValueError):
+            collector.public_snapshot(empty_book())
+
+    def test_previous_snapshot_chooses_newest_and_does_not_call_private_server(self):
+        seed = Path(__file__).resolve().parents[1] / 'news/assets/home-candidates.json'
+        value = json.loads(seed.read_text())
+        value['updatedAt'] = '2026-11-03T01:01:00Z'
+        with tempfile.TemporaryDirectory() as folder:
+            saved = Path(folder) / 'saved.json'
+            collector.write_atomic(saved, value)
+            with patch.object(collector.urllib.request, 'urlopen', side_effect=TimeoutError()):
+                actual = collector.read_previous(saved, 'https://news.zacai.fun/data/home-candidates.json', seed)
+            self.assertEqual(actual['updatedAt'], value['updatedAt'])
+            with self.assertRaises(ValueError):
+                collector.read_previous(saved, 'https://zacai.fun/api/homes/notebook', seed)
+
+    def test_failed_pages_refresh_retains_observations_and_marks_failed_sources(self):
+        seed = json.loads((Path(__file__).resolve().parents[1] / 'news/assets/home-candidates.json').read_text())
+        def unavailable(url):
+            raise TimeoutError()
+        result = collector.public_snapshot(collector.collect(seed, unavailable))
+        old = {item['id']: item for item in seed['items']}
+        self.assertGreater(len(result['items']), 0)
+        for item in result['items']:
+            self.assertEqual(item['checkedAt'], old[item['id']]['checkedAt'])
+            self.assertEqual(item['history'], old[item['id']]['history'])
+            self.assertTrue(item.get('stale'))
+        self.assertFalse(any(s['ok'] for s in result['sources']))
+
     def test_area_and_room_requirements_match_browser_rules(self):
         cases = json.loads((Path(__file__).parent / 'fixtures/home-requirements.json').read_text())
         for case in cases:

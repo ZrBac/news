@@ -1,7 +1,7 @@
 const { chromium } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 const assert = require("node:assert/strict");
 const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
-const endpoint = process.env.NEWS_REFRESH_ENDPOINT || "https://zacai.fun/api/news-refresh";
+const endpoint = process.env.NEWS_REFRESH_ENDPOINT || "https://news-refresh.944052796.workers.dev/api/news-refresh";
 
 (async () => {
   const browser = await chromium.launch({ args: ["--no-sandbox"] });

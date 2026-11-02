@@ -29,6 +29,23 @@ const legacyWorker = `const CACHE='news-shell-home-upgrade-legacy';
     if(e.data.type==='CHECK_OFFLINE') e.ports[0].postMessage({ready:false,reason:'version'});
   });`;
 
+async function readBook(page) {
+  return page.evaluate(async () => {
+    const db = await new Promise((resolve, reject) => {
+      const r = indexedDB.open("zrbac-home-book", 1);
+      r.onsuccess = () => resolve(r.result);
+      r.onerror = () => reject(r.error);
+    });
+    try {
+      return await new Promise((resolve, reject) => {
+        const r = db.transaction("notebook").objectStore("notebook").get("state");
+        r.onsuccess = () => resolve(r.result);
+        r.onerror = () => reject(r.error);
+      });
+    } finally { db.close(); }
+  });
+}
+
 (async () => {
   let legacy = true,
     blockedDownloads = 0,
@@ -143,7 +160,7 @@ const legacyWorker = `const CACHE='news-shell-home-upgrade-legacy';
     );
     await page.goto(base + "/homes/live/");
     await page.evaluate(() =>
-      Promise.all([window.homeCandidatesReady, window.homesInitialLoad]),
+      window.homeCandidatesReady,
     );
     assert.equal(
       await page.locator(".candidate-card").count(),
@@ -151,7 +168,7 @@ const legacyWorker = `const CACHE='news-shell-home-upgrade-legacy';
       "new entrance works while the old worker is still active",
     );
     assert.deepEqual(
-      await page.evaluate(() => window.HomeNotebook.snapshot()),
+      await readBook(page),
       book,
     );
     for (let i = 0; i < 100 && blockedDownloads < 2; i++)
@@ -205,18 +222,18 @@ const legacyWorker = `const CACHE='news-shell-home-upgrade-legacy';
       page.waitForNavigation(),
       page.locator("#apply-update").click(),
     ]);
-    await page.evaluate(() => window.homesInitialLoad);
+    await page.evaluate(() => window.homeCandidatesReady);
     assert.deepEqual(
-      await page.evaluate(() => window.HomeNotebook.snapshot()),
+      await readBook(page),
       book,
       "updating the worker preserves the notebook",
     );
     markNetwork = true;
     await page.goto(base + "/homes/");
     await page.locator('[data-current-network="yes"]').waitFor();
-    await page.evaluate(() => window.homesInitialLoad);
+    await page.evaluate(() => window.homeCandidatesReady);
     assert.deepEqual(
-      await page.evaluate(() => window.HomeNotebook.snapshot()),
+      await readBook(page),
       book,
     );
     for (const width of [320, 390, 768, 1440]) {
@@ -231,7 +248,7 @@ const legacyWorker = `const CACHE='news-shell-home-upgrade-legacy';
     await context.setOffline(true);
     await page.goto(base + "/homes/live/");
     await page.evaluate(() =>
-      Promise.all([window.homeCandidatesReady, window.homesInitialLoad]),
+      window.homeCandidatesReady,
     );
     assert.equal(
       await page.locator(".candidate-card").count(),
@@ -239,7 +256,7 @@ const legacyWorker = `const CACHE='news-shell-home-upgrade-legacy';
       "new entrance also has an offline fallback after updating",
     );
     assert.deepEqual(
-      await page.evaluate(() => window.HomeNotebook.snapshot()),
+      await readBook(page),
       book,
     );
     assert(

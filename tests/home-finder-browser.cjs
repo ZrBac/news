@@ -1,291 +1,87 @@
-const { chromium, devices } = require(
-  process.env.PLAYWRIGHT_MODULE || "playwright",
-);
+const { chromium, devices } = require(process.env.PLAYWRIGHT_MODULE || "playwright");
 const assert = require("node:assert/strict");
-const { spawn } = require("node:child_process");
-const path = require("node:path");
 const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
-const server = spawn(
-  "python3",
-  [path.join(__dirname, "homes_api_testserver.py"), new URL(base).origin],
-  { stdio: ["ignore", "pipe", "inherit"] },
-);
-async function boot() {
-  return new Promise((resolve, reject) => {
-    let output = "";
-    const timer = setTimeout(
-      () => reject(new Error("test backend did not start")),
-      10000,
-    );
-    server.stdout.on("data", (chunk) => {
-      output += chunk;
-      if (output.includes("\n")) {
-        clearTimeout(timer);
-        resolve(JSON.parse(output.split("\n")[0]));
-      }
-    });
-    server.on("exit", (code) => {
-      clearTimeout(timer);
-      reject(new Error("test backend exited " + code));
-    });
-  });
-}
-async function add(page, name) {
-  await page.locator("#add-home").click();
-  await page.locator('#home-form [name="name"]').fill(name);
-  await page.locator('#home-form [type="submit"]').click();
-  await page.locator("#home-editor").waitFor({ state: "hidden" });
-}
-const synced = async (page) => {
-  try {
-    await page.waitForFunction(() =>
-      document
-        .querySelector("#cloud-status")
-        .textContent.startsWith("已同步到"),
-    );
-  } catch (error) {
-    throw new Error(
-      `${error.message}; status=${await page.locator("#cloud-status").innerText()}; dialog=${await page.locator("#sync-error").textContent()}`,
-    );
-  }
-};
 (async () => {
-  const config = await boot(),
-    api = `http://127.0.0.1:${config.port}/api/homes`;
   const browser = await chromium.launch({ args: ["--no-sandbox"] });
   try {
-    const errors = [];
-    async function device() {
-      const context = await browser.newContext({
-        ...devices["iPhone 13"],
-        serviceWorkers: "block",
-        permissions: ["local-network-access"],
-      });
-      await context.route("**/homes/", async (route) => {
-        const response = await route.fetch();
-        await route.fulfill({
-          response,
-          body: (await response.text()).replace(
-            'content="https://zacai.fun/api/homes"',
-            `content="${api}"`,
-          ),
-        });
-      });
-      const page = await context.newPage();
-      page.on("pageerror", (error) => errors.push(error.message));
-      page.on("console", (msg) => {
-        if (msg.type() === "error" && msg.text().includes("fetch"))
-          console.log(msg.text());
-      });
-      page.on("requestfailed", (request) => {
-        if (request.url().startsWith(api))
-          console.log("Test API request failed:", request.failure()?.errorText);
-      });
-      page.on("response", (response) => {
-        if (response.url().startsWith(api) && response.status() >= 400)
-          console.log("Test API status:", response.status());
-      });
-      return { page, context };
-    }
-    const first = await device(),
-      second = await device();
-    const a = first.page,
-      b = second.page;
-    await a.goto(base + "/homes/");
-    await a.evaluate(() =>
-      Promise.all([window.homeCandidatesReady, window.homesInitialLoad]),
-    );
-    assert(
-      (await a.locator(".candidate-card").count()) > 0,
-      "prepopulated budget candidates",
-    );
-    await a.locator("#candidate-kind").selectOption("resale");
-    const firstCommunities = await a
-      .locator(".candidate-card h3")
-      .allTextContents();
-    assert.equal(
-      firstCommunities.length,
-      12,
-      "more than six candidates are initially visible",
-    );
-    assert.equal(
-      new Set(firstCommunities).size,
-      firstCommunities.length,
-      "show a range of communities first",
-    );
-    await a.locator("#candidate-more").click();
-    assert.equal(
-      await a.locator(".candidate-card").count(),
-      24,
-      "load more qualifying candidates",
-    );
-    await a.locator("#candidate-area").selectOption("西湖");
-    await a.locator("#candidate-region").selectOption("三墩");
-    assert((await a.locator(".candidate-card").count()) > 0);
-    for (const card of await a.locator(".candidate-card").all()) {
-      assert.match(await card.innerText(), /西湖 · 三墩/);
-    }
-    await a.locator("#candidate-area").selectOption("上城");
-    assert.equal(
-      await a.locator("#candidate-region").inputValue(),
-      "",
-      "changing district resets an incompatible region",
-    );
-    await a.locator("#candidate-area").selectOption("");
-    await a.locator("#candidate-kind").selectOption("new");
-    await a.locator("[data-save-candidate]").first().click();
-    await a.waitForFunction(
-      () => document.querySelectorAll(".home-card").length === 1,
-    );
-    assert.match(
-      await a.locator(".home-card").innerText(),
-      /价格待补充/,
-      "project estimate is not a unit asking quote",
-    );
-    await a.locator("#candidate-kind").selectOption("resale");
-    await a.locator("[data-save-candidate]").first().click();
-    await a.waitForFunction(
-      () => document.querySelectorAll(".home-card").length === 2,
-    );
-    assert.match(await a.locator("#home-list").innerText(), /挂牌价/);
+    const context = await browser.newContext({ ...devices["iPhone 13"] });
+    await context.addInitScript(require("./legacy-safari.cjs"));
+    const page = await context.newPage(), errors = [], external = [];
+    page.on("pageerror", e => errors.push(e.message));
+    page.on("request", r => { if (!r.url().startsWith(base)) external.push(r.url()); });
+    const now = new Date().toISOString();
+    const item = {id: "new-1", kind: "new", name: "测试新盘", district: "西湖", region: "三墩", address: "测试路",
+      url: "https://hz.newhouse.fang.com/loupan/1.htm", unitPrice: null, total: 320, priceBasis: "project",
+      areas: [110, 120], layout: "3室", status: "在售", source: "test", checkedAt: now, firstSeen: now, history: []};
+    const packet = {schema: 1, updatedAt: now, coverage: "公开测试来源", sources: [{id: "test", name: "房天下", url: item.url, ok: true, checkedAt: now}], items: [item,
+      ...Array.from({length: 14}, (_, i) => ({...item, id: "resale-" + i, kind: "resale", name: "测试小区" + i,
+        url: "https://m.fang.com/esf/hz/3_" + i + ".html", priceBasis: "listing", total: 330, areas: [110,110], layout: "3室2厅", district: "余杭", region: "闲林"})),
+      {...item, id: "small", name: "不符合面积", areas: [90,90]},
+      {...item, id: "two", name: "不符合户型", layout: "2室"},
+      {...item, id: "sold", name: "售罄新盘", status: "售罄"},
+      {...item, id: "escape", name: '<img id="bad" src=x onerror="window.bad=1">', total: 400},
+    ]};
+    let fail = false;
+    await page.route("**/data/home-candidates.json", route => fail ? route.abort() : route.fulfill({json: packet}));
+    await page.goto(base + "/homes/#sync=test-retired-fragment");
+    await page.evaluate(() => window.homeCandidatesReady);
+    assert.equal(new URL(page.url()).hash, "", "retired private link is cleared");
+    assert.equal(await page.locator("h1").innerText(), "杭州房源");
+    assert.equal(await page.locator(".candidate-card").count(), 12);
+    assert.equal(await page.locator("#cloud-connect, #add-home, #saved-homes, [data-save-candidate]").count(), 0);
+    assert.equal(await page.evaluate(() => typeof window.HomeNotebook), "undefined");
+    assert.match(await page.locator('[data-candidate="new-1"]').innerText(), /楼盘总价参考/);
+    await page.locator("#candidate-more").click();
+    assert.equal(await page.locator(".candidate-card").count(), 15);
+    await page.selectOption("#candidate-kind", "resale");
+    assert.equal(await page.locator(".candidate-card").count(), 12);
+    await page.selectOption("#candidate-area", "西湖");
+    assert.equal(await page.locator(".candidate-card").count(), 0);
+    await page.selectOption("#candidate-kind", "new");
+    assert.equal(await page.locator(".candidate-card").count(), 1);
+    await page.fill("#candidate-budget", "300");
+    await page.locator("#candidate-budget").dispatchEvent("change");
+    assert.equal(await page.locator(".candidate-card").count(), 0);
+    await page.fill("#candidate-budget", "350");
+    await page.locator("#candidate-budget").dispatchEvent("change");
+    await page.selectOption("#candidate-scope", "all");
+    assert.equal(await page.locator(".candidate-card").count(), 3);
+    assert.equal(await page.locator("#bad").count(), 0);
+    assert.equal(await page.locator('[data-candidate="small"], [data-candidate="two"]').count(), 0);
+    await page.selectOption("#candidate-scope", "budget");
+    await page.locator(".home-help summary").click();
+    packet.items[0].total = 310;
+    packet.items[0].history = [{at: now, changes: {total: {from: 320, to: 310}}}];
+    await page.locator("#candidate-refresh").click();
+    await page.waitForFunction(() => document.querySelector('[data-candidate="new-1"] .home-price').textContent.includes("310"));
+    await page.waitForFunction(() => !document.querySelector("#candidate-refresh").disabled);
+    assert.match(await page.locator(".candidate-history").innerText(), /1 次来源信息变化/);
+    fail = true;
+    await page.locator("#candidate-refresh").click();
+    await page.waitForFunction(() => document.querySelector("#candidate-message").textContent.includes("上次结果"));
+    assert.match(await page.locator('[data-candidate="new-1"] .home-price').innerText(), /310/);
     for (const width of [320, 390, 768, 1440]) {
-      await a.setViewportSize({ width, height: 844 });
-      assert(
-        await a.evaluate(
-          () => document.documentElement.scrollWidth <= innerWidth,
-        ),
-        "candidate layout overflow " + width,
-      );
+      await page.setViewportSize({width, height: 844});
+      assert(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), "no overflow at " + width);
     }
-    await a.setViewportSize({ width: 390, height: 844 });
-    await a.screenshot({ path: "/tmp/home-finder-mobile.png", fullPage: true });
-    await a.locator("[data-detail]").first().click();
-    await a
-      .locator('#visit-form [name="note"]')
-      .fill("两人共用的现场照片与笔记");
-    await a.locator("#visit-photos").setInputFiles({
-      name: "room.png",
-      mimeType: "image/png",
-      buffer: Buffer.from(
-        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aEfoAAAAASUVORK5CYII=",
-        "base64",
-      ),
-    });
-    await a.locator('#visit-form [type="submit"]').click();
-    await a.waitForFunction(
-      () => document.querySelectorAll(".home-photo-grid img").length === 1,
-    );
-    await a.locator('[data-close="home-detail"]').first().click();
-    // An existing local notebook migrates when the private link is opened.
-    await a.goto(base + "/homes/#sync=" + config.token);
-    await synced(a);
-    assert.equal(
-      new URL(a.url()).hash,
-      "",
-      "private token removed from the address bar",
-    );
-    await b.goto(base + "/homes/#sync=" + config.token);
-    await synced(b);
-    assert.equal(
-      await b.locator(".home-card").count(),
-      2,
-      "second device receives migrated data",
-    );
-    await b.locator("[data-detail]").first().click();
-    assert.match(
-      await b.locator("#detail-content").innerText(),
-      /两人共用的现场照片与笔记/,
-    );
-    assert.match(
-      await b.locator(".home-photo-grid img").getAttribute("src"),
-      /^data:image\/jpeg;base64,/,
-    );
-    await b.locator('[data-close="home-detail"]').first().click();
-    // A device can edit while disconnected. An online edit on the other device must survive.
-    await first.context.setOffline(true);
-    await add(a, "离线记录 A");
-    await add(b, "另一设备记录 B");
-    await synced(b);
-    await first.context.setOffline(false);
-    await a.locator("#cloud-sync").click();
-    await a.locator("#cloud-merge").waitFor({ state: "visible" });
-    a.on("dialog", (dialog) => dialog.accept());
-    await a.locator("#cloud-merge").click();
-    await synced(a);
-    assert.equal(await a.locator(".home-card").count(), 4);
-    await b.locator("#cloud-sync").click();
-    await b.waitForFunction(
-      () => document.querySelectorAll(".home-card").length === 4,
-    );
-    assert.match(await b.locator("#home-list").innerText(), /离线记录 A/);
-    assert.match(await b.locator("#home-list").innerText(), /另一设备记录 B/);
-    // A remote change must not replace the draft in an open editor.
-    await b.locator("[data-edit]").first().click();
-    await b.locator('#home-form [name="reason"]').fill("未保存的现场意见");
-    await add(a, "较新的服务端记录");
-    await synced(a);
-    await b.evaluate(() => window.HomeCloud.sync());
-    assert.equal(
-      await b.locator('#home-form [name="reason"]').inputValue(),
-      "未保存的现场意见",
-    );
-    b.on("dialog", (dialog) => dialog.accept());
-    await b.locator('[data-close="home-editor"]').first().click();
-    await b.waitForFunction(
-      () => document.querySelectorAll(".home-card").length === 5,
-    );
-    // Cached data from an older release must also obey the stricter requirements,
-    // even when the API is unreachable and "all observations" is selected.
-    const before = await a.evaluate(() => window.HomeNotebook.snapshot().homes);
-    await a.evaluate(() => {
-      const key = "zrbac-home-candidates-v1",
-        feed = JSON.parse(localStorage.getItem(key));
-      const candidate = {
-        ...feed.items[0],
-        kind: "resale",
-        priceBasis: "listing",
-        total: 330,
-        areas: [100, 100],
-        layout: "3室2厅",
-      };
-      feed.items = [
-        { ...candidate, id: "qualifying-cache", name: "符合条件的旧缓存" },
-        { ...candidate, id: "small-cache", areas: [99.99, 99.99] },
-        { ...candidate, id: "two-room-cache", layout: "2室3厅" },
-        { ...candidate, id: "unknown-cache", layout: "" },
-      ];
-      localStorage.setItem(key, JSON.stringify(feed));
-    });
-    await first.context.route(api + "/candidates", (route) => route.abort());
-    await a.reload();
-    await a.evaluate(() =>
-      Promise.all([window.homeCandidatesReady, window.homesInitialLoad]),
-    );
-    await a.locator("#candidate-scope").selectOption("all");
-    assert.equal(await a.locator(".candidate-card").count(), 1);
-    assert.equal(
-      await a.locator(".candidate-card h3").textContent(),
-      "符合条件的旧缓存",
-    );
-    assert.deepEqual(
-      await a.evaluate(() => window.HomeNotebook.snapshot().homes),
-      before,
-      "existing notebook entries remain intact",
-    );
-    assert.match(
-      await a.locator("#candidate-requirements").textContent(),
-      /100㎡.*3 室.*不含两室/,
-    );
+    await page.setViewportSize({width: 390, height: 844});
+    await page.locator("#theme-toggle").click();
+    assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+    await page.locator("#install-app").click();
+    assert(await page.locator("#info-dialog").isVisible());
+    await page.locator("#close-dialog").click();
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.waitForFunction(() => document.querySelector("#offline-status").dataset.state === "ready");
+    await page.evaluate(() => localStorage.removeItem("zrbac-home-candidates-v1"));
+    await page.unroute("**/data/home-candidates.json");
+    await context.setOffline(true);
+    await page.reload({waitUntil: "domcontentloaded"});
+    await page.evaluate(() => window.homeCandidatesReady);
+    assert.equal(await page.locator(".candidate-card").count(), 12, "Cache Storage keeps listings when localStorage is absent");
+    assert.match(await page.locator("#candidate-message").innerText(), /离线/);
+    assert.match(await page.locator('[data-candidate="new-1"] .home-price').innerText(), /310/);
     assert.deepEqual(errors, []);
-    console.log(
-      "Home finder: size/room requirements across cached feeds, pagination, preserved saves, candidate price provenance, mobile layout, migration and two-device sync passed",
-    );
-  } finally {
-    await browser.close();
-  }
-})()
-  .catch((error) => {
-    console.error(error);
-    process.exitCode = 1;
-  })
-  .finally(() => server.kill("SIGTERM"));
+    assert.deepEqual(external, [], "public listing page does not call a server API");
+    console.log("PASS: static listings, filters, observed changes, safe rendering, no notebook/server calls, mobile and offline recovery.");
+  } finally { await browser.close(); }
+})().catch(error => { console.error(error); process.exitCode = 1; });

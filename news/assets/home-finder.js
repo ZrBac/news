@@ -2,8 +2,8 @@
   "use strict";
   const H = window.HomeBook,
     $ = (s) => document.querySelector(s);
-  const API = $('meta[name="homes-api"]').content.replace(/\/$/, "");
-  const FALLBACK = $('meta[name="home-candidates-fallback"]').content;
+  const FEED = $('meta[name="home-candidates-feed"]').content;
+  const DATA_CACHE = "news-home-candidates-data-v1";
   const CACHE = "zrbac-home-candidates-v1";
   const esc = (v) =>
     String(v ?? "").replace(
@@ -42,8 +42,11 @@
     limit = 12,
     origin = "",
     loading = false;
-  const profile = () =>
-    window.HomeNotebook?.snapshot().profile || H.defaults().profile;
+  const profile = () => ({
+    budgetMin: 300,
+    budgetMax: Number($("#candidate-budget").value) || 350,
+    priority: "new",
+  });
   const unavailable = (c) =>
     c.missing ||
     c.mixedUse ||
@@ -137,9 +140,6 @@
         .join("");
     regionSelect.value = regions.includes(selectedRegion) ? selectedRegion : "";
     const region = regionSelect.value;
-    const saved = new Set(
-      (window.HomeNotebook?.snapshot().homes || []).map((h) => h.sourceUrl),
-    );
     const all = feed.items.filter(
       (c) =>
         (!kind || c.kind === kind) &&
@@ -210,7 +210,7 @@
               ? `按此均价，${p.budgetMax} 万约对应 ${number((p.budgetMax * 10000) / c.unitPrice)}㎡，有无该面积房源待核实。`
               : "";
           const map = `https://uri.amap.com/search?keyword=${encodeURIComponent("杭州 " + c.name)}&city=杭州&view=map`;
-          return `<article class="candidate-card" data-candidate="${esc(c.id)}"><div class="home-card-top"><span class="home-tag">${c.kind === "new" ? "新房" : "二手房"}</span><span class="home-tag ${category(c, p) === "budget" ? "active" : ""}">${esc(scopeLabel)}</span></div><h3>${esc(c.name)}</h3><p class="home-muted">${esc([c.district, c.region, area(c), c.layout.replace(/\s*—.*$/, "")].filter(Boolean).join(" · "))}</p><p class="home-price">${esc(q.main)}</p><p class="home-quote">${esc(q.note)}</p>${c.unitPrice && c.total ? `<p class="home-quote">参考均价 ${esc(c.unitPrice)} 元/㎡</p>` : ""}${affordable ? `<p class="candidate-note">${esc(affordable)}</p>` : ""}<p class="candidate-note">${esc(c.address || "详细位置请查看来源与地图")}<br>通勤待核实 · ${esc(c.status)}</p>${caution ? `<p class="home-caution">${esc(caution)}</p>` : ""}${history(c)}<div class="candidate-bottom"><div><a href="${esc(url(c.url))}" target="_blank" rel="noopener noreferrer">查看房源 ↗</a> <a href="${esc(map)}" target="_blank" rel="noopener noreferrer">地图 ↗</a></div><button data-save-candidate="${esc(c.id)}" ${saved.has(c.url) ? "disabled" : ""}>${saved.has(c.url) ? "已收藏" : "＋ 收藏"}</button></div><p class="candidate-observed home-muted">该条检查于 ${esc(date(c.checkedAt))}</p></article>`;
+          return `<article class="candidate-card" data-candidate="${esc(c.id)}"><div class="home-card-top"><span class="home-tag">${c.kind === "new" ? "新房" : "二手房"}</span><span class="home-tag ${category(c, p) === "budget" ? "active" : ""}">${esc(scopeLabel)}</span></div><h3>${esc(c.name)}</h3><p class="home-muted">${esc([c.district, c.region, area(c), c.layout.replace(/\s*—.*$/, "")].filter(Boolean).join(" · "))}</p><p class="home-price">${esc(q.main)}</p><p class="home-quote">${esc(q.note)}</p>${c.unitPrice && c.total ? `<p class="home-quote">参考均价 ${esc(c.unitPrice)} 元/㎡</p>` : ""}${affordable ? `<p class="candidate-note">${esc(affordable)}</p>` : ""}<p class="candidate-note">${esc(c.address || "详细位置请查看来源与地图")}<br>通勤待核实 · ${esc(c.status)}</p>${caution ? `<p class="home-caution">${esc(caution)}</p>` : ""}${history(c)}<div class="candidate-bottom"><div><a href="${esc(url(c.url))}" target="_blank" rel="noopener noreferrer">查看房源 ↗</a> <a href="${esc(map)}" target="_blank" rel="noopener noreferrer">地图 ↗</a></div></div><p class="candidate-observed home-muted">该条检查于 ${esc(date(c.checkedAt))}</p></article>`;
         })
         .join("") ||
       `<div class="home-empty"><h3>这批来源暂时没有符合条件的线索</h3><p>可以查看“价格待核实”，或切换区域和房源类型。列表未覆盖全部市场。</p></div>`;
@@ -245,7 +245,7 @@
       )
     )
       throw new Error("房源数据格式暂不可用");
-    // Apply the same requirements to old local caches, offline seeds and the API.
+    // Apply the same requirements to old local caches and the public static feed.
     feed = { ...value, items: value.items.filter(H.candidateFits) };
     render();
   }
@@ -254,86 +254,36 @@
     loading = true;
     $("#candidate-refresh").disabled = true;
     const controller = new AbortController(),
-      timeout = setTimeout(() => controller.abort(), 15000);
+      timeout = setTimeout(() => controller.abort(), 8000);
     try {
-      const response = await fetch(API + "/candidates", {
+      const response = await fetch(FEED, {
         cache: "no-store",
         signal: controller.signal,
         credentials: "omit",
       });
       if (!response.ok) throw new Error();
-      origin = "服务器";
+      origin = "";
       accept(await response.json());
       try {
         localStorage.setItem(CACHE, JSON.stringify(feed));
+      } catch {}
+      try {
+        await (await caches.open(DATA_CACHE)).put(FEED, new Response(JSON.stringify(feed), { headers: { "Content-Type": "application/json" } }));
       } catch {}
     } catch {
       origin = "连接暂不可用，显示上次结果 · ";
       if (feed) render();
       else
         $("#candidate-message").textContent =
-          "暂时无法读取候选，请联网后重试。你的收藏仍可使用。";
+          "暂时无法读取房源，请联网后点“重新读取最新结果”。";
     } finally {
       clearTimeout(timeout);
       loading = false;
       $("#candidate-refresh").disabled = false;
     }
   }
-  $("#candidate-list").addEventListener("click", async (event) => {
-    const button = event.target.closest("[data-save-candidate]");
-    if (!button) return;
-    const c = feed.items.find((x) => x.id === button.dataset.saveCandidate);
-    if (!c) return;
-    button.disabled = true;
-    try {
-      await window.homesInitialLoad;
-      const next = window.HomeNotebook.snapshot();
-      if (next.homes.some((h) => h.sourceUrl === c.url)) return;
-      const now = new Date().toISOString(),
-        q = price(c);
-      const observation = c.checkedAt?.slice(0, 10) || now.slice(0, 10);
-      next.homes.push(
-        H.home({
-          id: H.id(),
-          name: c.name,
-          kind: c.kind,
-          district: [c.district, c.region].filter(Boolean).join(" · "),
-          address: c.address || "",
-          sourceUrl: c.url,
-          size: c.areas?.[0] === c.areas?.[1] ? c.areas[0] : null,
-          layout: c.kind === "resale" ? c.layout : "",
-          createdAt: now,
-          updatedAt: now,
-          detail: `${q.main}；${q.note}。${c.unitPrice ? `参考均价 ${c.unitPrice} 元/㎡。` : ""}页面检查 ${date(c.checkedAt)}。${c.status}；通勤、余房及其他费用待核实。`,
-          commute: { driver: next.profile.driver },
-          prices:
-            c.priceBasis === "listing" && c.total
-              ? [
-                  {
-                    id: H.id(),
-                    amount: c.total,
-                    type: "asking",
-                    date: observation,
-                    source:
-                      "房天下页面报价；此日期为检查日期，非发布或成交日期",
-                    createdAt: now,
-                  },
-                ]
-              : [],
-          visits: [],
-        }),
-      );
-      await window.HomeNotebook.save(next, next.revision);
-      window.HomeNotebook.message(
-        `已收藏 ${c.name}，可在下方“我的收藏与看房记录”中查看${c.priceBasis === "listing" ? "。" : "。楼盘参考金额保存在说明里，取得具体房号报价后再记入价格记录。"}`,
-      );
-    } catch (error) {
-      window.HomeNotebook?.message(error.message);
-    } finally {
-      render();
-    }
-  });
   for (const id of [
+    "candidate-budget",
     "candidate-scope",
     "candidate-kind",
     "candidate-area",
@@ -349,8 +299,16 @@
     render();
   });
   $("#candidate-refresh").addEventListener("click", load);
-  window.addEventListener("homebookchange", render);
   window.addEventListener("online", load);
+  $("#close-dialog").addEventListener("click", () => $("#info-dialog").close());
+  $("#theme-toggle").addEventListener("click", () => {
+    const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    document.documentElement.dataset.theme = theme;
+    $('meta[name="theme-color"]').content = theme === "dark" ? "#181818" : "#ffffff";
+    try { localStorage.setItem("zrbac-news-theme", theme); } catch {}
+  });
+  // Retired shared links must not leave their private fragment visible in this public reader.
+  if (/^#sync=/.test(location.hash)) window.history.replaceState(null, "", location.pathname + location.search);
   window.homeCandidatesReady = (async () => {
     try {
       const cached = localStorage.getItem(CACHE);
@@ -361,13 +319,15 @@
     } catch {}
     if (!feed) {
       try {
-        const response = await fetch(FALLBACK);
-        if (response.ok) {
-          origin = "随页面保存的结果 · ";
+        const response = await (await caches.open(DATA_CACHE)).match(FEED);
+        if (response?.ok) {
+          origin = "上次结果 · ";
           accept(await response.json());
         }
       } catch {}
     }
-    await load();
+    if (navigator.onLine !== false) await load();
+    else if (feed) { origin = "离线，显示上次结果 · "; render(); }
+    else $("#candidate-message").textContent = "尚未保存房源，请联网打开一次。";
   })();
 })();

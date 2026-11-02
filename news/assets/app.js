@@ -872,7 +872,7 @@
         ${backup ? '<p class="price-status">中指云本轮暂未能核实，补充展示克而瑞公开周报，口径以原文为准。</p>' : status && status.status !== "ok" ? `<p class="price-status">${escape(housingIssue(status))}，保留已收录价格。</p>` : ""}</section>`;
       })
       .join("");
-    panel.innerHTML = `<a class="housing-home-book" href="/homes/live/"><span><strong>看房源 · 新房与二手房</strong><small>按预算和板块筛选，收藏后记录看房</small></span><span aria-hidden="true">→</span></a><h2 class="city-price-heading">杭州整体成交</h2><p class="price-intro">新房成交均价按周、二手房及其他月度统计按月发布。随网站自动检查，没有新数据时保留上次结果。</p>
+    panel.innerHTML = `<a class="housing-home-book" href="/homes/live/"><span><strong>看房源 · 新房与二手房</strong><small>按预算和板块筛选，每天检查房源与报价变化</small></span><span aria-hidden="true">→</span></a><h2 class="city-price-heading">杭州整体成交</h2><p class="price-intro">新房成交均价按周、二手房及其他月度统计按月发布。随网站自动检查，没有新数据时保留上次结果。</p>
       ${data.checkedAt ? `<p class="price-published housing-checked">最近检查 ${escape(formatTime(data.checkedAt))}（北京时间）；数据日期以各项统计期为准。</p>` : ""}
       <div class="housing-links" aria-label="楼盘信息查询">
         <button type="button" class="text-button" data-housing-jump>楼盘动态 ↓</button>
@@ -2113,7 +2113,7 @@
     notice.textContent = "正在请求更新…";
     const endpoint =
       document.querySelector('meta[name="news-refresh-endpoint"]')?.content ||
-      "https://zacai.fun/api/news-refresh";
+      "https://news-refresh.944052796.workers.dev/api/news-refresh";
     let baseline = Date.parse(state.data?.updatedAt || "") || 0;
     try {
       let result = await requestJSON(

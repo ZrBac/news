@@ -19,7 +19,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -37,9 +37,7 @@ jobs:
           node --check news/assets/editorial.js
           node --test tests/exchange-core.cjs
           node --check news/assets/pwa.js
-          node --check news/assets/homes.js
           node --check news/assets/homes-core.js
-          node --check news/assets/homes-sync.js
           node --check news/assets/home-finder.js
           node --test tests/homes-core.cjs
           node --check news/assets/guide.js
@@ -64,6 +62,23 @@ jobs:
         run: python scripts/collect_housing_prices.py --previous-url https://news.zacai.fun/data/latest.json
       - name: Update foreign currency to CNY reference rates
         run: python scripts/collect_exchange_rates.py --previous-url https://news.zacai.fun/data/latest.json
+      - name: Restore public home listing observations
+        uses: actions/cache/restore@v4
+        with:
+          path: news/data/home-candidates.json
+          key: home-candidates-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: home-candidates-v1-
+      - name: Check public home listings twice a day
+        id: home-candidates
+        continue-on-error: true
+        timeout-minutes: 6
+        run: python scripts/collect_home_candidates.py --previous-url https://news.zacai.fun/data/home-candidates.json
+      - name: Save public listing history
+        if: always() && steps.home-candidates.outcome != 'skipped'
+        uses: actions/cache/save@v4
+        with:
+          path: news/data/home-candidates.json
+          key: home-candidates-v1-${{ github.run_id }}-${{ github.run_attempt }}
       - name: Restore editorial results and usage ledger
         id: ai-cache
         uses: actions/cache/restore@v4

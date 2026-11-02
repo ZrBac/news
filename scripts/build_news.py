@@ -237,7 +237,7 @@ def main():
     p = argparse.ArgumentParser()
     p.add_argument('--output', type=Path, default=ROOT / '_site')
     args = p.parse_args()
-    refresh_endpoint = os.environ.get('NEWS_REFRESH_ENDPOINT', '').strip() or 'https://zacai.fun/api/news-refresh'
+    refresh_endpoint = os.environ.get('NEWS_REFRESH_ENDPOINT', '').strip() or 'https://news-refresh.944052796.workers.dev/api/news-refresh'
     endpoint = urlsplit(refresh_endpoint)
     if (endpoint.scheme != 'https' or not endpoint.hostname or endpoint.username or endpoint.password
             or endpoint.query or endpoint.fragment or endpoint.path != '/api/news-refresh'):
@@ -253,6 +253,9 @@ def main():
     shutil.copytree(ROOT / 'news/guide', output / 'guide')
     shutil.copytree(ROOT / 'news/homes', output / 'homes')
     shutil.copytree(ROOT / 'news/assets', output / 'assets/news', dirs_exist_ok=True)
+    # Keep the retired notebook implementation in Git for recovery, not in the site.
+    for name in ('homes.js', 'homes-sync.js', 'home-candidates.json'):
+        (output / 'assets/news' / name).unlink(missing_ok=True)
     chapters, static_paths = build_guide_reader(output)
     # Keep the previous edition available to older installed readers until they update.
     old_book = (ROOT / 'news/guide/book.json').read_bytes()
@@ -265,7 +268,7 @@ def main():
                 '<span class="skeleton-line title"></span><span class="skeleton-line"></span>'
                 '<span class="skeleton-line short"></span></div></div>')
     homepage = homepage.replace('__NEWS_SKELETON__', skeleton * 12)
-    homepage = homepage.replace('content="https://zacai.fun/api/news-refresh"',
+    homepage = homepage.replace('content="https://news-refresh.944052796.workers.dev/api/news-refresh"',
                                 f'content="{html_escape(refresh_endpoint, quote=True)}"')
     pages = {'/': homepage, '/games/': (output / 'games/index.html').read_text(),
              '/guide/': (output / 'guide/index.html').read_text(),
@@ -273,7 +276,7 @@ def main():
     pages.update({path: (output / path.lstrip('/') / 'index.html').read_text() for path in static_paths})
     shell_files = ['/', '/games/', '/guide/', '/homes/', '/manifest.webmanifest', '/assets/news/icon-180.png',
                    '/assets/news/icon-192.png', '/assets/news/icon-512.png']
-    for filename in ('compat.js', 'compat.css', 'archive.js', 'personal.js', 'exchange-core.js', 'editorial.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json', 'homes-core.js', 'homes-sync.js', 'homes.js', 'home-finder.js', 'home-candidates.json', 'homes.css'):
+    for filename in ('compat.js', 'compat.css', 'archive.js', 'personal.js', 'exchange-core.js', 'editorial.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json', 'homes-core.js', 'home-finder.js', 'homes.css'):
         asset = output / 'assets/news' / filename
         digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:12]
         versioned = asset.with_name(f'{asset.stem}.{digest}{asset.suffix}')
@@ -322,6 +325,13 @@ def main():
     worker = worker.replace('__GUIDE_REVISION__', json.dumps(json.loads(old_book)['revision']))
     (output / 'sw.js').write_text(worker)
     shutil.copytree(ROOT / 'news/data', output / 'data', dirs_exist_ok=True)
+    # Listing publications are data changes, not a new PWA version.
+    from collect_home_candidates import public_snapshot
+    candidates = ROOT / 'news/data/home-candidates.json'
+    if not candidates.is_file():
+        candidates = ROOT / 'news/assets/home-candidates.json'
+    (output / 'data/home-candidates.json').write_text(
+        json.dumps(public_snapshot(json.loads(candidates.read_text())), ensure_ascii=False, separators=(',', ':')) + '\n')
     (output / '.nojekyll').touch()
     data = json.loads((output / 'data/news.json').read_text())
     price_file = ROOT / 'news/data/housing.json'

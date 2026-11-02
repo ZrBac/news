@@ -9,6 +9,7 @@ import concurrent.futures
 import datetime as dt
 from html.parser import HTMLParser
 import json
+import math
 import os
 from pathlib import Path
 import re
@@ -19,6 +20,111 @@ import urllib.request
 
 MAX_PAGE = 2_500_000
 ROOT = Path(__file__).resolve().parents[1]
+REVISION = 'pages-candidates-v1'
+BEIJING = dt.timezone(dt.timedelta(hours=8))
+MAX_SNAPSHOT = 3_000_000
+
+
+def candidate_fits(item):
+    """Only publish known areas of at least 100 square metres and 3+ rooms."""
+    if not isinstance(item, dict):
+        return False
+    areas, layout = item.get('areas'), item.get('layout')
+    if (not isinstance(areas, list) or len(areas) != 2
+            or any(type(a) not in (int, float) or not math.isfinite(a) for a in areas)
+            or not 100 <= areas[0] <= areas[1] or not isinstance(layout, str)):
+        return False
+    numerals = dict(zip('零〇一二两三四五六七八九十', (0, 0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10)))
+    layout = re.sub(r'[零〇一二两三四五六七八九十]+', lambda m: str(numerals.get(m[0], 0)), layout)
+    groups = re.findall(r'(\d+(?:\.\d+)?(?:\s*[-–—~/、至到]\s*\d+(?:\.\d+)?)*)\s*(?:室|居)', layout)
+    rooms = [float(n) for group in groups for n in re.findall(r'\d+(?:\.\d+)?', group)]
+    return bool(rooms) and all(n.is_integer() and n >= 3 for n in rooms)
+
+
+def public_snapshot(value):
+    """Allow only public listing fields; never carry notebook data into Pages."""
+    if (not isinstance(value, dict) or value.get('schema') != 1
+            or not isinstance(value.get('items'), list) or len(value['items']) > 500
+            or not isinstance(value.get('sources'), list) or len(value['sources']) > 50):
+        raise ValueError('Invalid candidate snapshot')
+    checked = dt.datetime.fromisoformat(value['updatedAt'].replace('Z', '+00:00'))
+    if checked.tzinfo is None:
+        raise ValueError('Candidate timestamp must include timezone')
+    result = {k: value[k] for k in ('schema', 'updatedAt', 'scheduleRevision', 'coverage', 'notice') if k in value}
+    fields = ('id', 'kind', 'name', 'district', 'region', 'address', 'url', 'unitPrice', 'total',
+              'priceBasis', 'areas', 'layout', 'status', 'source', 'sourcePage', 'mixedUse',
+              'title', 'orientation', 'opening', 'delivery', 'checkedAt', 'firstSeen', 'missing', 'stale')
+    result['items'] = []
+    for item in value['items']:
+        if not candidate_fits(item):
+            continue
+        if (not isinstance(item.get('id'), str) or not isinstance(item.get('name'), str)
+                or not isinstance(item.get('source'), str) or item.get('kind') not in ('new', 'resale')
+                or not re.fullmatch(r'https://(?:hz\.newhouse\.fang\.com/loupan/\d+\.htm|m\.fang\.com/esf/hz/\d+_\d+\.html)', item.get('url', ''))):
+            raise ValueError('Invalid public listing')
+        row = {k: item[k] for k in fields if k in item}
+        row['history'] = [
+            {'at': event['at'], 'changes': {k: {p: change.get(p) for p in ('from', 'to')}
+             for k, change in event.get('changes', {}).items()
+             if k in ('unitPrice', 'total', 'status', 'opening', 'delivery')}}
+            for event in item.get('history', [])[-30:]]
+        if isinstance(item.get('crossCheck'), dict):
+            row['crossCheck'] = {k: item['crossCheck'][k] for k in ('status', 'url', 'checkedAt', 'stale') if k in item['crossCheck']}
+        result['items'].append(row)
+    result['sources'] = []
+    for source in value['sources']:
+        row = {k: source[k] for k in ('id', 'name', 'url', 'attemptedAt', 'ok', 'checkedAt', 'count', 'partial', 'error') if k in source}
+        row['pages'] = [{k: page[k] for k in ('url', 'ok', 'count', 'errorType', 'checkedAt') if k in page}
+                        for page in source.get('pages', [])[:3]]
+        result['sources'].append(row)
+    return result
+
+
+def refresh_due(previous, now):
+    if previous.get('scheduleRevision') != REVISION:
+        return True
+    try:
+        last = dt.datetime.fromisoformat(previous['updatedAt'].replace('Z', '+00:00'))
+        if last.tzinfo is None or last > now:
+            return True
+    except (KeyError, TypeError, ValueError):
+        return True
+    local = now.astimezone(BEIJING)
+    slot = local.replace(hour=16, minute=0, second=0, microsecond=0)
+    if local.hour < 9:
+        slot -= dt.timedelta(days=1)
+    elif local.hour < 16:
+        slot = slot.replace(hour=9)
+    if last < slot:
+        return True
+    # Retry a completely failed check at most hourly, without erasing its data.
+    return not any(s.get('ok') or s.get('partial') for s in previous.get('sources', [])) and now - last >= dt.timedelta(hours=1)
+
+
+def read_previous(path, previous_url=None, seed=None):
+    candidates = []
+    for local in (path, seed):
+        try:
+            if local and Path(local).is_file():
+                candidates.append(public_snapshot(json.loads(Path(local).read_text())))
+        except (OSError, KeyError, TypeError, ValueError):
+            pass
+    if previous_url:
+        # Public snapshots only. No access to the retired private notebook API.
+        parsed = urllib.parse.urlsplit(previous_url)
+        if parsed.scheme != 'https' or parsed.hostname != 'news.zacai.fun' or parsed.path != '/data/home-candidates.json' or parsed.username or parsed.query or parsed.fragment:
+            raise ValueError('Expected the public Pages candidate snapshot')
+        try:
+            with urllib.request.urlopen(urllib.request.Request(previous_url, headers={'Cache-Control': 'no-cache'}), timeout=20) as response:
+                raw = response.read(MAX_SNAPSHOT + 1)
+            if len(raw) > MAX_SNAPSHOT:
+                raise ValueError('Oversized candidate snapshot')
+            candidates.append(public_snapshot(json.loads(raw)))
+        except (OSError, KeyError, TypeError, ValueError):
+            print('Previous public snapshot unavailable; retaining the local seed.')
+    if not candidates:
+        return {}
+    return max(candidates, key=lambda value: dt.datetime.fromisoformat(value['updatedAt'].replace('Z', '+00:00')))
 
 
 class Node:
@@ -390,15 +496,24 @@ def write_atomic(path, value):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--output', default='/var/lib/zrbac-homes/candidates.json')
+    parser.add_argument('--output', type=Path, default=ROOT / 'news/data/home-candidates.json')
+    parser.add_argument('--previous-url')
+    parser.add_argument('--seed', type=Path, default=ROOT / 'news/assets/home-candidates.json')
+    parser.add_argument('--force', action='store_true')
     args = parser.parse_args()
     path = Path(args.output)
-    previous = json.loads(path.read_text()) if path.exists() else {}
-    result = collect(previous)
+    previous = read_previous(path, args.previous_url, args.seed)
+    if previous and not args.force and not refresh_due(previous, dt.datetime.now(dt.timezone.utc)):
+        write_atomic(path, previous)
+        print(json.dumps({'items': len(previous['items']), 'collection': 'not-due', 'checkedAt': previous['updatedAt']}))
+        return
+    result = public_snapshot(collect(previous))
+    result['scheduleRevision'] = REVISION
     write_atomic(path, result)
     print(json.dumps({'items': len(result['items']), 'successfulSources': sum(s['ok'] for s in result['sources'])}))
+    # A source outage must not prevent other news sections from publishing.
     if not any(s['ok'] or s.get('partial') for s in result['sources']):
-        raise SystemExit(1)
+        print('::warning::All listing sources failed; previous observations are retained with their original dates.')
 
 
 if __name__ == '__main__':

@@ -163,6 +163,11 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.goto(base + "/#local");
     await page.evaluate(() => window.newsInitialLoad);
     assert.equal(await page.locator("#section-title").innerText(), "去处");
+    assert(await page.locator('#outing-filters').isHidden());
+    assert(await page.locator('#weekend-tools').isHidden());
+    assert(await page.locator('#source-filter').isHidden());
+    assert.equal(await page.locator('#outing-catalog-heading #result-count').count(), 1);
+    await page.locator('#outing-filter-toggle').click();
     assert.equal(await page.locator('[data-filter="local"]').count(), 0);
     assert.equal(
       await page.locator('.header-actions [data-view="local"]').innerText(),
@@ -301,11 +306,11 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       await page.locator(".outing-types").innerText(),
       /亲子体验|城市漫游|运动观赛/,
     );
-    for (const type of ["market", "culture", "outdoor", "camping"]) {
+    for (const type of ["market", "culture", "experience", "outdoor"]) {
       await page.locator(`[data-outing-type="${type}"]`).click();
       assert.equal(
         await page.locator("#camping-places").isVisible(),
-        type === "camping",
+        type === "outdoor",
       );
       assert.equal(
         await page.locator("#hiking-places").isVisible(),
@@ -317,23 +322,18 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       );
       assert.equal(
         await page.locator("#rainy-places").isVisible(),
-        type === "culture",
+        type === "culture" || type === "experience",
       );
       if (type === "culture") {
         assert.equal(
           await page.locator("#rainy-places .place-card:not([hidden])").count(),
-          4,
+          3,
         );
       }
       assert.equal(
         await page.locator(".article").count(),
-        { market: 1, culture: 2, outdoor: 2, camping: 1 }[type],
+        { market: 1, culture: 1, experience: 1, outdoor: 3 }[type],
       );
-      if (type === "camping")
-        assert.match(
-          await page.locator("#camping-updates").innerText(),
-          /每小时自动检查.*最近检查.*最新消息/s,
-        );
       assert.equal(
         await page
           .locator(`[data-outing-type="${type}"]`)
@@ -341,6 +341,13 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         "true",
       );
     }
+    assert.equal(await page.locator('[data-outing-type="camping"]').count(), 0, 'camping is an outdoor subcategory');
+    for (const kind of ['hiking', 'cycling', 'camping']) {
+      await page.locator(`[data-outing-kind="${kind}"]`).click();
+      assert.deepEqual(await page.locator('[data-place-group]:visible').evaluateAll(nodes => nodes.map(node => node.id)), [`${kind}-places`]);
+      assert.equal(await page.locator('.article').count(), {hiking:1,cycling:0,camping:1}[kind]);
+    }
+    assert.match(await page.locator('#camping-updates').innerText(), /每小时自动检查.*最近检查.*最新消息/s);
     await page.locator('[data-outing-type="all"]').click();
     await page.locator('[data-outing-range="recent"]').click();
     assert.equal(await page.locator(".article").count(), 3);
@@ -422,6 +429,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       0,
     );
     await page.locator('[data-view="local"]').click();
+    await page.locator('#outing-filter-toggle').click();
     for (const group of [
       "hiking-places",
       "cycling-places",
@@ -526,6 +534,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.evaluate(() => {
       Date.now = () => Date.parse("2026-10-26T10:00:00Z");
     });
+    if (await page.locator('#outing-filters').isHidden()) await page.locator('#outing-filter-toggle').click();
     await page.locator('[data-outing-type="all"]').click();
     assert.equal(
       await page.locator('[data-article-id="weekend-market"]').count(),

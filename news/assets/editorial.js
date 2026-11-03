@@ -89,18 +89,14 @@
     // After that only the existing place references and dated source stories remain.
     if (!trip.weather || !validDate(trip.weather.updatedAt) || now - Date.parse(trip.weather.updatedAt) > 48 * 3600000) return profileOnly();
     const stale = now - Date.parse(trip.weather.updatedAt) > 24 * 3600000 || trip.status !== "ok";
-    const words = state.query.toLowerCase().split(/\s+/).filter(Boolean);
     const candidates = trip.picks.concat(trip.alternatives || []).filter((p) => {
       if (!p || typeof p !== "object") return false;
       const weather = forecast(trip, p);
-      const category = ["hiking", "cycling"].includes(p.type) ? "outdoor" : p.type === "rainy" ? "culture" : p.type;
       return typeof p.name === "string" && typeof p.reason === "string" && p.day >= today &&
         p.day >= trip.weekendStart && p.day <= trip.weekendEnd && weather &&
         [weather.low, weather.high, weather.rainProbability, weather.rainMm, weather.windKmh, weather.code].every(Number.isFinite) &&
         ((p.setting === "indoor" || (!p.setting && p.type === "rainy")) || (weather.code < 51 && weather.rainProbability < 60 && weather.rainMm < 3 && weather.windKmh < 30)) &&
         (!p.discovery || (validDate(p.verifiedAt) && now - Date.parse(p.verifiedAt) <= 48 * 3600000)) &&
-        (state.outingType === "all" || category === state.outingType) && state.source === "all" && !state.date &&
-        words.every((w) => (p.name + " " + p.reason + " " + p.area).toLowerCase().includes(w)) &&
         !/演唱会|博物馆|亲子|观赛|攀岩|抱石|滑冰|溜冰|冰场/.test(p.name) && !window.OutingProfile?.excludes(p);
     });
     const picks = candidates.filter(p => p.discovery === true).slice(0, 8);

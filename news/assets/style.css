@@ -514,7 +514,8 @@ span[data-icon] {
 .outing-section-heading > span { color: var(--muted); font-size: 12px; }
 .place-groups { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; align-items: start; }
 .outing-ranges,
-.outing-types {
+.outing-types,
+.outing-subtypes {
   display: flex;
   gap: 6px;
   overflow-x: auto;
@@ -523,7 +524,8 @@ span[data-icon] {
   -webkit-overflow-scrolling: touch;
 }
 .outing-ranges button,
-.outing-types button {
+.outing-types button,
+.outing-subtypes button {
   flex: 0 0 auto;
   border: 1px solid var(--line);
   border-radius: 5px;
@@ -534,10 +536,30 @@ span[data-icon] {
   cursor: pointer;
 }
 .outing-ranges button[aria-pressed="true"],
-.outing-types button[aria-pressed="true"] {
+.outing-types button[aria-pressed="true"],
+.outing-subtypes button[aria-pressed="true"] {
   background: var(--surface);
   color: var(--ink);
   border-color: var(--secondary);
+}
+.outings-view #outing-recommendations { margin: 4px 0 24px; padding: 0; border-top: 0; }
+#outing-browse { min-height: 44px; font-size: 12px; white-space: nowrap; }
+#outing-catalog-heading { scroll-margin-top: 80px; border-top: 1px solid var(--line); padding-top: 22px; flex-wrap: wrap; }
+#outing-catalog-count .result-count { font-size: 12px; }
+#outing-filter-toggle { min-height: 44px; white-space: nowrap; }
+#outing-filters { margin: 10px 0 18px; padding: 14px; border: 1px solid var(--line); border-radius: 6px; }
+#outing-filters .outing-ranges, #outing-filters .outing-types, #outing-filters .outing-subtypes { flex-wrap: wrap; overflow: visible; }
+#outing-filters button { min-height: 44px; }
+#outing-filters .outing-subtypes { padding-top: 4px; border-top: 1px solid var(--line); }
+#outing-source-controls { display: flex; align-items: center; gap: 12px; border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
+#outing-source-controls .source-select { flex: 1; min-width: 0; }
+#outing-source-controls select { width: 100%; max-width: 100%; min-height: 44px; }
+#outing-filters .reading-options > summary { min-height: 44px; padding: 12px 0; }
+#outing-filter-reset { font-size: 12px; }
+.outings-view .filter-row { flex-wrap: nowrap; }
+.outings-view .search-box { flex: 1; min-width: 0; }
+@media (max-width: 760px) {
+  #outing-filters select, #outing-filters input[type="date"] { font-size: 16px; min-width: 0; max-width: 100%; }
 }
 .outing-checked {
   margin: 3px 0 12px;

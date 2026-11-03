@@ -141,8 +141,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
           `[${category === "local" ? "data-view" : "data-filter"}="${category}"]`,
         )
         .click();
-      if (category === "local")
+      if (category === "local") {
+        await page.locator('#outing-filter-toggle').click();
         await page.locator('[data-outing-range="recent"]').click();
+      }
       await page
         .waitForFunction(
           ({ label, expected }) =>
@@ -200,8 +202,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
           `[${category === "local" ? "data-view" : "data-filter"}="${category}"]`,
         )
         .click();
-      if (category === "local")
+      if (category === "local") {
+        await page.locator('#outing-filter-toggle').click();
         await page.locator('[data-outing-range="recent"]').click();
+      }
       await page.waitForFunction(
         ({ label, expected }) =>
           document.querySelector("#section-title").textContent === label &&
@@ -239,6 +243,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator(".reading-options > summary").click();
     await page.goto(base + "/#local");
     await page.evaluate(() => window.newsInitialLoad);
+    await page.locator('#outing-filter-toggle').click();
     await page.locator('[data-outing-range="recent"]').click();
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
@@ -253,6 +258,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await context.setOffline(true);
     await page.reload();
     await page.evaluate(() => window.newsInitialLoad);
+    await page.locator('#outing-filter-toggle').click();
     await page.locator('[data-outing-range="recent"]').click();
     await page.waitForFunction(
       () => document.querySelectorAll(".article").length > 0,

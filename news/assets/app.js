@@ -82,6 +82,8 @@
     limit: 12,
     housingLimit: 6,
     outingType: "all",
+    outingKind: "all",
+    outingFiltersOpen: false,
     outingRange: "weekend",
     saved: new Map(),
   };
@@ -102,11 +104,29 @@
   };
   state.date = dayOf(Date.now());
   const outingTypes = {
-    market: "市集节庆",
+    market: "市集活动",
     culture: "展览演出",
-    outdoor: "户外周边",
-    camping: "露营",
+    experience: "手作与体验",
+    outdoor: "户外出游",
   };
+  const outingKinds = { hiking: "爬山徒步", cycling: "骑行", camping: "露营" };
+  const experienceWords = /手作|手工|工作坊|非遗体验|陶艺|拼豆|拓印|泥塑|竹编|体验课|匹克球|保龄球|卡丁车|桌游|密室|射箭|运动乐园|DIY|VR/i;
+  function outingActivity(type, text) {
+    if (type === "camping" || /露营|营地|野营/.test(text)) return { type: "outdoor", kind: "camping" };
+    if (type === "market") return { type: "market", kind: "all" };
+    if (experienceWords.test(text)) return { type: "experience", kind: "all" };
+    if (type === "culture") return { type: "culture", kind: "all" };
+    return { type: "outdoor", kind: /骑行|自行车|单车/.test(text) ? "cycling" : /爬山|登山|徒步|古道/.test(text) ? "hiking" : "all" };
+  }
+  function activityMatches(activity) {
+    return (state.outingType === "all" || activity.type === state.outingType) &&
+      (state.outingType !== "outdoor" || state.outingKind === "all" || activity.kind === state.outingKind);
+  }
+  function placeActivity(place) {
+    const group = place.closest("[data-place-group]").id;
+    const kind = { "hiking-places": "hiking", "cycling-places": "cycling", "camping-places": "camping" }[group];
+    return kind ? { type: "outdoor", kind } : outingActivity("culture", place.dataset.search + " " + place.querySelector("h3").textContent);
+  }
   const outingExcluded =
     /演唱[会會]|巡回演唱|歌友[会會]|幼儿园|(?:小学|中学|学校).{0,20}(?:秋游|研学|毅行)|家族办公室|周年庆|客户答谢|团建回顾|长期主义|落地实验|活动回顾|赛事回顾|精彩回顾|圆满落幕|圆满收官|成功举办|活动纪实|活动侧记|闭幕|曲终|谢幕|落下帷幕|圆满结束|拍于|摄于|戏剧人|(?:亮相|赴|登陆|走进)(?:上海|北京|广州|深圳)国际|露营经济|露营产业|营地投资|营地招商|露营装备/;
   function outingInfo(article) {
@@ -126,6 +146,10 @@
     const end = new Date(start);
     end.setUTCDate(end.getUTCDate() + 1);
     return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)];
+  }
+  function outingLabel(article) {
+    const activity = outingActivity(outingInfo(article).type, article.title);
+    return outingKinds[activity.kind] || outingTypes[activity.type] || "出游消息";
   }
   function outingDates(info) {
     return (
@@ -148,7 +172,7 @@
       if (state.outingRange === "weekend" && info.until < outingWeekend()[0])
         return false;
     }
-    if (state.outingType !== "all" && info.type !== state.outingType)
+    if (!activityMatches(outingActivity(info.type, article.title)))
       return false;
     if (
       state.outingRange === "weekend" &&
@@ -188,7 +212,7 @@
           : "活动时间见原文";
     const labels = { date: "日期", venue: "地点", cost: "费用", parking: "停车", stove: "用炉", booking: "预约", closure: "开放安排" };
     const facts = Array.isArray(article.facts) ? article.facts.filter((f) => labels[f.kind] && typeof f.text === "string").slice(0, 5) : [];
-    return `<p class="outing-summary"><span>${escape(outingTypes[info.type] || "出游消息")}</span><span>${escape(when)}${ended ? " · 已结束" : ""}</span></p>
+    return `<p class="outing-summary"><span>${escape(outingLabel(article))}</span><span>${escape(when)}${ended ? " · 已结束" : ""}</span></p>
       ${info.venue || info.cost ? `<p class="outing-details">${[info.venue, info.cost].filter(Boolean).map(escape).join(" · ")}</p>` : ""}
       ${facts.length ? `<details class="outing-facts"><summary>实用信息 · 原文摘录</summary>${facts.map((f) => `<p><strong>${labels[f.kind]}：</strong>${escape(f.text)}</p>`).join("")}</details>` : ""}`;
   }
@@ -276,8 +300,7 @@
       const places = [...group.querySelectorAll("[data-place-types]")];
       const matches = places.filter(
         (place) =>
-          (state.outingType === "all" ||
-            place.dataset.placeTypes.split(" ").includes(state.outingType)) &&
+          activityMatches(placeActivity(place)) &&
           words.every((word) =>
             `${place.dataset.search} ${place.textContent}`
               .toLocaleLowerCase()
@@ -334,7 +357,7 @@
       .pop();
     const failed = campSources.filter((s) => s.status !== "ok").length;
     const campingNote =
-      state.outingType === "camping"
+      state.outingType === "outdoor" && state.outingKind === "camping"
         ? `<p class="outing-checked" id="camping-updates">露营消息每小时自动检查${checked ? `，最近检查 ${escape(formatTime(checked))}` : "，等待首次检查"}；${camping?.latestAt ? `最新消息 ${escape(formatTime(camping.latestAt))}。` : "暂无新消息时保留近期报道。"}${failed ? "部分来源暂不可用，保留已收录消息。" : ""} 下方营地为地点参考，停车和用炉条件请向营地确认。</p>`
         : "";
     const updatesOpen = panel.querySelector(".outing-update-info")?.open;
@@ -349,9 +372,40 @@
             `<button data-outing-type="${key}" aria-pressed="${state.outingType === key}">${escape(label)}</button>`,
         )
         .join("")}</div>
+      ${state.outingType === "outdoor" ? `<div class="outing-subtypes" role="group" aria-label="户外玩法">${Object.entries({ all: "全部户外", ...outingKinds }).map(([key, label]) => `<button data-outing-kind="${key}" aria-pressed="${state.outingKind === key}">${escape(label)}</button>`).join("")}</div>` : ""}
       <details class="outing-update-info"${updatesOpen ? " open" : ""}><summary>更新说明</summary>
       <p class="outing-checked">来源每小时检查；每天9点、16点补充检索（北京时间，可能延迟）。${escape(researched || last)}活动时间与报名以原文为准。</p></details>${campingNote}`;
     return referenceCount;
+  }
+  // Reuse the same controls and event listeners in news and outings. DOM order
+  // matches reading/tab order; no duplicate search or source fields are needed.
+  let outingControlHomes;
+  function renderOutingLayout() {
+    const local = state.view === "local";
+    if (!outingControlHomes) {
+      outingControlHomes = [
+        [".source-select", "#outing-source-controls"], ["#date-trigger", "#outing-source-controls"],
+        ["#date-panel", "#outing-filters"], [".reading-options", "#outing-filters"],
+        ["#weekend-tools", "#outing-topic-controls"], ["#result-count", "#outing-catalog-count"],
+      ].map(([selector, target]) => {
+        const node = $(selector), home = document.createComment("control position");
+        node.before(home);
+        return { node, home, target: $(target) };
+      });
+    }
+    for (const { node, home, target } of outingControlHomes) {
+      if (local && node.parentNode !== target) target.insertBefore(node, target.id === "outing-filters" ? $("#outing-filter-reset") : null);
+      else if (!local && node.previousSibling !== home) home.after(node);
+    }
+    $("#outing-catalog-heading").hidden = !local;
+    $("#outing-browse").hidden = !local;
+    $("#outing-filter-toggle").hidden = !local;
+    $("#outing-filters").hidden = !local || !state.outingFiltersOpen;
+    $("#outing-filter-toggle").setAttribute("aria-expanded", String(state.outingFiltersOpen));
+    const count = [state.outingType !== "all", state.outingKind !== "all", state.outingRange !== "weekend", state.source !== "all", !!state.date].filter(Boolean).length;
+    $("#outing-filter-toggle").textContent = `筛选${count ? ` · ${count}` : ""}`;
+    $("#outing-filter-toggle").classList.toggle("active", count > 0);
+    $("#search").setAttribute("aria-label", local ? "搜索全部活动、地点或玩法" : "搜索资讯标题和摘要");
   }
   const timeFormatter = new Intl.DateTimeFormat("zh-CN", {
     timeZone: "Asia/Shanghai",
@@ -598,7 +652,7 @@
         .filter(Boolean);
       articles = articles.filter((a) =>
         words.every((word) =>
-          `${a.title} ${a.excerpt} ${sourceFor(a).name} ${a.outing?.venue || ""} ${outingTypes[a.outing?.type] || ""}`
+          `${a.title} ${a.excerpt} ${sourceFor(a).name} ${a.outing?.venue || ""} ${a.category === "local" ? outingLabel(a) : ""}`
             .toLocaleLowerCase()
             .includes(word),
         ),
@@ -948,6 +1002,7 @@
     $(".sidebar").hidden = outings;
     $(".main-layout").classList.toggle("outings-view", outings);
     $("#outing-news-heading").hidden = !outings;
+    renderOutingLayout();
     $$("[data-view]").forEach((el) => {
       const active =
         el.dataset.view === state.view ||
@@ -1106,6 +1161,8 @@
     state.limit = pageSize();
     state.housingLimit = 6;
     state.outingType = "all";
+    state.outingKind = "all";
+    state.outingFiltersOpen = false;
     state.outingRange = "weekend";
     state.query = "";
     state.source = "all";
@@ -1508,7 +1565,7 @@
   }).format(new Date());
   $("#year").textContent = new Date().getFullYear();
   function focusSearch() {
-    $("#news-content").scrollIntoView({ behavior: "smooth" });
+    $(state.view === "local" ? "#outing-catalog-heading" : "#news-content").scrollIntoView({ behavior: "smooth" });
     $("#search").focus({ preventScroll: true });
   }
   document.addEventListener("keydown", (e) => {
@@ -1523,6 +1580,24 @@
     }
   });
   let searchTimer;
+  $("#outing-browse").addEventListener("click", () => {
+    $("#outing-catalog-heading").scrollIntoView({ behavior: "smooth", block: "start" });
+    $("#search").focus({ preventScroll: true });
+  });
+  $("#outing-filter-toggle").addEventListener("click", () => {
+    state.outingFiltersOpen = !state.outingFiltersOpen;
+    renderOutingLayout();
+  });
+  $("#outing-filter-reset").addEventListener("click", () => {
+    state.outingType = state.outingKind = "all";
+    state.outingRange = "weekend";
+    state.query = state.date = "";
+    state.source = "all";
+    state.limit = pageSize();
+    $("#search").value = $("#date-filter").value = "";
+    $("#source-filter").value = "all";
+    render();
+  });
   $("#search").addEventListener("input", (e) => {
     state.query = e.target.value.trim();
     state.limit = pageSize();
@@ -1636,6 +1711,7 @@
         clearTimeout(searchTimer);
         state.query = "";
         state.outingType = "all";
+        state.outingKind = "all";
         $("#search").value = "";
         render();
       }
@@ -1674,14 +1750,19 @@
     }
     const outingType = e.target.closest("[data-outing-type]");
     const outingRange = e.target.closest("[data-outing-range]");
-    if (outingType || outingRange) {
+    const outingKind = e.target.closest("[data-outing-kind]");
+    if (outingType || outingRange || outingKind) {
       if (
         outingType &&
         ["all", ...Object.keys(outingTypes)].includes(
           outingType.dataset.outingType,
         )
-      )
+      ) {
         state.outingType = outingType.dataset.outingType;
+        state.outingKind = "all";
+      }
+      if (outingKind && ["all", ...Object.keys(outingKinds)].includes(outingKind.dataset.outingKind))
+        state.outingKind = outingKind.dataset.outingKind;
       if (
         outingRange &&
         ["weekend", "recent"].includes(outingRange.dataset.outingRange)

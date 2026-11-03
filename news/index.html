@@ -128,6 +128,12 @@
               <h1 id="section-title" tabindex="-1">每日速览</h1>
             </div>
             <span id="result-count" class="result-count"></span>
+            <button id="outing-browse" class="text-button" hidden>全部活动与地点 ↓</button>
+          </div>
+          <section id="outing-recommendations" aria-label="本周新发现与去处记录" hidden></section>
+          <div id="outing-catalog-heading" class="outing-section-heading" hidden>
+            <h2>全部活动与地点</h2>
+            <span id="outing-catalog-count"></span>
           </div>
           <div class="filter-tabs" aria-label="资讯栏目">
             <div
@@ -198,7 +204,13 @@
             >
               <span data-icon="calendar"></span><span>日期</span>
             </button>
+            <button id="outing-filter-toggle" class="date-button" aria-expanded="false" aria-controls="outing-filters" hidden>筛选</button>
           </div>
+          <section id="outing-filters" aria-label="活动与地点筛选" hidden>
+            <div id="outing-topic-controls"></div>
+            <div id="outing-source-controls"></div>
+            <button id="outing-filter-reset" class="text-button">清除筛选</button>
+          </section>
           <div id="date-panel" class="date-panel" hidden>
             <label for="date-filter">按发布日期查看（北京时间）</label
             ><input type="date" id="date-filter" /><button
@@ -244,7 +256,6 @@
             aria-label="周末玩法筛选"
             hidden
           ></section>
-          <section id="outing-recommendations" aria-label="本周新发现与去处记录" hidden></section>
           <section id="outing-places" aria-labelledby="outing-places-title" hidden>
             <div class="outing-section-heading">
               <h2 id="outing-places-title">按玩法找地方</h2>
@@ -302,7 +313,7 @@
                   下雨去哪 <span data-place-count>__RAINY_COUNT__ 个地点参考</span>
                 </h2></summary>
                 <p class="place-intro">
-                  手作、书店和话剧，按兴趣挑一两项。时长为本站粗略预留，不含交通；需要课程或场次的先预约，停车与地铁接驳仍可能淋雨。
+                  手作、运动体验、书店和话剧，按兴趣挑一两项。时长为本站粗略预留，不含交通；需要课程或场次的先预约，停车与地铁接驳仍可能淋雨。
                 </p>
                 __RAINY_PLACES__
                 <p class="place-note">

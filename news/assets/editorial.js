@@ -127,6 +127,7 @@
         <p class="trip-weather">${esc(region.name)} · ${esc(p.day.slice(5))} ${esc(weatherNames[w.code] || "天气预报")} ${esc(Math.round(w.low))}—${esc(Math.round(w.high))}℃ · 降水概率 ${esc(w.rainProbability)}%</p>
         <details class="trip-details"${expanded.has(key) ? " open" : ""}><summary>查看安排与来源</summary>
           <p><strong>为什么推荐：</strong>${esc(p.reason)}</p>
+          ${primary && p.settingEvidence ? `<p><strong>场地依据：</strong>${esc(p.settingEvidence)}</p>` : ""}
           ${primary ? `<p><strong>活动日期：</strong>${esc(p.start)}—${esc(p.end)}</p><p><strong>地点：</strong>${esc(p.area || "详细地点待确认")}</p>
           <p><strong>费用：</strong>${esc(cost || "来源未公布，需确认两人总价")}${cost ? "（原文口径，两人总价以报名页为准）" : ""}</p>
           <p><strong>预约：</strong>${esc(booking || "是否需预约及余位待确认")}</p>` : `<p class="trip-note">常设地点参考 · 基础资料 ${esc(p.reviewedOn || "见来源")}；出发前确认开放与预约。</p>`}

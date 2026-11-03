@@ -231,6 +231,22 @@ class EditorialTests(unittest.TestCase):
             article['outing']['setting'] = setting
             self.assertEqual(ai.complete_trip(data, places, {}, trip, self.now)['picks'], [])
 
+    def test_full_article_details_are_verified_and_unchanged_pages_are_not_reprocessed(self):
+        item, body = self.discovery_fixture()
+        item['event']['settingEvidence'] = '本次安排在五大主题馆举行。'
+        body += '\n' + item['event']['settingEvidence']
+        client = Mock()
+        client.state = {}
+        client.ask.return_value = ({'items': [item, {**item, 'url': 'https://www.ooeli.com/not-provided'}]}, {})
+        pages = {item['url']: body}
+        records = ai.extract_source_details(client, pages, [], self.now)
+        self.assertEqual(len(records), 1)
+        self.assertEqual(records[0]['outing']['setting'], 'indoor')
+        self.assertEqual(ai.extract_source_details(client, pages, [], self.now), [])
+        client.ask.assert_called_once()
+        ai.extract_source_details(client, {item['url']: body + '\n新公告'}, [], self.now)
+        self.assertEqual(client.ask.call_count, 2)
+
     def test_private_feedback_filters_places_and_events_without_entering_cache(self):
         item, body = self.discovery_fixture()
         article = ai.validate_discovery(item, {item['url']}, body, [], self.now)

@@ -669,6 +669,27 @@ def trip_options(data, places, research, weather, now, profile=None):
     return start, end, eligible
 
 
+def activity_text_for_day(candidate, day):
+    """A multi-day exhibition can contain individual sessions on other dates."""
+    original = candidate.get('novelty', '')
+    if not candidate.get('discovery') or not original:
+        return original
+    chosen = date.fromisoformat(day)
+    def dates(text):
+        return {(int(month), int(number)) for month, number in re.findall(r'(\d{1,2})月\s*(\d{1,2})日', text)}
+    def covers(text):
+        info = outing_info({'title': '', 'publishedAt': candidate.get('publishedAt')}, text)
+        return bool(info.get('start') and info['start'] <= day <= info['end'])
+    mentioned = dates(original)
+    if not mentioned or (chosen.month, chosen.day) in mentioned or covers(original):
+        return original
+    facts = [f['text'] for f in candidate.get('facts', []) if f['kind'] == 'date']
+    # Prefer a literal session notice for this day; otherwise show the proved
+    # event period. Never move the date of a workshop to fill a recommendation.
+    return next((text for text in facts if dates(text) == {(chosen.month, chosen.day)}),
+                next((text for text in facts if covers(text)), '具体场次日期请查看来源公告。'))
+
+
 def complete_trip(data, places, research, trip, now, profile=None):
     """Fill filtered or partial picks from sourced candidates, without an API call."""
     weather = trip.get('weather') or {}
@@ -682,7 +703,8 @@ def complete_trip(data, places, research, trip, now, profile=None):
         picks, seen = [], set()
         def append(candidate, day, reason, selection):
             seen.add(candidate['id'])
-            picks.append({k: v for k, v in {**candidate, 'day': day, 'reason': reason, 'selection': selection}.items()
+            picks.append({k: v for k, v in {**candidate, 'day': day, 'reason': reason, 'selection': selection,
+                          'novelty': activity_text_for_day(candidate, day)}.items()
                           if k not in ('availableDays', 'closed')})
         for pick in trip.get('picks', []) + trip.get('alternatives', []):
             candidate = pool.get(pick.get('id'))

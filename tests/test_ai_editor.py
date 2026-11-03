@@ -231,6 +231,22 @@ class EditorialTests(unittest.TestCase):
             article['outing']['setting'] = setting
             self.assertEqual(ai.complete_trip(data, places, {}, trip, self.now)['picks'], [])
 
+    def test_weekend_card_does_not_promote_a_weekday_session(self):
+        item, body = self.discovery_fixture()
+        weekday = '11月5日将举办绘本分享会和剪纸体验。'
+        sunday = '11月8日下午将举办琥珀流光分享会。'
+        item['event']['novelty'] = weekday
+        item['facts'].append({'kind': 'date', 'quote': sunday})
+        article = ai.validate_discovery(item, {item['url']}, body + '\n' + weekday + '\n' + sunday, [], self.now)
+        places, trip = self.trip_fixture()
+        candidate = ai.trip_candidates({'weekendArticles': [article]}, [], [], self.now)[0]
+        trip['picks'] = [{'id': candidate['id'], 'day': '2026-11-08', 'reason': '周日有室内分享会，可以结合展区参观安排。'}]
+        result = ai.complete_trip({'weekendArticles': [article]}, places, {}, trip, self.now)
+        self.assertEqual(result['picks'][0]['novelty'], sunday)
+        self.assertEqual(article['outing']['novelty'], weekday, 'keep the source record intact')
+        candidate['novelty'] = '11月7日至8日，新增植物拓印双人体验课程。'
+        self.assertEqual(ai.activity_text_for_day(candidate, '2026-11-08'), candidate['novelty'])
+
     def test_full_article_details_are_verified_and_unchanged_pages_are_not_reprocessed(self):
         item, body = self.discovery_fixture()
         item['event']['settingEvidence'] = '本次安排在五大主题馆举行。'

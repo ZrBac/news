@@ -45,7 +45,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       picks: [pick, { ...pick, id: "rain-camp", name: "应被雨天条件拦截的露营", type: "camping", day: "2026-11-08" },
         { ...pick, id: "rainy-room", placeId: "", name: "室内书店", type: "rainy", day: "2026-11-08",
           reason: '室内阅读 <img id="bad" src=x onerror="window.bad=1">', sources: [{ label: "坏链接", url: "javascript:alert(1)" }] },
-        { ...pick, id: "place:beigao", placeId: "beigao", name: "北高峰" }],
+        { ...pick, id: "place:beigao", placeId: "beigao", name: "北高峰" },
+        ...Array.from({length:5}, (_, i) => ({...pick, id:`event:extra-${i}`, placeId:"", name:`新增体验${i}`}))],
     } };
     await page.route("**/data/latest.json*", (route) => route.fulfill({ json: packet }));
     await page.goto(base + "/#brief");
@@ -56,7 +57,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.match(await page.locator(".article-reports").innerText(), /11月3日起/);
     assert(await page.locator("#outing-recommendations").isHidden());
     await page.locator('[data-view="local"]').click();
-    assert.equal(await page.locator(".trip-list > li:visible").count(), 2);
+    assert.equal(await page.locator(".trip-list > li:visible").count(), 3);
     assert.equal(await page.locator("#bad").count(), 0);
     assert.equal(await page.locator('a[href^="javascript:"]').count(), 0);
     assert.match(await page.locator(".trip-list").innerText(), /降水概率 90%/);
@@ -68,16 +69,17 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert(await page.locator("#hiking-places").getAttribute("open") !== null);
     assert(await page.locator('[data-place-id="baoshi"] .place-details').getAttribute("open") !== null);
     assert(await page.locator('[data-place-id="beigao"]').isHidden());
+    assert.match(await page.locator('[data-trip-more]').innerText(), /再看 5 个新发现/);
     await page.locator('[data-trip-more]').click();
-    assert.equal(await page.locator(".trip-list > li:visible").count(), 3);
-    await page.locator('[data-trip-extra] .trip-details > summary').click();
+    assert.equal(await page.locator(".trip-list > li:visible").count(), 8);
+    await page.locator('[data-outing-id="place:beigao"] .trip-details > summary').click();
     await page.locator('[data-trip-place="beigao"]').click();
     assert(await page.locator('[data-place-id="beigao"] .place-links').isVisible(), "recommendations reveal references beyond the first page");
     await page.locator('[data-save="camp-facts"]').click();
-    assert.equal(await page.locator(".trip-list > li:visible").count(), 3, "saving a story keeps expanded recommendations");
+    assert.equal(await page.locator(".trip-list > li:visible").count(), 8, "saving a story keeps expanded recommendations");
     assert(await page.locator('[data-trip-place="beigao"]').isVisible());
     await page.locator('[data-trip-more]').click();
-    assert.equal(await page.locator(".trip-list > li:visible").count(), 2);
+    assert.equal(await page.locator(".trip-list > li:visible").count(), 3);
     await page.locator(".outing-facts summary").click();
     assert.match(await page.locator(".outing-facts").innerText(), /禁止使用自带卡式炉/);
     assert.match(await page.locator('[data-article-id="camp-facts"] .article-meta').innerText(), /杭州文旅/);
@@ -96,9 +98,9 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await context.setOffline(true);
     await page.reload({ waitUntil: "domcontentloaded" });
     await page.locator(".trip-list li").first().waitFor();
-    assert.equal(await page.locator(".trip-list > li:visible").count(), 2, "saved recommendations remain readable offline");
+    assert.equal(await page.locator(".trip-list > li:visible").count(), 3, "saved recommendations remain readable offline");
     await page.locator('[data-trip-more]').click();
-    assert.equal(await page.locator(".trip-list > li:visible").count(), 3, "extra recommendations remain available offline");
+    assert.equal(await page.locator(".trip-list > li:visible").count(), 8, "extra recommendations remain available offline");
     assert.match(await page.locator("#load-notice").innerText(), /上次成功获取/);
     assert.equal(await page.locator('[data-outing-id="place:baoshi"] [data-outing-feedback="want"]').getAttribute('aria-pressed'), 'true', 'feedback survives offline reload');
     await page.locator('[data-outing-id="place:baoshi"] [data-outing-feedback="visited"]').click();

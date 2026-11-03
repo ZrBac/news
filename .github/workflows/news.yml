@@ -90,7 +90,7 @@ jobs:
       - name: Prepare news summaries, outing research and weekend picks
         id: ai-editor
         continue-on-error: true
-        timeout-minutes: 5
+        timeout-minutes: 10
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OUTING_PROFILE_TOKEN: ${{ secrets.OUTING_PROFILE_TOKEN }}

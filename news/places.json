@@ -516,6 +516,78 @@
       ]
     },
     {
+      "id": "yijia-beads",
+      "group": "rainy",
+      "name": "亦佳手作 · 双人拼豆",
+      "area": "湖滨银泰附近 · 拼豆手作 · 按图案复杂度留时间",
+      "types": "culture",
+      "keywords": "下雨 雨天 室内 避雨 手作 手工 拼豆 DIY",
+      "aliases": [],
+      "reviewedOn": "2026-11-03",
+      "paragraphs": [
+        {
+          "label": "怎么玩：",
+          "text": "各做一个挂件或一起拼一幅小图，从选图、配色做到成品；第一次挑简单图案，烫豆环节请店员协助。"
+        },
+        {
+          "label": "地点依据：",
+          "text": "潮新闻在 2026 年 2 月实地探访了湖滨银泰附近的亦佳手作 DIY·拼豆店。这是常设体验参考，近期营业情况需再向门店确认。"
+        },
+        {
+          "label": "预约前：",
+          "text": "确认门店地址、两人是否要分别买套餐、限时时长、材料与烫豆是否包含；旧报道中的春节价格不作为当前报价。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E6%B9%96%E6%BB%A8+%E4%BA%A6%E4%BD%B3%E6%89%8B%E4%BD%9C+DIY+%E6%8B%BC%E8%B1%86&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "潮新闻探店与项目介绍",
+          "url": "https://jrsh.hangzhou.com.cn/content/2026-02/26/content_9182901.html"
+        }
+      ]
+    },
+    {
+      "id": "tianmu-pickleball",
+      "group": "rainy",
+      "name": "天幕匹克球馆 · 两人试打",
+      "area": "萧山 · 奥体 AT 中心综合训练馆 9 楼 · 室内运动",
+      "types": "culture",
+      "keywords": "下雨 雨天 室内 避雨 匹克球 运动 球拍",
+      "aliases": [],
+      "reviewedOn": "2026-11-03",
+      "paragraphs": [
+        {
+          "label": "怎么玩：",
+          "text": "两个人预约一片场地，先练发球和短距离对打，再按体力安排小局；第一次可先询问入门体验和球拍租借。"
+        },
+        {
+          "label": "地点依据：",
+          "text": "钱江世纪城和杭州网介绍的室内匹克球馆，位于飞虹路 3 号杭州奥体 AT 中心综合训练馆 9 楼。这里只推荐自己打球。"
+        },
+        {
+          "label": "预约前：",
+          "text": "通过“杭州奥体AT中心”微信小程序核对当天时段与场地费用，另问是否含球拍、球、教学和停车。常设场地参考，不保证周末有空场。"
+        }
+      ],
+      "links": [
+        {
+          "label": "地图查询",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E5%A4%A9%E5%B9%95%E5%8C%B9%E5%85%8B%E7%90%83%E9%A6%86+%E5%A5%A5%E4%BD%93AT%E4%B8%AD%E5%BF%83&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0"
+        },
+        {
+          "label": "钱江世纪城场馆介绍",
+          "url": "https://www.qjcbd.com/contents/287/35873.html"
+        },
+        {
+          "label": "杭州网预约方式",
+          "url": "https://hznews.hangzhou.com.cn/chengshi/content/2025-07/16/content_9039681.htm"
+        }
+      ]
+    },
+    {
       "id": "fengxiaoling",
       "group": "camping",
       "name": "FC CAMPING 风笑岭营地",

@@ -103,8 +103,8 @@
         words.every((w) => (p.name + " " + p.reason + " " + p.area).toLowerCase().includes(w)) &&
         !/演唱会|博物馆|亲子|观赛|攀岩|抱石|滑冰|溜冰|冰场/.test(p.name) && !window.OutingProfile?.excludes(p);
     });
-    const picks = candidates.filter(p => p.discovery === true).slice(0, 3);
-    const backups = candidates.filter(p => p.discovery !== true).slice(0, 3);
+    const picks = candidates.filter(p => p.discovery === true).slice(0, 8);
+    const backups = candidates.filter(p => p.discovery !== true).slice(0, 6);
     visiblePicks = new Map(candidates.map(p => [p.id, p]));
     panel.hidden = false;
     const updated = esc(formatTime(trip.updatedAt));
@@ -121,7 +121,7 @@
       const reference = p.placeId && /^[a-z0-9-]+$/.test(p.placeId)
         ? `<button class="text-button" data-trip-place="${esc(p.placeId)}">路线与条件</button>` : "";
       const newsLinks = (Array.isArray(p.news) ? p.news : []).filter(n => url(n.url) && validDate(n.publishedAt)).slice(0, 1);
-      return `<li data-trip-key="${esc(key)}" data-outing-id="${esc(p.id)}"${primary && index > 1 ? ` data-trip-extra${moreOpen ? "" : " hidden"}` : ""}>
+      return `<li data-trip-key="${esc(key)}" data-outing-id="${esc(p.id)}"${primary && index > 2 ? ` data-trip-extra${moreOpen ? "" : " hidden"}` : ""}>
         <p class="trip-kind">${esc(types[p.type] || "出游")} · ${esc({indoor:"室内",outdoor:"室外",mixed:"含室外区域",unknown:"场地待确认"}[p.setting] || "场地待确认")}</p>
         <h3>${esc(p.name)}</h3><p class="trip-reason">${esc(primary ? p.novelty : p.reason)}</p>
         <p class="trip-weather">${esc(region.name)} · ${esc(p.day.slice(5))} ${esc(weatherNames[w.code] || "天气预报")} ${esc(Math.round(w.low))}—${esc(Math.round(w.high))}℃ · 降水概率 ${esc(w.rainProbability)}%</p>
@@ -142,7 +142,7 @@
     panel.innerHTML = `<div class="trip-heading"><h2>本周新发现</h2><span>${esc(trip.weekendStart.slice(5).replace("-", "/"))}—${esc(trip.weekendEnd.slice(5).replace("-", "/"))}</span></div>
       <p class="trip-note">${updated} 整理 · ${picks.length} 个新活动${stale ? " · 更新暂未完成，以下为上次资料" : ""}</p>
       ${picks.length ? `<ul class="trip-list trip-discoveries">${cards(picks, true)}</ul>` : `<p class="trip-empty">暂未找到符合当前条件、日期与来源明确的新活动。新的活动消息会继续补充。</p>`}
-      ${picks.length > 2 ? `<button class="text-button" data-trip-more aria-expanded="${moreOpen}">${moreOpen ? "收起" : "再看 1 个新发现"}</button>` : ""}
+      ${picks.length > 3 ? `<button class="text-button" data-trip-more aria-expanded="${moreOpen}">${moreOpen ? "收起" : `再看 ${picks.length - 3} 个新发现`}</button>` : ""}
       ${backups.length ? `<details class="trip-backups"${backupsOpen ? " open" : ""}><summary>常设备选 · ${backups.length} 个</summary><ul class="trip-list">${cards(backups, false)}</ul></details>` : ""}
       ${profileMarkup(profileOpen)}
       <details class="trip-attribution"${attributionOpen ? " open" : ""}><summary>推荐依据</summary><p class="trip-note">新发现依据近期来源中的具体活动安排，AI 辅助筛选；常设地点单列为备选。未公布的费用、预约和余位不作推断。<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">天气：Open-Meteo</a> · ${esc(formatTime(trip.weather.updatedAt))} 获取；预报为区域参考。</p></details>`;
@@ -174,7 +174,7 @@
       const extra = Array.from(document.querySelectorAll("[data-trip-extra]"));
       extra.forEach((row) => { row.hidden = expanded; });
       more.setAttribute("aria-expanded", String(!expanded));
-      more.textContent = expanded ? `再看 ${extra.length} 个建议` : "收起";
+      more.textContent = expanded ? `再看 ${extra.length} 个新发现` : "收起";
       return;
     }
   });

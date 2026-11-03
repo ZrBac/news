@@ -44,7 +44,7 @@ class EditorialTests(unittest.TestCase):
             reserved = json.loads(path.read_text())['usage']['estimatedUsd']
             self.assertGreater(reserved, 0)
             self.assertNotIn('secret-for-test', path.read_text())
-            state['usage']['estimatedUsd'] = 50
+            state['usage']['estimatedUsd'] = self.config['monthlyBudgetUsd']
             with self.assertRaises(ai.BudgetStop):
                 client.ask('test', 'test', {}, ai.NEWS_SCHEMA)
             self.assertEqual(len(requests), 1)
@@ -230,6 +230,63 @@ class EditorialTests(unittest.TestCase):
         for setting in ('outdoor', 'mixed', 'unknown'):
             article['outing']['setting'] = setting
             self.assertEqual(ai.complete_trip(data, places, {}, trip, self.now)['picks'], [])
+
+    def test_more_choices_remain_deduplicated_and_keep_feedback_filters(self):
+        item, body = self.discovery_fixture()
+        article = ai.validate_discovery(item, {item['url']}, body, [], self.now)
+        events = [{**article, 'id': str(i), 'outing': {**article['outing'], 'eventName': f'杭州手作体验{i}'}} for i in range(12)]
+        places, trip = self.trip_fixture()
+        places += [{**places[0], 'id': f'backup-{i}', 'name': f'杭州备选{i}'} for i in range(8)]
+        result = ai.complete_trip({'weekendArticles': events + events}, places, {}, trip, self.now)
+        self.assertEqual(len(result['picks']), 8)
+        self.assertEqual(len({p['id'] for p in result['picks']}), 8)
+        self.assertEqual(len(result['alternatives']), 6)
+        dismissed = result['picks'][0]['id']
+        profile = {'records': [{'id': dismissed, 'status': 'dismiss'}]}
+        updated = ai.complete_trip({'weekendArticles': events}, places, {}, result, self.now, profile)
+        self.assertEqual(len(updated['picks']), 8)
+        self.assertNotIn(dismissed, [p['id'] for p in updated['picks']])
+
+    def test_advance_announcements_keep_real_dates_only_for_current_weekend(self):
+        item, body = self.discovery_fixture()
+        item.update(publishedDate='2026-09-18', publishedEvidence='2026年9月18日')
+        body = body.replace('2026年11月1日', '2026年9月18日')
+        article = ai.validate_discovery(item, {item['url']}, body, [], self.now)
+        self.assertTrue(article['publishedAt'].startswith('2026-09-17'))  # midnight Beijing in UTC
+        self.assertTrue(ai.discovery_current(article, self.now))
+        self.assertFalse(ai.discovery_current(article, self.now + timedelta(days=7)))
+        places, trip = self.trip_fixture()
+        result = ai.complete_trip({'weekendArticles': []}, places, {'items': [article]}, trip, self.now)
+        self.assertEqual(len(result['picks']), 1, 'a full recent-news list must not hide an advance announcement')
+        item['facts'] = []
+        self.assertIsNone(ai.validate_discovery(item, {item['url']}, body, [], self.now))
+
+    def test_research_covers_two_topics_and_preserves_results_when_one_fails(self):
+        item, body = self.discovery_fixture()
+        response = {'output': [{'type':'web_search_call', 'action':{'sources':[{'url':item['url']}]}}]}
+        client = Mock()
+        client.state = {}
+        client.ask.side_effect = [({'items':[item]}, response), TimeoutError(), ({'items':[item]}, {})]
+        result = ai.discover(client, [], {}, self.now, get=lambda _:body)
+        self.assertEqual(len(result['items']), 1)
+        self.assertEqual(result['status'], 'partial')
+        calls = client.ask.call_args_list
+        self.assertNotEqual(calls[0].args[2]['focus'], calls[1].args[2]['focus'])
+        self.assertIn(item['url'], calls[1].args[2]['knownUrls'])
+
+    def test_source_detail_batches_reach_past_the_first_six_pages(self):
+        item, body = self.discovery_fixture()
+        pages = {f'https://hznews.hangzhou.com.cn/event-{i}':body for i in range(14)}
+        client = Mock()
+        client.state = {}
+        client.ask.side_effect = lambda task, instructions, material, schema: ({'items':[
+            {**item, 'url': page['url']} for page in material['pages']]}, {})
+        records = ai.extract_source_details(client, pages, [], self.now)
+        self.assertEqual(len(records), 14)
+        self.assertEqual(client.ask.call_count, 3)
+        self.assertEqual(ai.extract_source_details(client, pages, [], self.now), [])
+        pages['https://hznews.hangzhou.com.cn/new-page'] = body
+        self.assertEqual(len(ai.extract_source_details(client, pages, [], self.now)), 1)
 
     def test_weekend_card_does_not_promote_a_weekday_session(self):
         item, body = self.discovery_fixture()

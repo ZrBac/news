@@ -514,37 +514,85 @@ def trip_candidates(data, places, discoveries, now):
     return result
 
 
-def recommend(client, data, places, research, weather, now):
+def trip_options(data, places, research, weather, now):
     start, end = weekend_days(now)
     days = [str(d) for d in (start, end) if d >= now.astimezone(news.BEIJING).date()]
     candidates = trip_candidates(data, places, research.get('items', []), now)
     eligible = {c['id']: {**c, 'availableDays': [d for d in days if suitable(c, d, weather)]} for c in candidates}
     eligible = {key: c for key, c in eligible.items() if c['availableDays']}
-    if not eligible:
-        raise EditorialError('no_weather_eligible_places')
-    result, _ = client.ask('weekend_picks',
-        '从给定候选挑3—4个本周末去处，覆盖不同玩法。晴天优先轻松爬山、休闲骑行、停车后少量搬运的露营；'
-        '下雨用室内替代。优先近期有明确新安排的候选，并保留至少一个雨天备选。'
-        '不选攀岩、抱石、滑冰、溜冰、演唱会、博物馆、亲子或观赛。同一个地点只出现一次。day必须来自对应availableDays。'
-        'reason用20—60字解释为什么适合这一天，依据材料和天气。'
-        '不得声称实时开放、允许用炉、余位充足、免票或已预约，也不编造交通时间、线路、距离或费用。'
-        '近期无新消息的地点只能作为常设地点参考，不能写成当周新活动。',
-        {'weekend': [str(start), str(end)], 'weather': weather, 'candidates': list(eligible.values())}, TRIP_SCHEMA)
+    return start, end, eligible
+
+
+def complete_trip(data, places, research, trip, now):
+    """Fill filtered or partial picks from sourced candidates, without an API call."""
+    weather = trip.get('weather') or {}
+    fetched = news.parse_date(weather.get('updatedAt'))
+    if not fetched or not timedelta(0) <= now - fetched <= timedelta(hours=24):
+        return trip
+    start, end, eligible = trip_options(data, places, research, weather, now)
+    if trip.get('weekendStart') != str(start) or trip.get('weekendEnd') != str(end):
+        return trip
     picks, seen = [], set()
-    for pick in result.get('picks', [])[:4]:
+    def append(candidate, day, reason, selection):
+        seen.add(candidate['id'])
+        picks.append({k: v for k, v in {**candidate, 'day': day, 'reason': reason, 'selection': selection}.items()
+                      if k not in ('availableDays', 'closed')})
+    for pick in trip.get('picks', []):
         candidate = eligible.get(pick.get('id'))
         reason = clean(pick.get('reason'), 100)
         if not candidate or candidate['id'] in seen or pick.get('day') not in candidate['availableDays'] or len(reason) < 8:
             continue
         if re.search(r'允许.{0,8}(?:炉|明火)|可以.{0,8}(?:炉|明火)|免费|免票|正常开放|保证|余位充足', reason):
             continue
-        seen.add(candidate['id'])
-        picks.append({k: v for k, v in {**candidate, 'day': pick['day'], 'reason': reason}.items()
-                      if k not in ('availableDays', 'closed')})
-    if not picks:
+        append(candidate, pick['day'], reason, pick.get('selection', 'ai'))
+        if len(picks) == 3:
+            break
+    def kind(candidate):
+        if candidate['type'] == 'rainy':
+            for activity in ('书店|图书馆', '手作|手工', '话剧|剧院', '运动|保龄球'):
+                if re.search(activity, candidate['name'] + candidate.get('details', '')):
+                    return activity
+        return candidate['type']
+    while len(picks) < 3:
+        remaining = [c for c in eligible.values() if c['id'] not in seen and c.get('sources')]
+        if not remaining:
+            break
+        kinds = {kind(p) for p in picks}
+        candidate = min(remaining, key=lambda c: (kind(c) in kinds,
+            not bool(c.get('news') or c.get('publishedAt')), c['id']))
+        day = min(candidate['availableDays'], key=lambda d: (
+            sum(p['day'] == d for p in picks), forecast_for(weather, candidate['region'], d)['rainProbability'], d))
+        forecast = forecast_for(weather, candidate['region'], day)
+        weekday = '周六' if day == str(start) else '周日'
+        if candidate['type'] == 'rainy':
+            reason = f'{weekday}降水概率{forecast["rainProbability"]:g}%，可选室内安排。'
+        else:
+            reason = f'{weekday}降水概率{forecast["rainProbability"]:g}%、预报风速{forecast["windKmh"]:g}km/h，可考虑户外安排。'
+        reason += '常设地点参考，出发前确认营业与预约。' if candidate.get('placeId') else '活动日期涵盖当天，具体安排以来源公告为准。'
+        append(candidate, day, reason, 'rules')
+    # Keep the last AI/weather timestamps: filling a gap must not postpone the
+    # scheduled refresh or make an old forecast appear newly fetched.
+    return {**trip, 'picks': picks}
+
+
+def recommend(client, data, places, research, weather, now):
+    start, end, eligible = trip_options(data, places, research, weather, now)
+    if not eligible:
+        raise EditorialError('no_weather_eligible_places')
+    result, _ = client.ask('weekend_picks',
+        '从给定候选挑3个本周末去处；候选不足时选2个，覆盖不同玩法。晴天优先轻松爬山、休闲骑行、停车后少量搬运的露营；'
+        '下雨用室内替代。优先近期有明确新安排的候选，并保留至少一个雨天备选。'
+        '不选攀岩、抱石、滑冰、溜冰、演唱会、博物馆、亲子或观赛。同一个地点只出现一次。day必须来自对应availableDays。'
+        'reason用20—60字解释为什么适合这一天，依据材料和天气。'
+        '不得声称实时开放、允许用炉、余位充足、免票或已预约，也不编造交通时间、线路、距离或费用。'
+        '近期无新消息的地点只能作为常设地点参考，不能写成当周新活动。',
+        {'weekend': [str(start), str(end)], 'weather': weather, 'candidates': list(eligible.values())}, TRIP_SCHEMA)
+    trip = complete_trip(data, places, research, {
+        'updatedAt': news.iso(now), 'weekendStart': str(start), 'weekendEnd': str(end),
+        'weather': weather, 'picks': result.get('picks', []), 'status': 'ok'}, now)
+    if not trip['picks']:
         raise EditorialError('no_valid_recommendations')
-    return {'updatedAt': news.iso(now), 'weekendStart': str(start), 'weekendEnd': str(end),
-            'weather': weather, 'picks': picks, 'status': 'ok'}
+    return trip
 
 
 def apply_results(data, editorial, records, now):
@@ -628,6 +676,7 @@ def run(data, previous, state, client, places, now, force=False):
                 problems.append('trip:' + safe_error(error))
                 trip['status'] = 'unavailable'
             trip['attemptedAt'] = news.iso(now)
+    trip = complete_trip(data, places, research, trip, now)
     editorial['trip'] = state['trip'] = trip
     editorial['usage'] = copy.deepcopy(state['usage'])
     editorial['status'] = 'partial' if problems else 'ok'

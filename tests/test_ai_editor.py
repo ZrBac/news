@@ -5,7 +5,7 @@ import tempfile
 import unittest
 from datetime import timedelta
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import Mock, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import ai_editor as ai
@@ -153,6 +153,73 @@ class EditorialTests(unittest.TestCase):
             changed = {'regions': {'hangzhou': {'days': [{**row, field: value}]}}}
             self.assertFalse(ai.suitable(candidate, '2026-11-07', changed))
             self.assertTrue(ai.suitable({**candidate, 'type': 'rainy'}, '2026-11-07', changed))
+
+    def trip_fixture(self):
+        stamp = ai.news.iso(self.now - timedelta(minutes=5))
+        places = [{'id': key, 'name': name, 'group': group, 'area': '杭州',
+                   'paragraphs': [{'text': name}], 'reviewedOn': '2026-11-01',
+                   'links': [{'label': '场地原文', 'url': 'https://example.com/' + key}]}
+                  for key, name, group in [('book', '室内书店', 'rainy'), ('craft', '室内手作', 'rainy'),
+                      ('theatre', '话剧剧院', 'rainy'), ('hill', '宝石山', 'hiking'),
+                      ('climbing', '室内攀岩', 'rainy'), ('skating', '万象城真冰场', 'rainy')]]
+        weather = {'updatedAt': stamp, 'regions': {'hangzhou': {'days': [
+            {'date': day, 'code': 63, 'low': 10, 'high': 20, 'rainProbability': 90, 'rainMm': 8, 'windKmh': 8}
+            for day in ('2026-11-07', '2026-11-08')]}}}
+        trip = {'updatedAt': stamp, 'attemptedAt': stamp, 'revision': 'editorial-v1', 'status': 'ok',
+                'weekendStart': '2026-11-07', 'weekendEnd': '2026-11-08', 'weather': weather,
+                'picks': [{'id': 'place:book', 'day': '2026-11-07', 'reason': '周六可能下雨，可在室内书店阅读。'}]}
+        return places, trip
+
+    def test_filtered_picks_are_filled_with_sourced_weather_eligible_choices(self):
+        places, trip = self.trip_fixture()
+        trip['picks'] += [{'id': 'place:' + key, 'day': '2026-11-07', 'reason': '这是一条旧的室内活动推荐。'}
+                          for key in ('climbing', 'skating')]
+        result = ai.complete_trip({}, places, {}, trip, self.now)
+        self.assertEqual({p['id'] for p in result['picks']}, {'place:book', 'place:craft', 'place:theatre'})
+        self.assertTrue(all(p['sources'] for p in result['picks']))
+        self.assertEqual([p['selection'] for p in result['picks']], ['ai', 'rules', 'rules'])
+        self.assertEqual(result['updatedAt'], trip['updatedAt'])
+        self.assertEqual(result['weather']['updatedAt'], trip['weather']['updatedAt'])
+
+    def test_short_ai_response_is_completed_without_another_api_call(self):
+        places, trip = self.trip_fixture()
+        client = Mock()
+        client.ask.return_value = ({'picks': trip['picks']}, {})
+        result = ai.recommend(client, {}, places, {}, trip['weather'], self.now)
+        self.assertEqual(len(result['picks']), 3)
+        client.ask.assert_called_once()
+
+    def test_retry_cooldown_does_not_leave_a_filtered_trip_short(self):
+        places, trip = self.trip_fixture()
+        previous = {'editorial': {'trip': trip, 'research': {'items': [], 'revision': ai.OUTING_REVISION,
+            'searchedAt': trip['updatedAt'], 'attemptedAt': trip['attemptedAt']}}}
+        with tempfile.TemporaryDirectory() as folder:
+            transport = Mock(side_effect=AssertionError('No API call during cooldown'))
+            client = ai.Client('x', self.config, {}, Path(folder) / 'state.json', self.now, transport)
+            with patch.object(ai, 'edit_news', return_value={}), patch.object(ai, 'fetch_weather') as weather:
+                result = ai.run({}, previous, client.state, client, places, self.now)
+            transport.assert_not_called()
+            weather.assert_not_called()
+            self.assertEqual(len(result['trip']['picks']), 3)
+            self.assertEqual(result['trip']['attemptedAt'], trip['attemptedAt'])
+            self.assertEqual(result['trip']['updatedAt'], trip['updatedAt'])
+
+    def test_completion_respects_closures_dates_and_forecast_age(self):
+        places, trip = self.trip_fixture()
+        data = {'placeUpdates': {'places': {'craft': {'items': [{
+            'title': '手作场地暂停营业', 'url': 'https://example.com/closure',
+            'publishedAt': '2026-11-01T00:00:00Z'}]}}}}
+        result = ai.complete_trip(data, places, {}, trip, self.now)
+        self.assertEqual({p['id'] for p in result['picks']}, {'place:book', 'place:theatre'})
+        for age in (timedelta(hours=25), -timedelta(minutes=5)):
+            stale = copy.deepcopy(trip)
+            stale['weather']['updatedAt'] = ai.news.iso(self.now - age)
+            self.assertEqual(ai.complete_trip({}, places, {}, stale, self.now), stale)
+        sunday = ai.news.parse_date('2026-11-08T01:00:00Z')
+        trip['weather']['updatedAt'] = ai.news.iso(sunday)
+        result = ai.complete_trip({}, places, {}, trip, sunday)
+        self.assertEqual(len(result['picks']), 3)
+        self.assertTrue(all(p['day'] == '2026-11-08' for p in result['picks']))
 
     def test_api_failure_keeps_previous_research_and_does_not_advance_success(self):
         state = {}

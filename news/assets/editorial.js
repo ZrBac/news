@@ -83,7 +83,7 @@
         (state.outingType === "all" || category === state.outingType) && state.source === "all" && !state.date &&
         words.every((w) => (p.name + " " + p.reason + " " + p.area).toLowerCase().includes(w)) &&
         !/演唱会|博物馆|亲子|观赛|攀岩|抱石|滑冰|溜冰|冰场/.test(p.name);
-    }).slice(0, 4);
+    }).slice(0, 3);
     if (!picks.length) return;
     panel.hidden = false;
     const updated = esc(formatTime(trip.updatedAt));

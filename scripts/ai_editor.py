@@ -25,8 +25,9 @@ from collect_weekend import Text, outing_info, search_due, select_articles, week
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION = 'editorial-v1'
+OUTING_REVISION = 'outings-v2'
 RATES = {'gpt-6-luna': (0.10, 0.50), 'gpt-6.1-sol': (2.00, 10.00)}
-EXCLUDED = re.compile(r'演唱会|巡回演唱|歌友会|博物馆|亲子|研学|观赛|赛事回顾|活动回顾|圆满落幕|圆满结束')
+EXCLUDED = re.compile(r'演唱会|巡回演唱|歌友会|博物馆|亲子|研学|观赛|攀岩|抱石|滑冰|溜冰|冰场|赛事回顾|活动回顾|圆满落幕|圆满结束')
 REGION = re.compile(r'杭州|西湖|余杭|临平|临安|萧山|富阳|桐庐|建德|千岛湖|淳安|安吉|德清|莫干山|海宁|良渚|湘湖|钱塘|滨江')
 CLOSED = re.compile(r'封山|封闭|闭园|暂停开放|暂停营业|禁止骑行|禁止露营|临时关闭|取消|延期')
 PUBLIC_DOMAINS = (*DOMAINS, 'zj.gov.cn', 'tonglu.gov.cn', 'jiande.gov.cn', 'chunan.gov.cn',
@@ -389,8 +390,8 @@ def discover(client, places, previous, now, get=get_source):
     result, response = client.ask('outing_research',
         '主动联网检索杭州及周边最近21天发布、适合近期或本周末的出游消息。'
         '分别检索露营/营地（停车后少量搬运、卡式炉条件）、爬山/骑行与临时管制、'
-        '雨天室内玩法（攀岩、滑冰、手作、书店、话剧）、市集节庆与展览。'
-        '排除演唱会、博物馆、亲子、观赛、招商、回顾和泛泛攻略。优先文旅部门、场地公告和本地媒体。'
+        '雨天室内玩法（手作、书店、话剧）、市集节庆与展览。'
+        '排除攀岩、抱石、滑冰、溜冰、演唱会、博物馆、亲子、观赛、招商、回顾和泛泛攻略。优先文旅部门、场地公告和本地媒体。'
         '最多8条，宁少勿编。必须有原文URL及明确发布日期，publishedEvidence摘录含完整年月日的逐字证据，'
         'quote为原文中含地点与实用安排的一小段逐字原文。不得将抓取日期或活动日当成报道发布日期。'
         'facts只摘录原文明确的活动日期/费用/停车/用炉/预约/关闭条件；不存在就给空数组。'
@@ -413,7 +414,7 @@ def discover(client, places, previous, now, get=get_source):
     prior = [a for a in previous.get('items', []) if news.parse_date(a.get('publishedAt'))
              and now - timedelta(days=21) <= news.parse_date(a['publishedAt']) <= now]
     items = {a['url']: a for a in prior + incoming}
-    return {'revision': REVISION, 'searchedAt': news.iso(now), 'status': 'ok',
+    return {'revision': OUTING_REVISION, 'searchedAt': news.iso(now), 'status': 'ok',
         'found': len(incoming), 'unverified': len(candidates) - len(incoming),
         'items': sorted(items.values(), key=lambda a: a['publishedAt'], reverse=True)[:20]}
 
@@ -524,7 +525,7 @@ def recommend(client, data, places, research, weather, now):
     result, _ = client.ask('weekend_picks',
         '从给定候选挑3—4个本周末去处，覆盖不同玩法。晴天优先轻松爬山、休闲骑行、停车后少量搬运的露营；'
         '下雨用室内替代。优先近期有明确新安排的候选，并保留至少一个雨天备选。'
-        '不选演唱会、博物馆、亲子或观赛。同一个地点只出现一次。day必须来自对应availableDays。'
+        '不选攀岩、抱石、滑冰、溜冰、演唱会、博物馆、亲子或观赛。同一个地点只出现一次。day必须来自对应availableDays。'
         'reason用20—60字解释为什么适合这一天，依据材料和天气。'
         '不得声称实时开放、允许用炉、余位充足、免票或已预约，也不编造交通时间、线路、距离或费用。'
         '近期无新消息的地点只能作为常设地点参考，不能写成当周新活动。',
@@ -600,7 +601,7 @@ def run(data, previous, state, client, places, now, force=False):
         editorial['news'] = {**editorial.get('news', {}), 'status': 'unavailable'}
     research = copy.deepcopy(state.get('research') or editorial.get('research') or {})
     attempted = news.parse_date(research.get('attemptedAt'))
-    due = search_due(now, research, REVISION)
+    due = search_due(now, research, OUTING_REVISION)
     # At most one retry per hour, including repeated manual page-refresh requests.
     if (force or due) and (force or not attempted or now - attempted >= timedelta(minutes=55)):
         try:
@@ -609,18 +610,20 @@ def run(data, previous, state, client, places, now, force=False):
             problems.append('research:' + safe_error(error))
             research['status'] = 'unavailable'
         research['attemptedAt'] = news.iso(now)
-    research['items'] = [a for a in research.get('items', []) if news.parse_date(a.get('publishedAt'))
+    research['items'] = [a for a in research.get('items', []) if not EXCLUDED.search(a.get('title', ''))
+                         and news.parse_date(a.get('publishedAt'))
                          and now - timedelta(days=21) <= news.parse_date(a['publishedAt']) <= now]
     editorial['research'] = state['research'] = research
     apply_results(data, editorial, records, now)
     trip = copy.deepcopy(state.get('trip') or editorial.get('trip') or {})
-    if force or search_due(now, {'searchedAt': trip.get('updatedAt'), 'revision': trip.get('revision')}, REVISION):
+    trip['picks'] = [p for p in trip.get('picks', []) if not EXCLUDED.search(p.get('name', ''))]
+    if force or search_due(now, {'searchedAt': trip.get('updatedAt'), 'revision': trip.get('revision')}, OUTING_REVISION):
         attempted = news.parse_date(trip.get('attemptedAt'))
         if force or not attempted or now - attempted >= timedelta(minutes=55):
             try:
                 weather = fetch_weather(now)
                 trip = recommend(client, data, places, research, weather, now)
-                trip['revision'] = REVISION
+                trip['revision'] = OUTING_REVISION
             except Exception as error:
                 problems.append('trip:' + safe_error(error))
                 trip['status'] = 'unavailable'

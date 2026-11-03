@@ -136,7 +136,7 @@ class PlaceUpdatesTests(unittest.TestCase):
         template = (places.ROOT / 'news/index.html').read_text()
         rendered = build_news.build_places(template)
         self.assertNotIn('_PLACES__', rendered)
-        self.assertEqual(rendered.count('data-place-id='), 38)
+        self.assertEqual(rendered.count('data-place-id='), 36)
         self.assertIn('骑行路线', rendered)
         self.assertIn('卡式炉', rendered)
         self.assertIn('data-place-id="cycle-xianghu"', rendered)

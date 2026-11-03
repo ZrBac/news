@@ -197,7 +197,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.equal(await page.locator("[data-place-group][open]").count(), 0);
     assert.match(
       await page.locator("#result-count").innerText(),
-      /38 个地点参考/,
+      /36 个地点参考/,
     );
     // Searching opens just the matching reference group, without relying on feeds.
     await page.fill("#search", "宝石山");
@@ -223,18 +223,18 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.fill("#search", "雨天");
     assert.equal(
       await page.locator("#rainy-places .place-card:visible").count(),
-      7,
+      5,
     );
     assert.doesNotMatch(
       (await page.locator("#rainy-places h3").allTextContents()).join(" "),
       /博物馆|博物院|美术馆/,
     );
     assert(await page.locator("#hiking-places").isHidden());
-    await page.fill("#search", "雨天 攀岩");
+    await page.fill("#search", "雨天 手作");
     assert.equal(await page.locator(".place-card:visible").count(), 1);
     assert.match(
       await page.locator(".place-card:visible h3").innerText(),
-      /香蕉攀岩/,
+      /自然造物/,
     );
     await page.fill("#search", "不存在的地点");
     assert.equal(await page.locator("[data-place-group]:visible").count(), 0);
@@ -434,7 +434,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       while (Number(await page.locator("#" + group + " [data-place-more]").getAttribute("data-remaining")))
         await page.locator("#" + group + " [data-place-more]").click();
     }
-    assert.equal(await page.locator(".place-card:visible").count(), 38);
+    assert.equal(await page.locator(".place-card:visible").count(), 36);
     assert.equal(
       await page.locator("#cycling-places .place-card:visible").count(),
       8,

@@ -342,40 +342,6 @@
       ]
     },
     {
-      "id": "climbing",
-      "group": "rainy",
-      "name": "香蕉攀岩 · 西溪天街店",
-      "area": "西溪天街 4F · 室内抱石 · 预留 1.5–2 小时",
-      "types": "",
-      "keywords": "下雨 雨天 室内 避雨 攀岩 抱石",
-      "aliases": [],
-      "reviewedOn": "2026-10-23",
-      "paragraphs": [
-        {
-          "label": "",
-          "text": "想在雨天活动身体，可以试一节抱石入门课。低高度岩壁配落地区软垫，玩法是研究动作、尝试不同线路。"
-        },
-        {
-          "label": "体验：",
-          "text": "初次去先问入门指导和岩鞋租借，按教练要求练习下落；课程、入场和租鞋是否分开收费，订前看清。"
-        },
-        {
-          "label": "",
-          "text": "位于余杭塘路龙湖西溪天街 4F 46–47。先确认本店课程及余位，再安排出发。"
-        }
-      ],
-      "links": [
-        {
-          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E9%A6%99%E8%95%89%E6%94%80%E5%B2%A9+%E8%A5%BF%E6%BA%AA%E5%A4%A9%E8%A1%97%E5%BA%97&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
-          "label": "地图查询"
-        },
-        {
-          "url": "https://media.bananaclimbing.com/",
-          "label": "官方门店与课程"
-        }
-      ]
-    },
-    {
       "id": "partyday",
       "group": "rainy",
       "name": "PARTYDAY · 杭州运动超乐场",
@@ -406,40 +372,6 @@
         {
           "url": "https://www.partydaysport.com/en/hangzhou.html",
           "label": "官方杭州门店介绍"
-        }
-      ]
-    },
-    {
-      "id": "skating",
-      "group": "rainy",
-      "name": "冰纷万象 · 万象城真冰场",
-      "area": "钱江新城 · 富春路万象城 L4 · 预留 1–2 小时",
-      "types": "",
-      "keywords": "下雨 雨天 室内 避雨 滑冰 真冰 溜冰",
-      "aliases": [],
-      "reviewedOn": "2026-10-23",
-      "paragraphs": [
-        {
-          "label": "",
-          "text": "想学一项新运动，可以留一两个小时滑真冰。初次体验先约基础指导，也可以只练站稳、滑行和停下。"
-        },
-        {
-          "label": "体验：",
-          "text": "查当日公众滑冰场次，确认冰鞋、护具和教学是否包含；穿便于活动的衣服，按冰场要求佩戴护具。"
-        },
-        {
-          "label": "",
-          "text": "地址是富春路 701 号万象城 L4，导航时认准钱江新城这家商场。"
-        }
-      ],
-      "links": [
-        {
-          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%B7%9E+%E5%86%B0%E7%BA%B7%E4%B8%87%E8%B1%A1+%E5%AF%8C%E6%98%A5%E8%B7%AF+%E4%B8%87%E8%B1%A1%E5%9F%8E&city=%E6%9D%AD%E5%B7%9E&view=map&callnative=0",
-          "label": "地图查询"
-        },
-        {
-          "url": "https://you.ctrip.com/sight/hangzhou14/1489363.html",
-          "label": "场馆位置与营业信息"
         }
       ]
     },

@@ -43,5 +43,9 @@ def excludes(candidate, profile):
 
 def event_key(name, start, end, venue):
     import hashlib
+    # Local publishers use both the formal exhibition name and its common
+    # abbreviation, and often omit the city prefix from the same venue.
+    name = name.replace('文化创意产业博览会', '文博会').replace('文化创意博览会', '文博会')
+    venue = re.sub(r'^杭州市?', '', venue)
     text = re.sub(r'[\s\W_]+', '', name + start + end + venue).lower()
     return 'event:' + hashlib.sha256(text.encode()).hexdigest()[:24]

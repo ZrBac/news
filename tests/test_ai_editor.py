@@ -247,6 +247,16 @@ class EditorialTests(unittest.TestCase):
         ai.extract_source_details(client, {item['url']: body + '\n新公告'}, [], self.now)
         self.assertEqual(client.ask.call_count, 2)
 
+    def test_partial_reextraction_keeps_details_only_while_the_same_event_still_proves_them(self):
+        item, body = self.discovery_fixture()
+        previous = ai.validate_discovery(item, {item['url']}, body, [], self.now)
+        partial = copy.deepcopy(previous)
+        del partial['outing']['novelty']
+        self.assertEqual(ai.merge_discovery(previous, partial, body)['outing']['novelty'], item['event']['novelty'])
+        self.assertNotIn('novelty', ai.merge_discovery(previous, partial, body.replace(item['event']['novelty'], ''))['outing'])
+        partial['outing']['eventName'] = '另一个活动'
+        self.assertNotIn('novelty', ai.merge_discovery(previous, partial, body)['outing'])
+
     def test_private_feedback_filters_places_and_events_without_entering_cache(self):
         item, body = self.discovery_fixture()
         article = ai.validate_discovery(item, {item['url']}, body, [], self.now)
@@ -265,6 +275,13 @@ class EditorialTests(unittest.TestCase):
             ai.save(path, {'outingProfile': profile, 'trip': result})
             self.assertNotIn('outingProfile', path.read_text())
             self.assertNotIn('私人的去过记录', path.read_text())
+
+    def test_common_event_aliases_share_feedback_identity(self):
+        formal = ai.outing_profile.event_key('第二十届杭州文化创意产业博览会', '2026-11-05', '2026-11-09', '杭州白马湖国际会展中心')
+        short = ai.outing_profile.event_key('第二十届杭州文博会', '2026-11-05', '2026-11-09', '白马湖国际会展中心')
+        self.assertEqual(formal, short)
+        different_date = ai.outing_profile.event_key('第二十届杭州文博会', '2026-11-12', '2026-11-15', '白马湖国际会展中心')
+        self.assertNotEqual(formal, different_date)
 
     def test_source_recheck_invalidates_changed_or_cancelled_details_and_preserves_time_on_failure(self):
         item, body = self.discovery_fixture()

@@ -5,5 +5,5 @@
   "monthlyBudgetUsd": 50,
   "runBudgetUsd": 1.2,
   "maxNewsPerRun": 60,
-  "maxSearchCalls": 4
+  "maxSearchCalls": 6
 }

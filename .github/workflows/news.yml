@@ -35,6 +35,7 @@ jobs:
           node --check news/assets/personal.js
           node --check news/assets/exchange-core.js
           node --check news/assets/editorial.js
+          node --check news/assets/outings-profile.js
           node --test tests/exchange-core.cjs
           node --check news/assets/pwa.js
           node --check news/assets/homes-core.js
@@ -92,6 +93,7 @@ jobs:
         timeout-minutes: 5
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+          OUTING_PROFILE_TOKEN: ${{ secrets.OUTING_PROFILE_TOKEN }}
         run: python scripts/ai_editor.py --previous-url https://news.zacai.fun/data/latest.json
       - name: Save editorial usage even if a later build fails
         if: always() && steps.ai-editor.outcome != 'skipped'

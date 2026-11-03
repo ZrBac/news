@@ -22,6 +22,14 @@
 
 ## 本地检查
 
+### 去处共同记录
+
+`/api/outings/profile` 是独立的私有记录接口，使用同一 `NewsCoordinator` 类的 `idFromName('outings')` 实例，不动 `news` 的刷新状态。GET/POST 必须提供 `Authorization: Bearer <OUTING_PROFILE_TOKEN>`；浏览器读写另校验资讯站 Origin，构建任务可不带 Origin 读取。POST 按单条反馈或设置更新，最多保存 300 条，可撤销；禁止任意字段写入。接口不缓存，令牌和请求正文不写应用日志。
+
+部署时生成足够长的随机连接码，分别用 stdin 写入 Worker Secret 和 GitHub Actions 的 `OUTING_PROFILE_TOKEN`（同一值）。不要放进命令参数、静态构建或仓库。给拥有者的私人连接链接格式是 `https://news.zacai.fun/#local&outing-key=<连接码>`，浏览器存入本机后立即清除地址中的令牌。两台手机分别打开一次，即可共用记录。轮换时更新两处 Secret，再给设备新的连接链接；原有记录不随密钥轮换删除。
+
+采集程序只在内存里使用这些记录，公开数据和 Actions 缓存不含个人偏好。静态页面、离线阅读、新闻定时采集保持原架构；共同记录依赖 Cloudflare，不依赖当前服务器。同步失败先留本机待发送，快速连续修改保留最后一次选择。
+
 使用 Node.js 22，工具依赖独立于根目录的旧 Hexo：
 
 ```sh

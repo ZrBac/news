@@ -62,13 +62,31 @@ export default {
       );
       response.headers.set(
         "Access-Control-Allow-Headers",
-        "X-News-Refresh, Content-Type",
+        "X-News-Refresh, Content-Type, Authorization",
       );
       response.headers.set("Access-Control-Max-Age", "600");
       response.headers.set("X-Content-Type-Options", "nosniff");
       return response;
     };
     const { pathname, search } = new URL(request.url);
+    if (pathname === "/api/outings/profile" && !search) {
+      if (origin && !ORIGINS.has(origin)) return reply({ status: "forbidden" }, 403);
+      if (request.method === "OPTIONS" && ORIGINS.has(origin)) return reply({ status: "ok" });
+      if (!env.OUTING_PROFILE_TOKEN || request.headers.get("Authorization") !== "Bearer " + env.OUTING_PROFILE_TOKEN)
+        return reply({ status: "unauthorized" }, 401);
+      if (!["GET", "POST"].includes(request.method)) return reply({ status: "method_not_allowed" }, 405);
+      if (request.method === "POST" && !ORIGINS.has(origin)) return reply({ status: "forbidden" }, 403);
+      try {
+        const { success } = await env.REQUEST_LIMITER.limit({ key: "outings:" + (request.headers.get("CF-Connecting-IP") || "build") });
+        if (!success) return reply({ status: "busy" }, 429);
+        const body = request.method === "POST" ? await boundedText(request, 8192) : undefined;
+        const object = env.COORDINATOR.get(env.COORDINATOR.idFromName("outings"));
+        const response = await object.fetch(new Request("https://internal/outing-profile", {
+          method: request.method, ...(body !== undefined ? { body } : {}),
+        }));
+        return reply(await response.json(), response.status);
+      } catch { return reply({ status: "unavailable" }, 503); }
+    }
     if (![API, API + "/status"].includes(pathname) || search)
       return reply({ status: "not_found" }, 404);
     if (!ORIGINS.has(origin)) return reply({ status: "forbidden" }, 403);
@@ -133,6 +151,7 @@ export class NewsCoordinator {
         if (Date.now() < this.errorUntil)
           return json({ status: "unavailable" }, 503);
         const action = new URL(request.url).pathname;
+        if (action === "/outing-profile") return await this.outingProfile(request);
         if (action === "/status") return json(await this.status());
         if (action === "/trigger" && this.env.MANUAL_ENABLED === "true")
           return json(await this.trigger());
@@ -146,6 +165,34 @@ export class NewsCoordinator {
         return json({ status: "unavailable" }, 503);
       }
     });
+  }
+
+  async outingProfile(request) {
+    const profile = await this.ctx.storage.get("outingProfile") || { schema: 1, settings: {}, records: [], updatedAt: null };
+    if (request.method === "GET") return json(profile);
+    let input;
+    try { input = JSON.parse(await boundedText(request, 8192)); }
+    catch { return json({ status: "invalid_request" }, 400); }
+    if (!input || typeof input !== "object" || Array.isArray(input)) return json({ status: "invalid_request" }, 400);
+    const stamp = new Date().toISOString();
+    if (input.action === "settings") {
+      if (typeof input.startArea !== "string" || input.startArea.length > 50 ||
+          !Number.isInteger(input.people) || input.people < 1 || input.people > 10 ||
+          !["car", "transit"].includes(input.transport)) return json({ status: "invalid_request" }, 400);
+      profile.settings = { startArea: input.startArea.trim(), people: input.people, transport: input.transport };
+    } else if (["record", "remove"].includes(input.action)) {
+      if (typeof input.id !== "string" || !/^(place|event):[a-z0-9-]{1,100}$/.test(input.id))
+        return json({ status: "invalid_request" }, 400);
+      if (input.action === "record") {
+        if (!["visited", "want", "dismiss"].includes(input.status) || typeof input.title !== "string" ||
+            !input.title.trim() || input.title.length > 150) return json({ status: "invalid_request" }, 400);
+        const record = { id: input.id, title: input.title.trim(), status: input.status, updatedAt: stamp };
+        profile.records = [record, ...profile.records.filter(r => r.id !== input.id)].slice(0, 300);
+      } else profile.records = profile.records.filter(r => r.id !== input.id);
+    } else return json({ status: "invalid_request" }, 400);
+    profile.updatedAt = stamp;
+    await this.ctx.storage.put("outingProfile", profile);
+    return json(profile);
   }
 
   async upstream(url, options = {}, maximum = 300_000) {

@@ -26,6 +26,7 @@ test("Workers runtime: SQLite coordinator serializes requests and keeps cooldown
       GITHUB_TOKEN: "test-only",
       MANUAL_ENABLED: "true",
       WATCHDOG_ENABLED: "true",
+      OUTING_PROFILE_TOKEN: "test-private-profile",
     },
     durableObjects: {
       COORDINATOR: { className: "NewsCoordinator", useSQLite: true },
@@ -75,8 +76,15 @@ test("Workers runtime: SQLite coordinator serializes requests and keeps cooldown
     const results = await Promise.all(Array.from({ length: 8 }, request));
     assert.equal(results.filter((r) => r.status === "running").length, 1);
     assert.equal(results.filter((r) => r.status === "cooldown").length, 7);
+    const profileUrl = "https://api.example.com/api/outings/profile";
+    const profileHeaders = {Origin:"https://news.zacai.fun", Authorization:"Bearer test-private-profile"};
+    const saved = await mf.dispatchFetch(profileUrl, {method:"POST", headers:profileHeaders,
+      body:JSON.stringify({action:"record",id:"place:craft",title:"室内手作",status:"visited"})});
+    assert.equal(saved.status,200);
     await mf.dispose();
     mf = new Miniflare(convertV4MiniflareOptions(options));
+    const stored = await (await mf.dispatchFetch(profileUrl,{headers:profileHeaders})).json();
+    assert.equal(stored.records[0].status,"visited", "private records persist in their separate SQLite object");
     assert.equal((await request()).status, "cooldown");
     assert.equal(dispatches, 1);
   } finally {

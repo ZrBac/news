@@ -20,18 +20,21 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 
 import collect_news as news
+import outing_profile
 from collect_places import DOMAINS
 from collect_weekend import Text, outing_info, search_due, select_articles, weekend_days
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION = 'editorial-v1'
-OUTING_REVISION = 'outings-v2'
+OUTING_REVISION = 'outings-discoveries-v1'
 RATES = {'gpt-6-luna': (0.10, 0.50), 'gpt-6.1-sol': (2.00, 10.00)}
 EXCLUDED = re.compile(r'演唱会|巡回演唱|歌友会|博物馆|亲子|研学|观赛|攀岩|抱石|滑冰|溜冰|冰场|赛事回顾|活动回顾|圆满落幕|圆满结束')
 REGION = re.compile(r'杭州|西湖|余杭|临平|临安|萧山|富阳|桐庐|建德|千岛湖|淳安|安吉|德清|莫干山|海宁|良渚|湘湖|钱塘|滨江')
 CLOSED = re.compile(r'封山|封闭|闭园|暂停开放|暂停营业|禁止骑行|禁止露营|临时关闭|取消|延期')
+OUTING_SOURCES = json.loads((ROOT / 'news/outing-sources.json').read_text())['sources']
 PUBLIC_DOMAINS = (*DOMAINS, 'zj.gov.cn', 'tonglu.gov.cn', 'jiande.gov.cn', 'chunan.gov.cn',
-                  'deqing.gov.cn', 'anji.gov.cn', 'zjhn.gov.cn', 'news.cn', 'people.com.cn')
+                  'deqing.gov.cn', 'anji.gov.cn', 'zjhn.gov.cn', 'news.cn', 'people.com.cn',
+                  *(source['domain'] for source in OUTING_SOURCES))
 AREAS = {
     'hangzhou': ('杭州市区', 30.2741, 120.1551),
     'linan': ('临安', 30.233, 119.725),
@@ -55,7 +58,8 @@ def fingerprint(value):
 def save(path, value):
     path.parent.mkdir(parents=True, exist_ok=True)
     temp = path.with_suffix('.tmp')
-    temp.write_text(compact(value) + '\n')
+    public_cache = {k: v for k, v in value.items() if k != 'outingProfile'}
+    temp.write_text(compact(public_cache) + '\n')
     temp.replace(path)
 
 
@@ -88,6 +92,9 @@ SEARCH_SCHEMA = object_schema({'items': array_schema(object_schema({
     'publishedDate': STRING, 'publishedEvidence': STRING,
     'type': {'type': 'string', 'enum': ['market', 'culture', 'outdoor', 'camping']},
     'quote': STRING, 'placeIds': array_schema(STRING),
+    'event': object_schema({'name': STRING, 'novelty': STRING, 'venue': STRING,
+        'setting': {'type': 'string', 'enum': ['indoor', 'outdoor', 'mixed', 'unknown']},
+        'settingEvidence': STRING, 'bookingUrl': STRING}),
     'facts': array_schema(object_schema({
         'kind': {'type': 'string', 'enum': ['date', 'venue', 'cost', 'parking', 'stove', 'booking', 'closure']},
         'quote': STRING,
@@ -153,7 +160,7 @@ class Client:
             'input': compact(material),
             'text': {'format': {'type': 'json_schema', 'name': task, 'strict': True, 'schema': schema}}}
         if research:
-            payload.update(tools=[{'type': 'web_search', 'search_context_size': 'low',
+            payload.update(tools=[{'type': 'web_search', 'search_context_size': 'medium',
                 'filters': {'allowed_domains': list(PUBLIC_DOMAINS)}}],
                 tool_choice='required', max_tool_calls=self.config['maxSearchCalls'],
                 include=['web_search_call.action.sources'])
@@ -320,7 +327,9 @@ def get_source(url):
     header = '\n'.join(line.strip() for line in ''.join(parsed.parts).splitlines() if line.strip())[:3500]
     heading = re.search(r'<h1\b[^>]*>(.*?)</h1>', html, re.I | re.S) or re.search(r'<title\b[^>]*>(.*?)</title>', html, re.I | re.S)
     title = clean(news.plain(heading[1]), 150) if heading else ''
-    return parsed.text + '\n' + header + '\n' + '\n'.join(meta) + '\n来源标题：' + title
+    links = [urllib.parse.urljoin(url, href) for href in re.findall(r'<a\b[^>]*href=["\x27]([^"\x27]+)', html, re.I)]
+    links = [link for link in links if trusted_url(link)][:80]
+    return parsed.text + '\n' + header + '\n' + '\n'.join(meta) + '\n来源标题：' + title + '\n来源链接：' + '\n'.join(links)
 
 
 def cited_urls(response):
@@ -372,11 +381,29 @@ def validate_discovery(item, urls, body, places, now):
     record = {'id': 'discovery-' + fingerprint(url), 'title': title, 'url': url,
         'sourceId': 'web-discovery', 'sourceName': publisher if publisher and normalized(publisher) in normalized(body) else urllib.parse.urlsplit(url).hostname,
         'category': 'local', 'publishedAt': news.iso(datetime.combine(published, datetime.min.time(), news.BEIJING)),
-        'excerpt': '', 'dateOnly': True, 'facts': facts, 'verifiedAt': news.iso(now),
+        'excerpt': '', 'dateOnly': True, 'facts': facts, 'verifiedAt': news.iso(now), 'sourceStatus': 'verified',
         'placeIds': [p['id'] for p in places if p['id'] in item.get('placeIds', [])
                      and any(alias in title + quote + ' '.join(f['text'] for f in facts) for alias in p.get('aliases', []))]}
     info = outing_info(record, '\n'.join(f['text'] for f in facts if f['kind'] == 'date'))
     info['type'] = item['type']
+    event = item.get('event') or {}
+    novelty, name, venue = (clean(event.get(key), 200 if key == 'novelty' else 110) for key in ('novelty', 'name', 'venue'))
+    if len(novelty) >= 8 and normalized(novelty) in normalized(body):
+        info['novelty'] = novelty
+    if len(name) >= 3 and normalized(name) in normalized(body):
+        info['eventName'] = name
+    if len(venue) >= 3 and normalized(venue) in normalized(body):
+        info['venue'] = venue
+    setting, evidence = event.get('setting'), clean(event.get('settingEvidence'), 160)
+    indoor = bool(re.search(r'室内|展厅|展馆|会展中心|博览中心|剧院|剧场|书店', evidence))
+    outdoor = bool(re.search(r'室外|户外|露天|草坪|广场|山野|营地', evidence))
+    if evidence and normalized(evidence) in normalized(body):
+        if setting == 'indoor' and indoor and not outdoor or setting == 'outdoor' and outdoor and not indoor or setting == 'mixed' and indoor and outdoor:
+            info['setting'], info['settingEvidence'] = setting, evidence
+    info.setdefault('setting', 'unknown')
+    booking = event.get('bookingUrl', '')
+    if trusted_url(booking) and booking in body:
+        info['bookingUrl'] = booking
     # Cancellation/closure notices remain useful in the place updates, but are
     # excluded from playable activities and recommendations.
     info['cancelled'] = bool(CLOSED.search(title + ' '.join(f['text'] for f in facts if f['kind'] == 'closure')))
@@ -384,11 +411,43 @@ def validate_discovery(item, urls, body, places, now):
     return record
 
 
+def recheck_discoveries(previous, now, get=get_source):
+    """Re-read upcoming source pages; fetching alone never establishes new facts."""
+    items = copy.deepcopy(previous.get('items', []))
+    today = now.astimezone(news.BEIJING).date().isoformat()
+    active = [a for a in items if a.get('outing', {}).get('novelty')
+              and a['outing'].get('end', '') >= today][:8]
+    def check(article):
+        article['sourceCheckedAt'] = news.iso(now)
+        try:
+            body = get(article['url'])
+            info = article['outing']
+            proof = [f['text'] for f in article.get('facts', [])]
+            proof += [info[k] for k in ('novelty', 'eventName', 'venue', 'settingEvidence') if info.get(k)]
+            if not proof or any(normalized(p) not in normalized(body) for p in proof):
+                article['sourceStatus'] = 'changed'
+                return
+            # A cancellation next to this specific event invalidates the old
+            # recommendation. Unrelated navigation/footer notices do not.
+            name = info.get('eventName')
+            if name and any(CLOSED.search(body[max(0, m.start()-60):m.end()+120])
+                            for m in re.finditer(re.escape(name), body)):
+                info['cancelled'] = True
+            article['sourceStatus'] = 'verified'
+            article['verifiedAt'] = news.iso(now)
+        except Exception:
+            article['sourceStatus'] = 'unavailable'
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(check, active))
+    return {**previous, 'items': items}
+
+
 def discover(client, places, previous, now, get=get_source):
     today = now.astimezone(news.BEIJING).date().isoformat()
     start, end = weekend_days(now)
     result, response = client.ask('outing_research',
-        '主动联网检索杭州及周边最近21天发布、适合近期或本周末的出游消息。'
+        '主动联网检索杭州及周边最近21天发布、适合近期或本周末的新活动。目标是发现用户没体验过的具体新安排。'
+        '优先提供的主办方、剧场和场馆官网，媒体用于补充核验；不要只围绕已有地点搜索。'
         '分别检索露营/营地（停车后少量搬运、卡式炉条件）、爬山/骑行与临时管制、'
         '雨天室内玩法（手作、书店、话剧）、市集节庆与展览。'
         '排除攀岩、抱石、滑冰、溜冰、演唱会、博物馆、亲子、观赛、招商、回顾和泛泛攻略。优先文旅部门、场地公告和本地媒体。'
@@ -397,8 +456,11 @@ def discover(client, places, previous, now, get=get_source):
         'facts只摘录原文明确的活动日期/费用/停车/用炉/预约/关闭条件；不存在就给空数组。'
         'placeIds只关联提供的地点ID，找不到就为空。没有实际新消息就返回空数组，不重复上轮条目。',
         {'today': today, 'weekend': [str(start), str(end)],
+         'preferences': client.state.get('outingProfile', {}), 'officialSources': OUTING_SOURCES,
+         'requirements': 'event.name是原文活动名；novelty逐字摘录本次新增安排；venue逐字摘录地点。setting只能依据settingEvidence原文判断室内、室外或混合，不清楚填unknown。bookingUrl仅填原文实际链接，否则空字符串。facts.date必须保留明确的活动起止日期；不要用报道日期代替。已去过场所只有出现具体新活动才重新推荐。不要编造从出发地的距离、车程、两人费用或余位。',
          'places': [{'id': p['id'], 'name': p['name']} for p in places],
-         'knownUrls': [a['url'] for a in previous.get('items', [])]}, SEARCH_SCHEMA, research=True)
+         'knownUrls': [a['url'] for a in previous.get('items', [])
+                       if a.get('outing', {}).get('novelty') and a.get('sourceStatus') == 'verified']}, SEARCH_SCHEMA, research=True)
     urls = cited_urls(response)
     candidates = [a for a in result.get('items', [])[:8] if trusted_url(a.get('url')) and a['url'].split('#')[0] in urls]
     # Bounded diagnostic data stays in the Actions build cache, never in pages.
@@ -478,13 +540,13 @@ def suitable(candidate, day, weather):
         return False
     if candidate.get('start') and not candidate['start'] <= day <= candidate['end']:
         return False
-    if candidate['type'] != 'rainy' and (forecast['code'] in (95, 96, 99) or forecast['windKmh'] >= 30
+    if candidate.get('setting', 'indoor' if candidate['type'] == 'rainy' else 'unknown') != 'indoor' and (forecast['code'] in (95, 96, 99) or forecast['windKmh'] >= 30
             or forecast['rainProbability'] >= 60 or forecast['rainMm'] >= 3 or forecast['code'] >= 51):
         return False
     return True
 
 
-def trip_candidates(data, places, discoveries, now):
+def trip_candidates(data, places, discoveries, now, profile=None):
     result = []
     updates = data.get('placeUpdates', {}).get('places', {})
     for place in places:
@@ -499,98 +561,108 @@ def trip_candidates(data, places, discoveries, now):
             'area': place['area'], 'type': place['group'], 'details': text[:650],
             'reviewedOn': place['reviewedOn'], 'region': place_region(place['area'] + place['name']),
             'sources': references[:2], 'news': [{'title': a['title'], 'url': a.get('originalUrl') or a['url'], 'publishedAt': a['publishedAt']} for a in recent[:2]],
+            'setting': 'indoor' if place['group'] == 'rainy' else 'outdoor', 'discovery': False,
             'mapUrl': next((link['url'] for link in place['links'] if 'uri.amap.com/' in link['url']), ''), 'closed': closed})
     for article in data.get('weekendArticles', []):
         info = article.get('outing', {})
-        if not info.get('start') or not info.get('end') or info.get('cancelled'):
+        if not info.get('start') or not info.get('end') or info.get('cancelled') or not info.get('novelty'):
+            continue
+        verified = news.parse_date(article.get('verifiedAt'))
+        if article.get('sourceStatus') == 'changed' or not verified or not timedelta(0) <= now - verified <= timedelta(hours=48):
             continue
         if EXCLUDED.search(article['title']):
             continue
-        result.append({'id': 'event:' + article['id'], 'articleId': article['id'], 'name': article['title'],
+        name = info.get('eventName') or article['title']
+        result.append({'id': outing_profile.event_key(name, info['start'], info['end'], info.get('venue', '')),
+            'articleId': article['id'], 'name': name, 'discovery': True,
             'type': info['type'], 'area': info.get('venue', ''), 'details': article.get('excerpt', '')[:450],
+            'setting': info.get('setting', 'unknown'), 'novelty': info['novelty'], 'bookingUrl': info.get('bookingUrl', ''),
+            'verifiedAt': article.get('verifiedAt'),
             'region': place_region(article['title'] + info.get('venue', '')), 'start': info['start'], 'end': info['end'],
             'sources': [{'label': article.get('sourceName') or '活动原文', 'url': article.get('originalUrl') or article['url']}],
             'publishedAt': article['publishedAt'], 'facts': article.get('facts', [])})
-    return result
+    return [candidate for candidate in result if not outing_profile.excludes(candidate, profile)]
 
 
-def trip_options(data, places, research, weather, now):
+def trip_options(data, places, research, weather, now, profile=None):
     start, end = weekend_days(now)
     days = [str(d) for d in (start, end) if d >= now.astimezone(news.BEIJING).date()]
-    candidates = trip_candidates(data, places, research.get('items', []), now)
+    candidates = trip_candidates(data, places, research.get('items', []), now, profile)
     eligible = {c['id']: {**c, 'availableDays': [d for d in days if suitable(c, d, weather)]} for c in candidates}
     eligible = {key: c for key, c in eligible.items() if c['availableDays']}
     return start, end, eligible
 
 
-def complete_trip(data, places, research, trip, now):
+def complete_trip(data, places, research, trip, now, profile=None):
     """Fill filtered or partial picks from sourced candidates, without an API call."""
     weather = trip.get('weather') or {}
     fetched = news.parse_date(weather.get('updatedAt'))
     if not fetched or not timedelta(0) <= now - fetched <= timedelta(hours=24):
         return trip
-    start, end, eligible = trip_options(data, places, research, weather, now)
+    start, end, eligible = trip_options(data, places, research, weather, now, profile)
     if trip.get('weekendStart') != str(start) or trip.get('weekendEnd') != str(end):
         return trip
-    picks, seen = [], set()
-    def append(candidate, day, reason, selection):
-        seen.add(candidate['id'])
-        picks.append({k: v for k, v in {**candidate, 'day': day, 'reason': reason, 'selection': selection}.items()
-                      if k not in ('availableDays', 'closed')})
-    for pick in trip.get('picks', []):
-        candidate = eligible.get(pick.get('id'))
-        reason = clean(pick.get('reason'), 100)
-        if not candidate or candidate['id'] in seen or pick.get('day') not in candidate['availableDays'] or len(reason) < 8:
-            continue
-        if re.search(r'允许.{0,8}(?:炉|明火)|可以.{0,8}(?:炉|明火)|免费|免票|正常开放|保证|余位充足', reason):
-            continue
-        append(candidate, pick['day'], reason, pick.get('selection', 'ai'))
-        if len(picks) == 3:
-            break
-    def kind(candidate):
-        if candidate['type'] == 'rainy':
-            for activity in ('书店|图书馆', '手作|手工', '话剧|剧院', '运动|保龄球'):
-                if re.search(activity, candidate['name'] + candidate.get('details', '')):
-                    return activity
-        return candidate['type']
-    while len(picks) < 3:
-        remaining = [c for c in eligible.values() if c['id'] not in seen and c.get('sources')]
-        if not remaining:
-            break
-        kinds = {kind(p) for p in picks}
-        candidate = min(remaining, key=lambda c: (kind(c) in kinds,
-            not bool(c.get('news') or c.get('publishedAt')), c['id']))
-        day = min(candidate['availableDays'], key=lambda d: (
-            sum(p['day'] == d for p in picks), forecast_for(weather, candidate['region'], d)['rainProbability'], d))
-        forecast = forecast_for(weather, candidate['region'], day)
-        weekday = '周六' if day == str(start) else '周日'
-        if candidate['type'] == 'rainy':
-            reason = f'{weekday}降水概率{forecast["rainProbability"]:g}%，可选室内安排。'
-        else:
-            reason = f'{weekday}降水概率{forecast["rainProbability"]:g}%、预报风速{forecast["windKmh"]:g}km/h，可考虑户外安排。'
-        reason += '常设地点参考，出发前确认营业与预约。' if candidate.get('placeId') else '活动日期涵盖当天，具体安排以来源公告为准。'
-        append(candidate, day, reason, 'rules')
-    # Keep the last AI/weather timestamps: filling a gap must not postpone the
-    # scheduled refresh or make an old forecast appear newly fetched.
-    return {**trip, 'picks': picks}
+    def choose(pool):
+        picks, seen = [], set()
+        def append(candidate, day, reason, selection):
+            seen.add(candidate['id'])
+            picks.append({k: v for k, v in {**candidate, 'day': day, 'reason': reason, 'selection': selection}.items()
+                          if k not in ('availableDays', 'closed')})
+        for pick in trip.get('picks', []) + trip.get('alternatives', []):
+            candidate = pool.get(pick.get('id'))
+            reason = clean(pick.get('reason'), 100)
+            if not candidate or candidate['id'] in seen or pick.get('day') not in candidate['availableDays'] or len(reason) < 8:
+                continue
+            if re.search(r'允许.{0,8}(?:炉|明火)|可以.{0,8}(?:炉|明火)|免费|免票|正常开放|保证|余位充足', reason):
+                continue
+            append(candidate, pick['day'], reason, pick.get('selection', 'ai'))
+            if len(picks) == 3:
+                break
+        def kind(candidate):
+            if candidate['type'] == 'rainy':
+                for activity in ('书店|图书馆', '手作|手工', '话剧|剧院', '运动|保龄球'):
+                    if re.search(activity, candidate['name'] + candidate.get('details', '')):
+                        return activity
+            return candidate['type']
+        while len(picks) < 3:
+            remaining = [c for c in pool.values() if c['id'] not in seen and c.get('sources')]
+            if not remaining:
+                break
+            kinds = {kind(p) for p in picks}
+            candidate = min(remaining, key=lambda c: (kind(c) in kinds,
+                not bool(c.get('news') or c.get('publishedAt')), c['id']))
+            day = min(candidate['availableDays'], key=lambda d: (
+                sum(p['day'] == d for p in picks), forecast_for(weather, candidate['region'], d)['rainProbability'], d))
+            forecast = forecast_for(weather, candidate['region'], day)
+            weekday = '周六' if day == str(start) else '周日'
+            if candidate.get('setting') == 'indoor':
+                reason = f'{weekday}降水概率{forecast["rainProbability"]:g}%，可选室内安排。'
+            else:
+                reason = f'{weekday}降水概率{forecast["rainProbability"]:g}%、预报风速{forecast["windKmh"]:g}km/h，可考虑户外安排。'
+            reason += '常设地点参考，出发前确认营业与预约。' if candidate.get('placeId') else '活动日期涵盖当天，具体安排以来源公告为准。'
+            append(candidate, day, reason, 'rules')
+        return picks
+    return {**trip, 'picks': choose({k: c for k, c in eligible.items() if c.get('discovery')}),
+            'alternatives': choose({k: c for k, c in eligible.items() if not c.get('discovery')})}
 
 
 def recommend(client, data, places, research, weather, now):
-    start, end, eligible = trip_options(data, places, research, weather, now)
+    start, end, eligible = trip_options(data, places, research, weather, now, client.state.get('outingProfile', {}))
     if not eligible:
         raise EditorialError('no_weather_eligible_places')
     result, _ = client.ask('weekend_picks',
-        '从给定候选挑3个本周末去处；候选不足时选2个，覆盖不同玩法。晴天优先轻松爬山、休闲骑行、停车后少量搬运的露营；'
+        '优先从discovery=true的候选挑最多3个本周末新活动，说明本次有什么新安排；不足时不凑数。常设地点仅作为备选。晴天优先轻松爬山、休闲骑行、停车后少量搬运的露营；'
         '下雨用室内替代。优先近期有明确新安排的候选，并保留至少一个雨天备选。'
         '不选攀岩、抱石、滑冰、溜冰、演唱会、博物馆、亲子或观赛。同一个地点只出现一次。day必须来自对应availableDays。'
         'reason用20—60字解释为什么适合这一天，依据材料和天气。'
         '不得声称实时开放、允许用炉、余位充足、免票或已预约，也不编造交通时间、线路、距离或费用。'
-        '近期无新消息的地点只能作为常设地点参考，不能写成当周新活动。',
-        {'weekend': [str(start), str(end)], 'weather': weather, 'candidates': list(eligible.values())}, TRIP_SCHEMA)
+        '近期无新消息的地点只能作为常设地点参考，不能写成当周新活动。'
+        '生成的推荐会公开展示；reason不要透露私人记录、出发地或用户个人信息。',
+        {'weekend': [str(start), str(end)], 'weather': weather, 'preferences': client.state.get('outingProfile', {}), 'candidates': list(eligible.values())}, TRIP_SCHEMA)
     trip = complete_trip(data, places, research, {
         'updatedAt': news.iso(now), 'weekendStart': str(start), 'weekendEnd': str(end),
-        'weather': weather, 'picks': result.get('picks', []), 'status': 'ok'}, now)
-    if not trip['picks']:
+        'weather': weather, 'picks': result.get('picks', []), 'status': 'ok'}, now, client.state.get('outingProfile', {}))
+    if not trip['picks'] and not trip.get('alternatives'):
         raise EditorialError('no_valid_recommendations')
     return trip
 
@@ -612,9 +684,10 @@ def apply_results(data, editorial, records, now):
             existing[article['url']] = article
         else:
             existing[article['url']]['facts'] = article.get('facts', [])
-            for key in ('start', 'end', 'until', 'when', 'cancelled'):
-                if key in article.get('outing', {}):
-                    existing[article['url']].setdefault('outing', {})[key] = article['outing'][key]
+            existing[article['url']].setdefault('outing', {}).update(article.get('outing', {}))
+            for key in ('verifiedAt', 'sourceStatus', 'sourceCheckedAt'):
+                if key in article:
+                    existing[article['url']][key] = article[key]
     data['weekendArticles'] = select_articles(list(existing.values()), now)
     if discoveries:
         sources = data.setdefault('sources', [])
@@ -651,13 +724,15 @@ def run(data, previous, state, client, places, now, force=False):
     attempted = news.parse_date(research.get('attemptedAt'))
     due = search_due(now, research, OUTING_REVISION)
     # At most one retry per hour, including repeated manual page-refresh requests.
-    if (force or due) and (force or not attempted or now - attempted >= timedelta(minutes=55)):
+    if (force or due) and (force or research.get('attemptedRevision') != OUTING_REVISION or not attempted or now - attempted >= timedelta(minutes=55)):
         try:
+            research = recheck_discoveries(research, now)
             research = discover(client, places, research, now)
         except Exception as error:
             problems.append('research:' + safe_error(error))
             research['status'] = 'unavailable'
         research['attemptedAt'] = news.iso(now)
+        research['attemptedRevision'] = OUTING_REVISION
     research['items'] = [a for a in research.get('items', []) if not EXCLUDED.search(a.get('title', ''))
                          and news.parse_date(a.get('publishedAt'))
                          and now - timedelta(days=21) <= news.parse_date(a['publishedAt']) <= now]
@@ -667,7 +742,7 @@ def run(data, previous, state, client, places, now, force=False):
     trip['picks'] = [p for p in trip.get('picks', []) if not EXCLUDED.search(p.get('name', ''))]
     if force or search_due(now, {'searchedAt': trip.get('updatedAt'), 'revision': trip.get('revision')}, OUTING_REVISION):
         attempted = news.parse_date(trip.get('attemptedAt'))
-        if force or not attempted or now - attempted >= timedelta(minutes=55):
+        if force or trip.get('attemptedRevision') != OUTING_REVISION or not attempted or now - attempted >= timedelta(minutes=55):
             try:
                 weather = fetch_weather(now)
                 trip = recommend(client, data, places, research, weather, now)
@@ -676,7 +751,8 @@ def run(data, previous, state, client, places, now, force=False):
                 problems.append('trip:' + safe_error(error))
                 trip['status'] = 'unavailable'
             trip['attemptedAt'] = news.iso(now)
-    trip = complete_trip(data, places, research, trip, now)
+            trip['attemptedRevision'] = OUTING_REVISION
+    trip = complete_trip(data, places, research, trip, now, state.get('outingProfile', {}))
     editorial['trip'] = state['trip'] = trip
     editorial['usage'] = copy.deepcopy(state['usage'])
     editorial['status'] = 'partial' if problems else 'ok'
@@ -744,6 +820,7 @@ def main():
                 {**article['editorial'], 'hash': article_hash(article)})
     now = datetime.now(news.UTC)
     try:
+        state['outingProfile'] = outing_profile.load()
         client = Client(key, config, state, args.state, now)
         places = json.loads((ROOT / 'news/places.json').read_text())['places']
         run(data, previous, state, client, places, now, args.force)

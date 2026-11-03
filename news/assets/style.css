@@ -36,6 +36,20 @@
 .trip-details > p:not([class]) { font-size: 13px; }
 .trip-attribution, .outing-update-info { font-size: 11px; color: var(--muted); }
 .trip-attribution > summary, .outing-update-info > summary { cursor: pointer; padding: 8px 0; }
+.trip-backups, .outing-profile { border-top: 1px solid var(--line); margin-top: 12px; }
+.trip-backups > summary, .outing-profile > summary { cursor: pointer; min-height: 44px; padding: 12px 0; font-size: 13px; }
+.trip-feedback { display: flex; flex-wrap: wrap; gap: 6px 16px; }
+.trip-feedback button { min-height: 44px; font-size: 12px; }
+.trip-feedback [aria-pressed="true"] { color: var(--accent); font-weight: 600; }
+.trip-empty { color: var(--secondary); font-size: 13px; line-height: 1.8; }
+.outing-profile form { display: flex; flex-wrap: wrap; align-items: end; gap: 10px; margin: 10px 0; }
+.outing-profile label { display: grid; gap: 4px; font-size: 12px; color: var(--secondary); min-width: 0; }
+.outing-profile input, .outing-profile select { max-width: 100%; min-width: 0; width: 160px; min-height: 44px; padding: 8px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink); font: inherit; }
+.outing-profile input[type="number"] { width: 65px; }
+.outing-profile button { min-height: 44px; }
+.outing-records { list-style: none; padding: 0; font-size: 12px; }
+.outing-records li { display: flex; align-items: center; justify-content: space-between; gap: 10px; border-top: 1px solid var(--line); }
+.outing-records span { overflow-wrap: anywhere; }
 [data-trip-more] { min-height: 44px; }
 .outing-facts { margin: 10px 0; color: var(--secondary); font-size: 13px; line-height: 1.7; }
 .outing-facts summary { cursor: pointer; min-height: 36px; padding: 7px 0; }

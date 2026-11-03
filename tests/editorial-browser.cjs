@@ -36,7 +36,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     }];
     const sunny = { date: "2026-11-07", code: 2, low: 10, high: 20, rainProbability: 10, rainMm: 0, windKmh: 8 };
     const rainy = { ...sunny, date: "2026-11-08", code: 63, rainProbability: 90, rainMm: 8 };
-    const pick = { id: "place:baoshi", placeId: "baoshi", name: "宝石山", type: "hiking", region: "hangzhou",
+    const pick = { discovery: true, verifiedAt:"2026-11-02T07:00:00Z", novelty: "本周新增的活动与体验安排。", start:"2026-11-07", end:"2026-11-08", id: "place:baoshi", placeId: "baoshi", name: "宝石山", type: "hiking", region: "hangzhou",
       day: "2026-11-07", reason: "周六降水概率较低，可安排一段轻松步行。", reviewedOn: "2026-10-30",
       sources: [{ label: "文旅部门", url: "https://example.com/route" }] };
     packet.editorial = { news: { processed: 3, status: "ok" }, trip: {
@@ -88,6 +88,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.fill("#search", "宝石山");
     assert.equal(await page.locator(".trip-list > li").count(), 1);
     await page.fill("#search", "");
+    await page.locator('[data-outing-id="place:baoshi"] [data-outing-feedback="want"]').click();
+    assert.equal(await page.locator('[data-outing-id="place:baoshi"] [data-outing-feedback="want"]').getAttribute('aria-pressed'), 'true');
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
     await page.unroute("**/data/latest.json*");
@@ -98,10 +100,30 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator('[data-trip-more]').click();
     assert.equal(await page.locator(".trip-list > li:visible").count(), 3, "extra recommendations remain available offline");
     assert.match(await page.locator("#load-notice").innerText(), /上次成功获取/);
+    assert.equal(await page.locator('[data-outing-id="place:baoshi"] [data-outing-feedback="want"]').getAttribute('aria-pressed'), 'true', 'feedback survives offline reload');
+    await page.locator('[data-outing-id="place:baoshi"] [data-outing-feedback="visited"]').click();
+    assert.equal(await page.locator('[data-outing-id="place:baoshi"]').count(), 0);
+    await page.locator('.outing-profile > summary').click();
+    assert.match(await page.locator('.outing-records').innerText(), /宝石山 · 去过/);
+    await page.locator('[data-outing-remove="place:baoshi"]').click();
+    assert.equal(await page.locator('[data-outing-id="place:baoshi"]').count(), 1, 'undo restores an excluded suggestion');
     await page.evaluate(() => { Date.now = () => Date.parse("2026-11-05T08:00:00Z"); });
     await page.locator('[data-outing-type="camping"]').click();
     await page.locator('[data-outing-type="all"]').click();
-    assert(await page.locator("#outing-recommendations").isHidden(), "old weather must not look current");
+    assert.equal(await page.locator(".trip-list").count(), 0, "old weather must not look current");
+    assert(await page.locator(".outing-profile").isVisible(), "personal records stay accessible after forecasts expire");
+    await page.evaluate(packet => {
+      Date.now = () => Date.parse('2026-11-02T08:00:00Z');
+      packet.editorial.trip.alternatives = [{...packet.editorial.trip.picks[0], discovery:false}];
+      packet.editorial.trip.picks = [];
+      window.NewsEditorial.render(packet, {view:'local',query:'',outingType:'all',source:'all',date:''}, s=>s);
+    }, packet);
+    assert.equal(await page.locator('.trip-discoveries').count(), 0);
+    assert.match(await page.locator('.trip-empty').innerText(), /暂未找到/);
+    assert(await page.locator('.trip-backups .trip-list').isHidden(), 'permanent places start collapsed');
+    await page.locator('.trip-backups > summary').click();
+    await page.locator('.trip-backups .trip-details > summary').click();
+    assert.match(await page.locator('.trip-backups').innerText(), /常设地点参考/);
     assert.deepEqual(errors, []);
     assert.deepEqual(external, [], "reading recommendations must not call external APIs");
     await context.close();

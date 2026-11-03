@@ -165,7 +165,7 @@ class EditorialTests(unittest.TestCase):
         weather = {'updatedAt': stamp, 'regions': {'hangzhou': {'days': [
             {'date': day, 'code': 63, 'low': 10, 'high': 20, 'rainProbability': 90, 'rainMm': 8, 'windKmh': 8}
             for day in ('2026-11-07', '2026-11-08')]}}}
-        trip = {'updatedAt': stamp, 'attemptedAt': stamp, 'revision': 'editorial-v1', 'status': 'ok',
+        trip = {'updatedAt': stamp, 'attemptedAt': stamp, 'attemptedRevision': ai.OUTING_REVISION, 'revision': ai.OUTING_REVISION, 'status': 'ok',
                 'weekendStart': '2026-11-07', 'weekendEnd': '2026-11-08', 'weather': weather,
                 'picks': [{'id': 'place:book', 'day': '2026-11-07', 'reason': '周六可能下雨，可在室内书店阅读。'}]}
         return places, trip
@@ -175,24 +175,125 @@ class EditorialTests(unittest.TestCase):
         trip['picks'] += [{'id': 'place:' + key, 'day': '2026-11-07', 'reason': '这是一条旧的室内活动推荐。'}
                           for key in ('climbing', 'skating')]
         result = ai.complete_trip({}, places, {}, trip, self.now)
-        self.assertEqual({p['id'] for p in result['picks']}, {'place:book', 'place:craft', 'place:theatre'})
-        self.assertTrue(all(p['sources'] for p in result['picks']))
-        self.assertEqual([p['selection'] for p in result['picks']], ['ai', 'rules', 'rules'])
+        self.assertEqual({p['id'] for p in result['alternatives']}, {'place:book', 'place:craft', 'place:theatre'})
+        self.assertTrue(all(p['sources'] for p in result['alternatives']))
+        self.assertEqual([p['selection'] for p in result['alternatives']], ['ai', 'rules', 'rules'])
         self.assertEqual(result['updatedAt'], trip['updatedAt'])
         self.assertEqual(result['weather']['updatedAt'], trip['weather']['updatedAt'])
 
     def test_short_ai_response_is_completed_without_another_api_call(self):
         places, trip = self.trip_fixture()
         client = Mock()
+        client.state = {}
         client.ask.return_value = ({'picks': trip['picks']}, {})
         result = ai.recommend(client, {}, places, {}, trip['weather'], self.now)
-        self.assertEqual(len(result['picks']), 3)
+        self.assertEqual(len(result['alternatives']), 3)
         client.ask.assert_called_once()
+
+    def discovery_fixture(self):
+        title = '杭州周末手作体验新安排'
+        date_text = '活动时间：2026年11月7日至11月8日'
+        novelty = '本周新增植物拓印双人体验课程。'
+        setting = '本场活动在杭州室内展厅举办。'
+        item = {**self.item, 'title': title, 'type': 'culture', 'placeIds': [],
+                'quote': '杭州周末手作体验推出植物拓印双人课程。',
+                'facts': [{'kind': 'date', 'quote': date_text}],
+                'event': {'name': title, 'novelty': novelty, 'venue': '杭州室内展厅',
+                          'setting': 'indoor', 'settingEvidence': setting, 'bookingUrl': ''}}
+        body = '\n'.join(['2026年11月1日', title, item['quote'], date_text, novelty, setting])
+        return item, body
+
+    def test_new_events_require_literal_details_and_indoor_evidence(self):
+        item, body = self.discovery_fixture()
+        valid = ai.validate_discovery(item, {item['url']}, body, [], self.now)
+        info = valid['outing']
+        self.assertEqual((info['start'], info['end']), ('2026-11-07', '2026-11-08'))
+        self.assertEqual(info['setting'], 'indoor')
+        invented = copy.deepcopy(item)
+        invented['event'].update(novelty='没有出现在来源里的全新课程。', venue='虚构室内场馆',
+                                 settingEvidence='这是没有户外区域的室内展馆', bookingUrl='https://www.ooeli.com/fake')
+        info = ai.validate_discovery(invented, {item['url']}, body, [], self.now)['outing']
+        self.assertNotIn('novelty', info)
+        self.assertNotIn('venue', info)
+        self.assertNotIn('bookingUrl', info)
+        self.assertEqual(info['setting'], 'unknown')
+
+    def test_actual_indoor_events_survive_rain_and_permanent_places_are_separate(self):
+        item, body = self.discovery_fixture()
+        article = ai.validate_discovery(item, {item['url']}, body, [], self.now)
+        places, trip = self.trip_fixture()
+        data = {'weekendArticles': [article, {**article, 'id': 'same-event-another-story'}]}
+        result = ai.complete_trip(data, places, {}, trip, self.now)
+        self.assertEqual(len(result['picks']), 1, 'duplicate event stories yield one suggestion')
+        self.assertEqual(len(result['alternatives']), 3)
+        self.assertTrue(result['picks'][0]['discovery'])
+        for setting in ('outdoor', 'mixed', 'unknown'):
+            article['outing']['setting'] = setting
+            self.assertEqual(ai.complete_trip(data, places, {}, trip, self.now)['picks'], [])
+
+    def test_private_feedback_filters_places_and_events_without_entering_cache(self):
+        item, body = self.discovery_fixture()
+        article = ai.validate_discovery(item, {item['url']}, body, [], self.now)
+        places, trip = self.trip_fixture()
+        profile = {'records': [{'id': 'place:craft', 'title': '私人的去过记录', 'status': 'visited'},
+                               {'id': 'place:book', 'status': 'dismiss'}, {'id': 'place:theatre', 'status': 'want'}]}
+        data = {'weekendArticles': [article]}
+        result = ai.complete_trip(data, places, {}, trip, self.now, profile)
+        self.assertEqual([p['id'] for p in result['alternatives']], ['place:theatre'])
+        self.assertEqual(len(result['picks']), 1)
+        profile['records'].append({'id': result['picks'][0]['id'], 'status': 'visited'})
+        self.assertEqual(ai.complete_trip(data, places, {}, trip, self.now, profile)['picks'], [])
+        self.assertFalse(ai.outing_profile.excludes({'id': 'event:new', 'placeId': 'craft', 'discovery': True}, profile))
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'state.json'
+            ai.save(path, {'outingProfile': profile, 'trip': result})
+            self.assertNotIn('outingProfile', path.read_text())
+            self.assertNotIn('私人的去过记录', path.read_text())
+
+    def test_source_recheck_invalidates_changed_or_cancelled_details_and_preserves_time_on_failure(self):
+        item, body = self.discovery_fixture()
+        article = ai.validate_discovery(item, {item['url']}, body, [], self.now)
+        previous = {'items': [article]}
+        later = self.now + timedelta(hours=6)
+        confirmed = ai.recheck_discoveries(previous, later, lambda _: body)['items'][0]
+        self.assertEqual(confirmed['verifiedAt'], ai.news.iso(later))
+        self.assertEqual(confirmed['publishedAt'], article['publishedAt'])
+        changed = ai.recheck_discoveries(previous, later, lambda _: body.replace('11月8日', '11月9日'))['items'][0]
+        self.assertEqual(changed['sourceStatus'], 'changed')
+        self.assertEqual(ai.trip_candidates({'weekendArticles': [changed]}, [], [], later), [])
+        cancelled = ai.recheck_discoveries(previous, later, lambda _: body + '\n' + item['title'] + '取消，请勿前往。')['items'][0]
+        self.assertTrue(cancelled['outing']['cancelled'])
+        failed = ai.recheck_discoveries(previous, later, Mock(side_effect=TimeoutError()))['items'][0]
+        self.assertEqual(failed['verifiedAt'], article['verifiedAt'])
+        self.assertEqual(ai.trip_candidates({'weekendArticles': [failed]}, [], [], self.now + timedelta(hours=49)), [])
+
+    def test_feed_story_retains_verified_discovery_fields_when_urls_overlap(self):
+        item, body = self.discovery_fixture()
+        article = ai.validate_discovery(item, {item['url']}, body, [], self.now)
+        feed = {**article, 'sourceId': 'local-feed', 'outing': {'type': 'culture'}}
+        data = {'weekendArticles': [feed]}
+        ai.apply_results(data, {'research': {'items': [article], 'status': 'ok'}}, {}, self.now)
+        self.assertEqual(data['weekendArticles'][0]['outing']['novelty'], article['outing']['novelty'])
+        self.assertEqual(len(ai.trip_candidates(data, [], [], self.now)), 1)
+
+    def test_profile_uses_authentication_and_fails_without_saving_personal_records(self):
+        with patch.dict('os.environ', {'OUTING_PROFILE_TOKEN': 'test-connection'}, clear=True):
+            response = Mock()
+            response.read.return_value = b'{"schema":1,"records":[]}'
+            opener = Mock()
+            opener.return_value.__enter__ = Mock(return_value=response)
+            opener.return_value.__exit__ = Mock(return_value=False)
+            with patch.object(ai.outing_profile.urllib.request, 'urlopen', opener):
+                self.assertEqual(ai.outing_profile.load()['records'], [])
+            self.assertEqual(opener.call_args.args[0].get_header('Authorization'), 'Bearer test-connection')
+            with patch.object(ai.outing_profile.urllib.request, 'urlopen', side_effect=TimeoutError()):
+                with self.assertRaises(ai.outing_profile.ProfileUnavailable):
+                    ai.outing_profile.load()
 
     def test_retry_cooldown_does_not_leave_a_filtered_trip_short(self):
         places, trip = self.trip_fixture()
         previous = {'editorial': {'trip': trip, 'research': {'items': [], 'revision': ai.OUTING_REVISION,
-            'searchedAt': trip['updatedAt'], 'attemptedAt': trip['attemptedAt']}}}
+            'searchedAt': trip['updatedAt'], 'attemptedAt': trip['attemptedAt'], 'attemptedRevision': ai.OUTING_REVISION}}}
         with tempfile.TemporaryDirectory() as folder:
             transport = Mock(side_effect=AssertionError('No API call during cooldown'))
             client = ai.Client('x', self.config, {}, Path(folder) / 'state.json', self.now, transport)
@@ -200,7 +301,7 @@ class EditorialTests(unittest.TestCase):
                 result = ai.run({}, previous, client.state, client, places, self.now)
             transport.assert_not_called()
             weather.assert_not_called()
-            self.assertEqual(len(result['trip']['picks']), 3)
+            self.assertEqual(len(result['trip']['alternatives']), 3)
             self.assertEqual(result['trip']['attemptedAt'], trip['attemptedAt'])
             self.assertEqual(result['trip']['updatedAt'], trip['updatedAt'])
 
@@ -210,7 +311,7 @@ class EditorialTests(unittest.TestCase):
             'title': '手作场地暂停营业', 'url': 'https://example.com/closure',
             'publishedAt': '2026-11-01T00:00:00Z'}]}}}}
         result = ai.complete_trip(data, places, {}, trip, self.now)
-        self.assertEqual({p['id'] for p in result['picks']}, {'place:book', 'place:theatre'})
+        self.assertEqual({p['id'] for p in result['alternatives']}, {'place:book', 'place:theatre'})
         for age in (timedelta(hours=25), -timedelta(minutes=5)):
             stale = copy.deepcopy(trip)
             stale['weather']['updatedAt'] = ai.news.iso(self.now - age)
@@ -218,8 +319,8 @@ class EditorialTests(unittest.TestCase):
         sunday = ai.news.parse_date('2026-11-08T01:00:00Z')
         trip['weather']['updatedAt'] = ai.news.iso(sunday)
         result = ai.complete_trip({}, places, {}, trip, sunday)
-        self.assertEqual(len(result['picks']), 3)
-        self.assertTrue(all(p['day'] == '2026-11-08' for p in result['picks']))
+        self.assertEqual(len(result['alternatives']), 3)
+        self.assertTrue(all(p['day'] == '2026-11-08' for p in result['alternatives']))
 
     def test_api_failure_keeps_previous_research_and_does_not_advance_success(self):
         state = {}

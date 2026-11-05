@@ -170,7 +170,12 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         new Set(await page.locator(".category-label").allTextContents()),
         new Set([label]),
       );
-      const target = pool.at(-1);
+      // Raw feeds also contain expired outings and secondary reports that are
+      // intentionally absent from the reading list. Search/bookmark a rendered
+      // representative; complete archive searches have their own browser suite.
+      const targetId = await page.locator('.article').last().getAttribute('data-article-id');
+      const target = pool.find(article => article.id === targetId);
+      assert(target, 'rendered story belongs to the ' + category + ' snapshot');
       await page.fill("#search", target.title);
       await page.waitForFunction(
         (id) =>

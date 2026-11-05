@@ -72,9 +72,13 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8766";
     }
     await page.setViewportSize({width:390,height:844});
     await page.locator('[data-outing-mode="weekend"]').click();
+    // Fragment navigation dispatches hashchange after the click handler. Wait
+    // for the routed panel, rather than sampling the old view on faster runners.
+    await page.locator("#tonight-plans").waitFor({state:"hidden"});
     assert(await page.locator("#tonight-plans").isHidden());
     assert(await page.locator("#outing-catalog-heading").isVisible());
     await page.locator(".brand").click();
+    await page.locator(".filter-row #source-filter").waitFor({state:"visible"});
     assert(await page.locator("#outing-nav").isHidden());
     assert(await page.locator(".filter-row #source-filter").isVisible());
     await page.goto(base + "/#tonight");

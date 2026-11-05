@@ -43,6 +43,7 @@ const server = http.createServer(async (request, response) => {
   try {
     const checks = [
       "brief-browser.cjs",
+      "news-coverage-browser.cjs",
       "indexed-news-browser.cjs",
       "local-livelihood-browser.cjs",
       "weekend-browser.cjs",

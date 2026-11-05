@@ -258,7 +258,8 @@ def edit_news(client, data, state, now):
     pool = news_candidates(data, now)
     old = state.get('newsRecords', {})
     records = {a['id']: old[a['id']] for a in pool if a['id'] in old and old[a['id']].get('hash') == article_hash(a)}
-    new = [a for a in pool if a['id'] not in records]
+    new = sorted((a for a in pool if a['id'] not in records),
+                 key=lambda a: news.brief_rank(a, records), reverse=True)
     # Round-robin categories so busy feeds cannot monopolise the API budget.
     selected, queues = [], {}
     for article in new:
@@ -267,35 +268,67 @@ def edit_news(client, data, state, now):
         for queue in queues.values():
             if queue and len(selected) < client.config['maxNewsPerRun']:
                 selected.append(queue.pop(0))
-    context = [a for a in pool if a['id'] in records][:60]
-    if selected:
-        material = [{k: a.get(k, '') for k in ('id', 'title', 'excerpt', 'category', 'publishedAt')}
-                    for a in selected + context]
-        for article in material:
-            article['excerpt'] = article['excerpt'][:450]
-        result, _ = client.ask('news_groups',
-            '把同一具体事件的重复报道分组。主体、日期、比赛场次、版本或实际进展不同必须分开；'
-            '新进展保留独立组，不把整类新闻合并。每条新报道均可单独成组。'
-            '每组写一两句20—80字事实要点，信息少时只概述标题，不评价、不猜测影响。'
-            '直接写事实，避免“报道关注”“标题称”“文章介绍”“值得关注”等引导话。'
-            'priority是速览编辑排序：3为重大公共事件与普遍适用的即时提醒，2为明确的新政策/产品/比赛结果，'
-            '1为一般消息，0为宣传或缺少新事实。已明确属于旧事回顾、常识、人物纪实或纯评论的标为isBackground=true；'
-            '无法判断就false，不能仅因没有事件日期就判为旧闻。'
-            '为组内每个id提供一段材料中的逐字证据。只使用给定id；同id不得出现在两组。',
-            material, NEWS_SCHEMA)
-        checked = validate_groups(result, selected + context, records, now)
-        if not checked:
-            raise EditorialError('no_valid_news_groups')
-        mappings = {}
-        for identifier in checked:
-            if identifier in records:
-                mappings.setdefault(records[identifier]['eventId'], set()).add(checked[identifier]['eventId'])
-        remap = {key: next(iter(values)) for key, values in mappings.items() if len(values) == 1}
-        for record in records.values():
-            record['eventId'] = remap.get(record['eventId'], record['eventId'])
-        records.update(checked)
+    # Small batches avoid truncated output when a busy update contains dozens
+    # of unrelated stories. Match only a few useful old reports as context.
+    tokens = {a['id']: {normalized(a['title'])[i:i + 2] for i in range(len(normalized(a['title'])) - 1)}
+              for a in pool}
+    issues, processed = [], 0
     state['newsRecords'] = records
-    state['newsUpdatedAt'] = news.iso(now) if selected else state.get('newsUpdatedAt')
+    state['newsBatchIssues'] = []
+    for offset in range(0, len(selected), 12):
+        batch = selected[offset:offset + 12]
+        notice_events = {news.holiday_event(a) for a in batch} - {''}
+        def similarity(article):
+            if news.holiday_event(article) in notice_events:
+                return 1
+            words = tokens[article['id']]
+            return max((len(words & tokens[a['id']]) / max(1, len(words | tokens[a['id']]))
+                        for a in batch), default=0)
+        context = sorted((a for a in pool if a['id'] in records), key=similarity, reverse=True)
+        context = [a for a in context[:6] if similarity(a) >= 0.12]
+        candidates = batch + context
+        material = {'newIds': [a['id'] for a in batch], 'articles': [
+            {k: a.get(k, '') for k in ('id', 'title', 'excerpt', 'category', 'publishedAt')}
+            for a in candidates]}
+        try:
+            result, _ = client.ask('news_groups',
+                '把同一具体事件的重复报道分组。主体、日期、比赛场次、版本或实际进展不同必须分开；'
+                '新进展保留独立组，不把整类新闻合并。仅输出包含newIds中报道的组；旧报道只作合并参考。'
+                '每条新报道均应处理，没有重复时单独成组。'
+                '每组写一两句20—80字事实要点，信息少时只概述标题，不评价、不猜测影响。'
+                '直接写事实，避免“报道关注”“标题称”“文章介绍”“值得关注”等引导话。'
+                'priority是速览编辑排序：3为重大公共事件与普遍适用的即时提醒（如正式公布的全国放假安排、'
+                '重大灾害预警、影响广泛的政策变化）；2为明确的新政策/产品/比赛结果；'
+                '1为一般消息，0为宣传或缺少新事实。不要将普通产品宣传视为重大公共事件。'
+                '已明确属于旧事回顾、常识、人物纪实或纯评论的标为isBackground=true；'
+                '无法判断就false，不能仅因没有事件日期就判为旧闻。'
+                '为组内每个id提供一段材料中的逐字证据。只使用给定id；同id不得出现在两组。',
+                material, NEWS_SCHEMA)
+            checked = validate_groups(result, candidates, records, now)
+            new_ids = {a['id'] for a in batch}
+            if not new_ids.intersection(checked):
+                raise EditorialError('no_valid_news_groups')
+            if not new_ids.issubset(checked):
+                issues.append('missing_news_groups')
+            mappings = {}
+            for identifier in checked:
+                if identifier in records:
+                    mappings.setdefault(records[identifier]['eventId'], set()).add(checked[identifier]['eventId'])
+            remap = {key: next(iter(values)) for key, values in mappings.items() if len(values) == 1}
+            for record in records.values():
+                record['eventId'] = remap.get(record['eventId'], record['eventId'])
+            records.update(checked)
+            processed += len(new_ids.intersection(checked))
+            state['newsUpdatedAt'] = news.iso(now)
+        except Exception as error:
+            issues.append(safe_error(error))
+            if isinstance(error, BudgetStop):
+                break
+        finally:
+            state['newsBatchIssues'] = list(dict.fromkeys(issues))
+            save(client.path, state)
+    if selected and not processed:
+        raise EditorialError(issues[0] if issues else 'no_valid_news_groups')
     return records
 
 
@@ -882,8 +915,12 @@ def run(data, previous, state, client, places, now, force=False):
     records = state.get('newsRecords', {})
     try:
         records = edit_news(client, data, state, now)
-        editorial['news'] = {'updatedAt': state.get('newsUpdatedAt'), 'status': 'ok', 'processed': len(records)}
+        issues = state.get('newsBatchIssues', [])
+        problems.extend('news:' + issue for issue in issues)
+        editorial['news'] = {'updatedAt': state.get('newsUpdatedAt'),
+                             'status': 'partial' if issues else 'ok', 'processed': len(records)}
     except Exception as error:
+        records = state.get('newsRecords', records)
         problems.append('news:' + safe_error(error))
         editorial['news'] = {**editorial.get('news', {}), 'status': 'unavailable'}
     news_details.restore(previous, state)

@@ -143,6 +143,10 @@ def article_category(title, source):
     original_title = title
     title = title.rsplit(' - ', 1)[0]
     category = source['category']
+    # A public holiday notice remains public-service news even in a tech feed.
+    if (category in ('general', 'finance', 'livelihood', 'tech', 'ai')
+            and source['id'] not in INTERNATIONAL_SOURCES and is_holiday_notice(title)):
+        return 'livelihood'
     if source.get('titleFilter') == 'hangzhou-camping':
         # Some local camping guides use a scenic headline; verify their body in collect_weekend.
         direct = re.search(r'露营|营地|野营', title) and is_hangzhou_local(original_title)
@@ -191,6 +195,8 @@ def article_category(title, source):
         return 'finance'
     if category == 'finance' and source.get('titleFilter') == 'finance':
         return None
+    if source.get('format') == 'cctv-json' and category == 'general' and is_domestic_sports(title):
+        return 'sports'
     if HARDWARE_TOPIC.search(title) or (SYSTEM_PRODUCT.search(title) and SYSTEM_UPDATE.search(title)):
         return 'tech'
     if AI_PATTERN.search(title):
@@ -238,12 +244,80 @@ LIVELIHOOD_TOPIC = re.compile(
     r'社保|社会保险|社会保障|养老金?|医保|医疗保险|报销|生育津贴|育儿|托育|补贴|低保|救助|'
     r'就业|失业|招聘|招工|最低工资|劳动者|劳动权益|权益保障|消费者|消费维权|消费提醒|消费提示|'
     r'食品安全|食安|产品召回|退费|退款|以旧换新|国补|入学|招生政策|学费|助学|学生资助|'
-    r'春秋假|教育惩戒|教育收费|义务教育|民生实事|便民服务|公共服务|接诉即办|12345')
+    r'春秋假|节假日|放假安排|高考报名|教育惩戒|教育收费|义务教育|民生实事|便民服务|公共服务|接诉即办|12345')
 LIVELIHOOD_NOISE = re.compile(r'民生银行|国联民生|证券|股价|股票|股市|财报|控股股东|外交|反制措施|论坛|博览会|主题党日|党支部')
 FOREIGN_SERVICE_LOCATION = re.compile(r'美国|日本|韩国|英国|英格兰|德国|法国|加拿大|澳大利亚|新加坡|印度|俄罗斯')
 PUBLIC_RUMOR_TOPIC = re.compile(r'辟谣|谣言|网传|不实|假的|真相|诈骗|虚假')
 PUBLIC_RUMOR_NOISE = re.compile(r'宣传活动|宣传周|知识竞赛|共筑清朗|培训|流动课堂|辟谣号|扎实开展')
 INTERNATIONAL_SOURCES = {'chinanews-world', 'dw', 'rfi'}
+
+HOLIDAY_NOTICE = re.compile(r'节假日.{0,12}(?:安排|通知)|放假安排')
+NOTICE_SPECULATION = re.compile(r'预测|猜测|网传|疑似|或将|预计|尚未|未(?:公布|发布)|辟谣|不实|回顾|往年|攻略')
+PUBLIC_NEWS_DOMAINS = ('gov.cn', 'news.cn', 'xinhuanet.com', 'cctv.com', 'chinanews.com.cn')
+
+
+def is_holiday_notice(title):
+    title = unicodedata.normalize('NFKC', title.rsplit(' - ', 1)[0])
+    return bool(HOLIDAY_NOTICE.search(title) and not NOTICE_SPECULATION.search(title)
+                and not FOREIGN_SERVICE_LOCATION.search(title))
+
+
+def holiday_event(article):
+    """Recognize the annual national notice, not school or individual holidays."""
+    title = article.get('title', '')
+    text = unicodedata.normalize('NFKC', title + ' ' + article.get('excerpt', ''))
+    host = urllib.parse.urlsplit(safe_url(article.get('originalUrl') or article.get('url')) or '').hostname or ''
+    if (not is_holiday_notice(title) or not any(host == d or host.endswith('.' + d)
+            for d in (*PUBLIC_NEWS_DOMAINS, 'ithome.com'))
+            or not re.search(r'国务院|全年放假|部分节假日', text)
+            or re.search(r'学校|小学|中学|大学|幼儿园|寒假|暑假|寒暑假', title)):
+        return ''
+    year = re.search(r'(20\d{2})\s*年\s*(?:部分节假日|全年放假|放假安排)', text)
+    return 'notice-holidays-' + year[1] if year else ''
+
+
+def public_notice(article):
+    """Narrow fallback for confirmed, broadly applicable service announcements."""
+    host = urllib.parse.urlsplit(safe_url(article.get('originalUrl') or article.get('url')) or '').hostname or ''
+    if not any(host == d or host.endswith('.' + d) for d in PUBLIC_NEWS_DOMAINS):
+        return False
+    title = article.get('title', '')
+    if NOTICE_SPECULATION.search(title):
+        return False
+    if holiday_event(article):
+        return True
+    return bool(re.search(r'国务院|教育部|国家医保局|人力资源社会保障部|中央气象台', title)
+                and re.search(r'发布|启动|调整|出台|实施|生效|预警', title)
+                and re.search(r'高考报名|医保|养老金|最低工资|台风|暴雨|暴雪', title))
+
+
+def brief_rank(article, records=None):
+    if public_notice(article):
+        return 3
+    meta = (records.get(article['id'], {}) if records is not None else article.get('editorial', {}))
+    if meta.get('isBackground') is True:
+        return -1
+    priority = meta.get('priority')
+    return priority if type(priority) is int and 0 <= priority <= 3 else 1
+
+
+def brief_candidates(articles, records=None, limit=5):
+    """Preserve important events before applying source diversity or recency."""
+    ranked = sorted(articles, key=lambda a: (brief_rank(a, records), a['publishedAt']), reverse=True)
+    selected, others, counts, seen = [], [], {}, set()
+    for article in ranked:
+        meta = records.get(article['id'], {}) if records is not None else article.get('editorial', {})
+        key = holiday_event(article) or meta.get('eventId') or re.sub(r'\W', '', article['title'].rsplit(' - ', 1)[0]).casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        source = article.get('sourceId', '')
+        if len(selected) < limit and (brief_rank(article, records) >= 3 or counts.get(source, 0) < 2):
+            selected.append(article)
+            counts[source] = counts.get(source, 0) + 1
+        else:
+            others.append(article)
+    return selected + others[:max(0, limit - len(selected))]
 
 
 def is_hangzhou_local(title):
@@ -456,6 +530,38 @@ def parse_feed(data, source, now):
     return articles
 
 
+def parse_cctv(data, source, now):
+    # The public news list is JSONP. Decode its JSON only; never evaluate JS.
+    match = re.fullmatch(r'\s*news\((\{.*\})\)\s*;?\s*', data.decode('utf-8-sig'), re.S)
+    if not match:
+        raise ValueError('Invalid CCTV news list')
+    rows = json.loads(match[1]).get('data', {}).get('list')
+    if not isinstance(rows, list):
+        raise ValueError('Missing CCTV news list')
+    articles = []
+    for row in rows[:120]:
+        if not isinstance(row, dict):
+            continue
+        title = plain(str(row.get('title') or ''))[:240]
+        url = safe_url(row.get('url'))
+        published = row.get('focus_date')
+        if not isinstance(published, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', published):
+            continue
+        date = parse_date(published.replace(' ', 'T') + '+08:00')
+        host = urllib.parse.urlsplit(url or '').hostname or ''
+        if (not title or not url or not (host == 'cctv.com' or host.endswith('.cctv.com'))
+                or not date or not now - timedelta(days=30) <= date <= now + timedelta(minutes=10)):
+            continue
+        category = article_category(title, source)
+        if not category:
+            continue
+        excerpt = plain(str(row.get('brief') or ''))
+        articles.append({'id': hashlib.sha256(url.encode()).hexdigest()[:16], 'title': title,
+            'url': url, 'sourceId': source['id'], 'category': category, 'publishedAt': iso(date),
+            'excerpt': excerpt[:89].rstrip() + '…' if len(excerpt) > 90 else excerpt})
+    return articles
+
+
 class HousingDailyList(HTMLParser):
     """Read the publisher's dated news rows, excluding navigation and sidebars."""
     def __init__(self):
@@ -526,9 +632,9 @@ def collect(source, now):
     status['checkedAt'] = iso(now)
     started = time.monotonic()
     try:
-        parser = parse_housing_daily if source.get('format') == 'housing-daily-list' else parse_feed
+        parser = {'housing-daily-list': parse_housing_daily, 'cctv-json': parse_cctv}.get(source.get('format'), parse_feed)
         articles = parser(fetch(source['url']), source, now)
-        if not articles and source.get('format') == 'housing-daily-list':
+        if not articles and source.get('format') in ('housing-daily-list', 'cctv-json'):
             raise ValueError('No dated articles from the last 30 days')
         status.update(status='ok', fetchedCount=len(articles), latestAt=max((a['publishedAt'] for a in articles), default=None),
                       durationMs=round((time.monotonic() - started) * 1000))

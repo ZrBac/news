@@ -237,9 +237,8 @@ def candidates(data, records, now):
                 pool[article['id']] = article
     rows = sorted(pool.values(), key=lambda a: a['publishedAt'], reverse=True)
     today = now.astimezone(news.BEIJING).date()
-    # Match the initial reading packet: latest stories plus five source-balanced
-    # candidates per category. Older high-priority stories outside that packet
-    # should not consume the limited trial work before visible stories do.
+    # Use the builder's priority-aware candidate selection, including important
+    # announcements that have already left the latest 150 stories.
     visible = {a['id'] for a in data.get('articles', [])[:150]}
     visible.update(a['id'] for a in data.get('modelReleases', [])[:60])
     visible.update(a['id'] for a in [a for a in rows if a['category'] == 'gaming'][:60])
@@ -247,29 +246,16 @@ def candidates(data, records, now):
     def take(article):
         meta = records.get(article['id'], {})
         # Use precisely the same event/title identities as the reading list.
-        key = meta.get('eventId') or text_key(article['title'].rsplit(' - ', 1)[0])
+        key = news.holiday_event(article) or meta.get('eventId') or text_key(article['title'].rsplit(' - ', 1)[0])
         if key not in seen:
             chosen.append(article)
             seen.add(key)
     for category in CATEGORIES:
         items = [a for a in rows if a['category'] == category and
                  news.parse_date(a['publishedAt']).astimezone(news.BEIJING).date() == today]
-        selected, others, counts, titles = [], [], {}, set()
-        for article in items:
-            title = text_key(article['title'].rsplit(' - ', 1)[0])
-            if title in titles:
-                continue
-            titles.add(title)
-            source = article.get('sourceId', '')
-            if counts.get(source, 0) < 2 and len(selected) < 5:
-                selected.append(article)
-                counts[source] = counts.get(source, 0) + 1
-            else:
-                others.append(article)
-        visible.update(a['id'] for a in selected + others[:max(0, 5 - len(selected))])
+        visible.update(a['id'] for a in news.brief_candidates(items, records))
         items = [a for a in items if a['id'] in visible]
-        items.sort(key=lambda a: (-1 if records.get(a['id'], {}).get('isBackground') else
-                                 records.get(a['id'], {}).get('priority', 1)), reverse=True)
+        items.sort(key=lambda a: news.brief_rank(a, records), reverse=True)
         before = len(chosen)
         for article in items:
             take(article)

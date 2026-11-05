@@ -6,6 +6,7 @@ import json
 import os
 import re
 import shutil
+import sys
 from html import escape as html_escape
 from datetime import datetime, timedelta, timezone
 from email.utils import format_datetime
@@ -14,6 +15,8 @@ from urllib.parse import urlsplit
 from xml.sax.saxutils import escape
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'scripts'))
+import collect_news as news
 
 
 def build_places(template):
@@ -115,6 +118,15 @@ def build_guide_reader(output):
 def build_news_pages(data, output):
     """Keep the full export for collectors; readers fetch a small initial page."""
     size = 150
+    # Publish only the small deterministic fallback score; the AI's validated
+    # priority is already in editorial. Normal category lists stay chronological.
+    def annotate(article):
+        if news.public_notice(article):
+            article = {**article, 'briefPriority': 3}
+        event = news.holiday_event(article)
+        return {**article, 'briefEvent': event} if event else article
+    data = {**data, **{key: [annotate(a) for a in data[key]] for key in
+                      ('articles', 'modelReleases', 'housingArticles') if key in data}}
     articles = data['articles']
     folder = output / 'data/archive'
     folder.mkdir(parents=True, exist_ok=True)
@@ -186,8 +198,8 @@ def build_news_pages(data, output):
         housing.append(article)
         if len(housing) == 60:
             break
-    # Include several candidates from each category for today/yesterday. A busy
-    # sports feed must not hide a day's only model or housing story from the brief.
+    # Retain important events even after they leave the latest 150. Source and
+    # category diversity must not push an older public announcement out of view.
     brief_days, brief_articles = [], []
     if data.get('updatedAt'):
         today = datetime.fromisoformat(data['updatedAt'].replace('Z', '+00:00')).astimezone(
@@ -197,25 +209,15 @@ def build_news_pages(data, output):
         for day in brief_days:
             for category in ('general', 'finance', 'livelihood', 'tech', 'ai', 'models',
                              'entertainment', 'gaming', 'sports', 'housing'):
-                pool, seen = [], set()
+                pool = []
                 for article in candidates:
                     if article.get('category') != category:
                         continue
                     published = datetime.fromisoformat(article['publishedAt'].replace('Z', '+00:00')).astimezone(
                         timezone(timedelta(hours=8))).date().isoformat()
-                    key = re.sub(r'\W', '', article['title'].rsplit(' - ', 1)[0]).casefold()
-                    if published == day and key not in seen:
+                    if published == day:
                         pool.append(article)
-                        seen.add(key)
-                selected, others, counts = [], [], {}
-                for article in pool:
-                    source = article.get('sourceId', '')
-                    if counts.get(source, 0) < 2 and len(selected) < 5:
-                        selected.append(article)
-                        counts[source] = counts.get(source, 0) + 1
-                    else:
-                        others.append(article)
-                brief_articles.extend(selected + others[:max(0, 5 - len(selected))])
+                brief_articles.extend(news.brief_candidates(pool))
     gaming = [article for article in articles if article.get('category') == 'gaming'][:60]
     latest = {**data, 'articles': articles[:size], 'modelReleases': releases, 'gamingArticles': gaming,
               'housingArticles': housing,

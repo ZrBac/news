@@ -1,5 +1,14 @@
 [
   {
+    "id": "cctv-news",
+    "name": "央视网新闻",
+    "url": "https://news.cctv.com/2019/07/gaiban/cmsdatainterface/page/news_1.jsonp",
+    "home": "https://news.cctv.com/",
+    "format": "cctv-json",
+    "category": "general",
+    "color": "#b95039"
+  },
+  {
     "id": "chinanews",
     "name": "中国新闻网",
     "url": "https://www.chinanews.com.cn/rss/china.xml",

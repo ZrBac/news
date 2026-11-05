@@ -540,6 +540,16 @@
       </div><button class="save-button${saved ? " saved" : ""}" data-save="${escape(article.id)}" aria-label="${saved ? "取消收藏" : "收藏"}：${escape(article.title)}" aria-pressed="${saved}" title="${saved ? "取消收藏" : "收藏文章"}">${icon("bookmark")}</button></article>`;
   }
   function selectBrief(articles) {
+    const rank = (article) => {
+      const meta = window.NewsEditorial?.metadata(article);
+      if (article.briefPriority === 3) return 3;
+      if (meta?.isBackground === true) return -1;
+      return Number.isInteger(meta?.priority) && meta.priority >= 0 && meta.priority <= 3 ? meta.priority : 1;
+    };
+    // Group after ranking so a lower-priority follow-up cannot hide the main
+    // announcement when it becomes the newest report of the same event.
+    articles = [...articles].sort((a, b) => rank(b) - rank(a) ||
+      Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
     if (window.NewsEditorial)
       articles = window.NewsEditorial.group(articles, (a) => a.title.replace(/ - [^-]+$/, "").replace(/[\s\p{P}]/gu, "").toLowerCase());
     const seen = new Set();
@@ -552,6 +562,14 @@
       seen.add(title);
       return true;
     });
+    // Reserve a few leading places for major events, even when several belong
+    // to one category. Fill the rest with a broad reading selection.
+    const selected = articles.filter((a) => rank(a) >= 3).slice(0, 3);
+    const selectedIds = new Set(selected.map((a) => a.id));
+    const represented = new Set(selected.map((a) => a.category));
+    const counts = {};
+    for (const article of selected)
+      counts[article.sourceId] = (counts[article.sourceId] || 0) + 1;
     const queues = [
       "general",
       "finance",
@@ -564,14 +582,8 @@
       "sports",
       "housing",
     ]
-      .map((category) => articles.filter((a) => a.category === category).sort((a, b) => {
-        const rank = (article) => {
-          const meta = window.NewsEditorial?.metadata(article);
-          if (meta?.isBackground === true) return -1;
-          return Number.isInteger(meta?.priority) && meta.priority >= 0 && meta.priority <= 3 ? meta.priority : 1;
-        };
-        return rank(b) - rank(a);
-      }))
+      .sort((a, b) => Number(represented.has(a)) - Number(represented.has(b)))
+      .map((category) => articles.filter((a) => a.category === category && !selectedIds.has(a.id)))
       .filter((queue) => queue.length);
     // If more than ten categories have news, rotate the starting category by
     // calendar date so the last section is not permanently left out.
@@ -583,9 +595,8 @@
         ) % queues.length;
       queues.push(...queues.splice(0, offset));
     }
-    const selected = [];
-    const counts = {};
-    // Rotate categories and sources. This is a transparent reading selection, not a popularity score.
+    // Rotate the remaining categories and sources; these are editorial choices,
+    // not measured popularity or click counts.
     while (selected.length < 10 && queues.some((q) => q.length)) {
       for (const q of queues) {
         if (!q.length || selected.length >= 10) continue;
@@ -1541,7 +1552,7 @@
     sourceDialogToken++;
     $("#dialog-title").textContent = "关于本站";
     $("#dialog-content").innerHTML =
-      '<p>个人新闻订阅页，汇总综合、财经、民生、科技、AI、模型、文娱、游戏、体育和杭州房市资讯，计划每小时检查更新。顶部「去处」提供晚间安排与杭州及周边的周末玩法。</p><h3>排序与分类</h3><p>新闻按来源标注的发布时间排列。模型栏目筛选模型发布、升级与开放消息，标题识别可能遗漏；普通产品功能更新与发布传闻不收录到该栏目。每日速览从不同分类与来源中选取最多 10 条，不代表热度排名。</p><h3>内容与收藏</h3><p>标题和原始摘要来自对应资讯源，部分短摘要经 AI 整理并标注，点击标题可核对原文。收藏仅保存在当前浏览器，不会跨设备同步。</p><p><a href="https://github.com/ZrBac/news/issues" target="_blank" rel="noopener noreferrer">问题反馈</a></p>';
+      '<p>个人新闻订阅页，汇总综合、财经、民生、科技、AI、模型、文娱、游戏、体育和杭州房市资讯，计划每小时检查更新。顶部「去处」提供晚间安排与杭州及周边的周末玩法。</p><h3>排序与分类</h3><p>新闻按来源标注的发布时间排列。模型栏目筛选模型发布、升级与开放消息，标题识别可能遗漏；普通产品功能更新与发布传闻不收录到该栏目。每日速览优先展示重大公共消息，再兼顾不同分类与来源，最多 10 条，不代表点击热度排名。</p><h3>内容与收藏</h3><p>标题和原始摘要来自对应资讯源，部分短摘要经 AI 整理并标注，点击标题可核对原文。收藏仅保存在当前浏览器，不会跨设备同步。</p><p><a href="https://github.com/ZrBac/news/issues" target="_blank" rel="noopener noreferrer">问题反馈</a></p>';
     $("#info-dialog").showModal();
   }
   function theme(value) {

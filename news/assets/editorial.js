@@ -40,7 +40,8 @@
     const groups = new Map(), titles = new Map(), result = [];
     for (const article of articles) {
       const e = metadata(article);
-      const key = e ? e.eventId : titleKey(article);
+      const key = /^notice-holidays-20\d{2}$/.test(article.briefEvent || "")
+        ? article.briefEvent : e ? e.eventId : titleKey(article);
       const title = titleKey(article);
       const existing = groups.get(key) || titles.get(title);
       if (existing) {

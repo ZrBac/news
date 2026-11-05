@@ -1,4 +1,5 @@
 import copy
+import json
 import sys
 import unittest
 from datetime import timedelta
@@ -41,9 +42,11 @@ class TonightPlansTests(unittest.TestCase):
         client = Mock()
         client.state = {'outingProfile': {'settings': {'startArea': 'PRIVATE-ADDRESS'}, 'records': []}}
         def answer(task, instructions, material, schema):
+            self.assertTrue(all(p.get('project', {}).get('outcome') for p in material['templates']))
+            self.assertIn('下次接着做什么', instructions)
             return {'ideas': [
-                {'id': p['id'], 'name': '今晚试试一个新主题', 'summary': '用现有材料玩一个双人小挑战。',
-                 'steps': ['拿出家里现有的材料。', '轮流完成各自的小挑战。', '一起选出最有趣的结果。'],
+                {'id': p['id'], 'name': '今晚开始一个小项目', 'summary': '从手边的材料开始，留下一页自己的记录。',
+                 'steps': ['拿出家里现有的材料。', '按模板完成一小段，保留自己的作品。', '记下做到哪里，下次接着这个位置继续。'],
                  'materials': '不应透传的新增道具', 'private': '不应公开'} for p in material['templates']]}, {}
         client.ask.side_effect = answer
         first = tonight.update_home(client, {}, self.now)
@@ -57,6 +60,16 @@ class TonightPlansTests(unittest.TestCase):
         self.assertEqual(later['day'], '2026-11-06')
         self.assertEqual(client.ask.call_count, 2)
 
+    def test_old_daily_play_themes_are_replaced_and_all_dismissed_skips_generation(self):
+        client = Mock()
+        client.state = {'outingProfile': {'records': [
+            {'id': p['id'], 'status': 'dismiss'} for p in tonight.catalog() if p.get('project')]}}
+        previous = {'revision': 'tonight-v1', 'day': '2026-11-05', 'ideas': [{'name': '旧小游戏'}]}
+        result = tonight.update_home(client, previous, self.now)
+        self.assertEqual(result['revision'], tonight.REVISION)
+        self.assertEqual(result['ideas'], [])
+        client.ask.assert_not_called()
+
     def test_failure_cooldown_and_invalid_generated_ideas(self):
         client = Mock()
         client.state = {}
@@ -69,11 +82,16 @@ class TonightPlansTests(unittest.TestCase):
 
     def test_late_arrivals_have_multiple_self_contained_offline_options(self):
         all_options = tonight.catalog()
+        self.assertEqual(json.loads((tonight.ROOT / 'news/tonight.json').read_text())['revision'], tonight.REVISION)
         self.assertEqual(len({p['id'] for p in all_options}), len(all_options))
         for energy in ('easy', 'active'):
             options = [p for p in all_options if 21 in p['arrivals'] and (energy == 'active' or p['energy'] == energy)]
             self.assertGreaterEqual(len(options), 6)
             self.assertTrue(all(p['minutes'] <= 40 and p['setting'] == 'home' and len(p['steps']) == 3 for p in options))
+            self.assertGreaterEqual(len([p for p in options if p.get('project')]), 6)
+        for p in all_options:
+            if p.get('project'):
+                self.assertTrue(all(p['project'].get(k) for k in ('outcome', 'next', 'prompt')))
 
 
 if __name__ == '__main__':

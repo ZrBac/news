@@ -8,7 +8,7 @@ from pathlib import Path
 import collect_news as news
 
 ROOT = Path(__file__).resolve().parents[1]
-REVISION = 'tonight-v1'
+REVISION = 'tonight-v2'
 
 
 def catalog():
@@ -34,17 +34,20 @@ def update_home(client, previous, now, force=False):
         return previous
     records = client.state.get('outingProfile', {}).get('records', [])
     dismissed = {r['id'] for r in records if r.get('status') == 'dismiss'}
-    templates = [p for p in catalog() if p['setting'] == 'home' and p['id'] not in dismissed and p['kind'] != '休息']
+    templates = [p for p in catalog() if p['setting'] == 'home' and p['id'] not in dismissed and p.get('project')]
     templates.sort(key=lambda p: hashlib.sha256((today + p['id']).encode()).hexdigest())
     selected = templates[:8]
+    if not selected:
+        return {'revision': REVISION, 'day': today, 'updatedAt': news.iso(now), 'status': 'ok', 'ideas': []}
     result, _ = client.ask('tonight_home',
-        '为两个人下班后在家生成今晚能直接开始的小安排。仅对给定玩法换一个具体主题或挑战，保留id。'
-        '每项写短标题、20—45字说明和恰好三步完整玩法，不能只写玩桌游或看电影。'
-        '不能只改标题：至少两步加入今天具体的题目、限制或合作目标，让照着步骤就能玩，不要原样抄模板。'
-        '例如给出绘画题、接龙开头、猜词题单或新的纸桥挑战；卡牌基本计分仍须自足。'
-        '严格保持原有时长、精力要求、已有材料和玩法类型，不增购道具、不默认有游戏主机或会员。'
+        '为两个人下班后可持续做的兴趣项目，提供第一次开始时的具体选题，保留id。'
+        '每项写短标题、20—45字说明和恰好三步。围绕模板project.outcome，留下能保存的作品、笔记或练习记录。'
+        '最后一步必须说清楚留下什么以及下次接着做什么；不要写做完即丢的一次性小游戏。'
+        '例如第一次写一个场景、整理一次出游的三张照片、记录一道菜的实际用量，而不是泛泛建议培养兴趣。'
+        '这些只是未开始项目的可选起步题；网站会保留已开始项目的进展，不要要求每天换书、换主题或从头再来。'
+        '严格保持原有时长、精力要求、已有材料和兴趣方向，不增购道具、不默认有游戏主机或会员。'
         '疲惫时只给轻松的小事，晚到家不安排外出、烹饪大餐或超过40分钟的活动。'
-        '卡牌/猜谜规则必须自足；阅读、音乐、看片用已有内容，不编造作品、平台片源或价格。'
+        '阅读、音乐、看片和语言练习用已有内容，不编造作品、原文、平台片源、外语例句或价格。'
         '每步最多65字，标题最多26字。不要外链、健康功效、私人信息、工作任务、打卡口号和消费推荐。'
         '生成的安排公开展示，不提个人记录。最多8项，无法写好可少给。',
         {'date': today, 'templates': selected,

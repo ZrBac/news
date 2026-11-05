@@ -73,6 +73,20 @@
 .tonight-details ol { padding-left: 22px; }
 .tonight-details li { border: 0; padding: 4px 0; }
 .tonight-details p { overflow-wrap: anywhere; }
+.tonight-output, .tonight-continuation { font-size: 13px; line-height: 1.8; color: var(--secondary); }
+.tonight-continuation { padding-left: 10px; border-left: 2px solid var(--line); }
+.tonight-last-note { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }
+.tonight-next, .tonight-record-text { white-space: pre-wrap; overflow-wrap: anywhere; }
+.tonight-recording > summary, .tonight-journal > summary { cursor: pointer; min-height: 44px; padding: 10px 0; font-size: 13px; }
+.tonight-recording form { margin: 4px 0 12px; }
+.tonight-recording label { display: grid; gap: 6px; margin: 10px 0; color: var(--secondary); font-size: 13px; }
+.tonight-recording input, .tonight-recording textarea { width: 100%; min-width: 0; min-height: 44px; border: 1px solid var(--line); border-radius: 5px; padding: 9px; background: var(--paper); color: var(--ink); font: 16px/1.6 var(--sans); }
+.tonight-recording textarea { resize: vertical; }
+.tonight-recording button, .tonight-journal button { min-height: 44px; }
+.tonight-journal { margin-top: 12px; border-top: 1px solid var(--line); }
+.tonight-history { padding: 0; margin: 8px 0; list-style: none; font-size: 13px; }
+.tonight-history li { padding: 10px 0; border-top: 1px solid var(--line); }
+.tonight-history p { margin: 4px 0; overflow-wrap: anywhere; }
 @media (max-width: 600px) {
   .tonight-controls { gap: 8px; }
   .tonight-arrival { width: 100%; }

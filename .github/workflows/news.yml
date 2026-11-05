@@ -38,6 +38,7 @@ jobs:
           node --check news/assets/tonight.js
           node --check news/assets/outings-profile.js
           node --test tests/exchange-core.cjs
+          node --test tests/tonight-journal.cjs
           node --check news/assets/pwa.js
           node --check news/assets/homes-core.js
           node --check news/assets/home-finder.js

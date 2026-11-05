@@ -526,14 +526,15 @@
       aggregated &&
       excerptKey.length >= 8 &&
       textKey(article.title).startsWith(excerptKey);
-    const summary = state.view === "brief" && window.NewsEditorial?.metadata(article)?.summary;
+    const detail = ["brief", "models"].includes(state.view) && window.NewsEditorial?.detail(article);
+    const summary = detail?.summary || (state.view === "brief" && window.NewsEditorial?.metadata(article)?.summary);
     const publishedLabel = article.dateOnly ? dayOf(article.publishedAt) : relativeTime(article.publishedAt);
     const publishedTitle = article.dateOnly ? dayOf(article.publishedAt) + "（来源仅提供日期）" : "北京时间 " + formatTime(article.publishedAt);
     return `<article class="article${read ? " read" : ""}" data-article-id="${escape(article.id)}"><div class="article-body">
       ${state.view === "brief" ? `<span class="article-number">${String(index + 1).padStart(2, "0")}</span>` : ""}
       <h3><a href="${escape(articleUrl(article))}" aria-label="${escape(article.title)}" target="_blank" rel="noopener noreferrer">${headline}</a></h3>
       ${article.category === "local" ? outingSummary(article) : ""}
-      ${summary ? `<p class="editorial-summary">${escape(summary)}</p>` : article.excerpt ? `<p${repeatsTitle ? ' class="repeated-excerpt"' : ""}>${escape(article.excerpt)}</p>` : ""}
+      ${summary ? `<p class="editorial-summary"${detail ? ' data-summary-source="article"' : ""}>${escape(summary)}</p>` : article.excerpt ? `<p${repeatsTitle ? ' class="repeated-excerpt"' : ""}>${escape(article.excerpt)}</p>` : ""}
       <div class="article-meta"><span>${escape(source.name)}</span><time datetime="${escape(article.publishedAt)}" title="${escape(publishedTitle)}">${escape(publishedLabel)}</time><span class="category-label ${escape(article.category)}">${categoryNames[article.category]}</span>${read ? '<span class="read-label">已读</span>' : ""}</div>
       ${article.reports?.length ? `<details class="article-reports"><summary>其他 ${article.reports.length} 篇报道</summary>${article.reports.map((a) => `<a href="${escape(articleUrl(a))}" target="_blank" rel="noopener noreferrer">${escape(sourceFor(a).name)} · ${escape(a.title)}</a>`).join("")}</details>` : ""}
       </div><button class="save-button${saved ? " saved" : ""}" data-save="${escape(article.id)}" aria-label="${saved ? "取消收藏" : "收藏"}：${escape(article.title)}" aria-pressed="${saved}" title="${saved ? "取消收藏" : "收藏文章"}">${icon("bookmark")}</button></article>`;
@@ -651,13 +652,11 @@
         .toLocaleLowerCase()
         .split(/\s+/)
         .filter(Boolean);
-      articles = articles.filter((a) =>
-        words.every((word) =>
-          `${a.title} ${a.excerpt} ${sourceFor(a).name} ${a.outing?.venue || ""} ${a.category === "local" ? outingLabel(a) : ""}`
-            .toLocaleLowerCase()
-            .includes(word),
-        ),
-      );
+      articles = articles.filter((a) => {
+        const summary = ["brief", "models"].includes(state.view) && window.NewsEditorial?.detail(a)?.summary;
+        const text = `${a.title} ${a.excerpt} ${summary || ""} ${sourceFor(a).name} ${a.outing?.venue || ""} ${a.category === "local" ? outingLabel(a) : ""}`.toLocaleLowerCase();
+        return words.every(word => text.includes(word));
+      });
     }
     if (window.NewsPersonal?.onlyUnread())
       articles = articles.filter((a) => !window.NewsPersonal.isRead(a.id));

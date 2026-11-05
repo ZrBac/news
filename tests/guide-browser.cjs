@@ -61,13 +61,17 @@ const book = require("../news/guide/book.json");
       await page.locator('[data-mode="saved"][aria-current="page"]').waitFor();
       assert.equal(await page.locator(".guide-entry").count(), 1);
       await page.reload();
+      await page.evaluate(() => window.guideInitialLoad);
       await page.locator('.entry-save[aria-pressed="true"]').waitFor();
       await page.locator('[data-mode="read"]').click();
       await page.locator('[data-mode="read"][aria-current="page"]').waitFor();
       await page.locator("#guide-chapter").selectOption("");
-      await page.locator("#guide-query").fill("量子虫洞星际飞船");
+      // A made-up token stays absent even when upstream adds new chapter text.
+      await page.locator("#guide-query").fill("guideunmatchedc729c718f629");
+      await page.waitForFunction(() => document.querySelectorAll(".guide-entry").length === 0);
       assert.equal(await page.locator(".guide-entry").count(), 0);
       await page.locator("#guide-query").fill("租房押金");
+      await page.locator(".guide-entry").first().waitFor();
       assert((await page.locator(".guide-entry").count()) > 0);
       assert.equal(
         await page

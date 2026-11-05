@@ -21,15 +21,17 @@ from pathlib import Path
 
 import collect_news as news
 import outing_profile
+import tonight_plans
 from collect_places import DOMAINS
 from collect_weekend import Text, outing_info, search_due, select_articles, weekend_days
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION = 'editorial-v1'
-OUTING_REVISION = 'outings-discoveries-v4'
+OUTING_REVISION = 'outings-discoveries-v5-evenings'
 MAX_DISCOVERIES = 8
 MAX_ALTERNATIVES = 6
 RESEARCH_TOPICS = (
+    '下班后的晚间活动：优先杭州西湖区、余杭区、五常与未来科技城，找今天及未来三天20点后开始、22点前结束的成人工作坊、放映、小剧场、夜间体验。facts.date逐字摘录同一天的年月日和开始/结束时刻，不把日间活动当晚场；无明确时段则不收录为晚间安排。',
     '雨天室内体验：分别找成人手作课程、工作坊、互动喜剧/话剧、独立放映、具体新展。优先本周末可参与的体验，避免全部都是展会或阅读。',
     '市集与户外：分别找生活方式市集、美食体验、季节限定活动、轻松爬山/骑行与临时管制、停车后少量搬运且可询问卡式炉条件的露营。',
 )
@@ -364,7 +366,7 @@ def discovery_current(article, now):
     # stays intact; a current source recheck is still required for recommendation.
     return (now - published <= timedelta(days=120) and bool(info.get('novelty'))
             and bool(info.get('start')) and bool(info.get('end'))
-            and info['start'] <= str(end) and info['end'] >= str(start))
+            and info['start'] <= str(end) and info['end'] >= str(now.astimezone(news.BEIJING).date()))
 
 
 def validate_discovery(item, urls, body, places, now):
@@ -468,7 +470,7 @@ def extract_source_details(client, pages, places, now):
     """Extract from retrieved articles, not only the search engine's snippets."""
     hashes = client.state.setdefault('outingDetailHashes', {})
     pending = [(url, body) for url, body in pages.items()
-               if hashes.get(url) != fingerprint(['source-details-v3', body])][:18]
+               if hashes.get(url) != fingerprint(['source-details-v4-evening-times', body])][:18]
     accepted, failures = [], []
     for offset in range(0, len(pending), 6):
         selected = dict(pending[offset:offset + 6])
@@ -493,7 +495,7 @@ def extract_detail_batch(client, selected, places, now):
         'name、novelty、venue、settingEvidence、quote、facts的quote、publishedEvidence都必须是原文逐字连续片段。'
         'novelty只能摘录一句20—90字的原文说明本次新安排，优先普通游客可参与的体验、课程、市集或新展品，跳过招商及行业宣传。禁止改写、拼接或加省略号。日期按活动日期摘录，发布日期要有完整年月日证据，不得互换；'
         '费用说明保留票种和适用日期，预约只用实际原文链接。未知内容留空，setting填unknown。'
-        '优先提取本周末仍在举办的活动；提前公布的演出排期也可提取，绝不把旧公告发布日期改成今天。'
+        '优先提取今天晚间、未来三天或本周末仍在举办的活动；facts.date保留对应日期与起止时刻的完整原文，不能把不同日期的时段合并。提前公布的演出排期也可提取，绝不把旧公告发布日期改成今天。'
         '泛泛攻略和无法确认发表日期的文章可不返回。排除演唱会、博物馆、亲子、观赛、攀岩和滑冰。',
         {'today': now.astimezone(news.BEIJING).date().isoformat(),
          'weekend': [str(day) for day in weekend_days(now)],
@@ -507,7 +509,7 @@ def extract_detail_batch(client, selected, places, now):
             if article:
                 accepted.append(article)
     for article in accepted:
-        hashes[article['url']] = fingerprint(['source-details-v3', selected[article['url']]])
+        hashes[article['url']] = fingerprint(['source-details-v4-evening-times', selected[article['url']]])
     client.state['outingDetailHashes'] = dict(list(hashes.items())[-80:])
     print(compact({'detailPages': len(selected), 'verifiedDetails': len(accepted)}))
     return accepted
@@ -538,18 +540,18 @@ def merge_discovery(previous, current, body):
 def discover(client, places, previous, now, get=get_source, lead_articles=()):
     today = now.astimezone(news.BEIJING).date().isoformat()
     start, end = weekend_days(now)
-    items, urls, errors = [], set(), []
+    items, urls, errors, batches = [], set(), [], []
     for focus in RESEARCH_TOPICS:
         try:
             result, response = client.ask('outing_research',
                 '主动联网检索杭州及周边适合近期或本周末的新活动。目标是发现用户没体验过的具体新安排。'
-                '主要找最近21天报道；也可收录提前120天内公布、明确仍覆盖本周末的演出或展览，保留真实发布日期。'
+                '主要找最近21天报道；也可收录提前120天内公布、明确仍覆盖今天至本周末的演出或展览，保留真实发布日期。'
                 '优先提供的主办方、剧场和场馆官网，媒体用于补充核验；不要只围绕已有地点搜索。'
                 '集中完成本批focus中的不同玩法检索，尽量覆盖多种体验；knownUrls已有报道不再重复，只为其补证据时例外。'
                 '排除攀岩、抱石、滑冰、溜冰、演唱会、博物馆、亲子、观赛、招商、回顾和泛泛攻略。优先文旅部门、场地公告和本地媒体。'
                 '最多8条，宁少勿编。必须有原文URL及明确发布日期，publishedEvidence摘录含完整年月日的逐字证据，'
                 'quote为原文中含地点与实用安排的一小段逐字原文。不得将抓取日期或活动日当成报道发布日期。'
-                'facts只摘录原文明确的活动日期/费用/停车/用炉/预约/关闭条件；不存在就给空数组。'
+                'facts只摘录原文明确的活动日期/费用/停车/用炉/预约/关闭条件；晚间活动的date须逐字摘录日期和开始、结束时刻在一起的证据，不存在就给空数组。'
                 'placeIds只关联提供的地点ID，找不到就为空。没有实际新消息就返回空数组，不重复上轮条目。',
                 {'today': today, 'weekend': [str(start), str(end)],
                  'focus': focus, 'preferences': client.state.get('outingProfile', {}), 'officialSources': OUTING_SOURCES,
@@ -558,13 +560,18 @@ def discover(client, places, previous, now, get=get_source, lead_articles=()):
                  'knownUrls': [a['url'] for a in previous.get('items', [])
                                if a.get('outing', {}).get('novelty') and a.get('sourceStatus') == 'verified']
                               + [a['url'] for a in items if a.get('url')]}, SEARCH_SCHEMA, research=True)
-            items.extend(result.get('items', [])[:8])
+            batch = result.get('items', [])[:8]
+            batches.append(batch)
+            items.extend(batch)
             urls.update(cited_urls(response))
         except Exception as error:
             errors.append(error)
             print('Research topic unavailable: ' + safe_error(error))
     if len(errors) == len(RESEARCH_TOPICS):
         raise errors[0]
+    # The source-reading cap is shared; evening searches must not crowd the
+    # weekend/outdoor topics out of the first 18 pages.
+    items = [batch[i] for i in range(8) for batch in batches if i < len(batch)]
     candidates = [a for a in items if trusted_url(a.get('url')) and a['url'].split('#')[0] in urls]
     # Bounded diagnostic data stays in the Actions build cache, never in pages.
     client.state['researchReview'] = {'candidates': items, 'citedUrls': sorted(urls)[:160]}
@@ -863,6 +870,14 @@ def run(data, previous, state, client, places, now, force=False):
     editorial = copy.deepcopy(previous.get('editorial', {}))
     editorial.update(schema=1, checkedAt=news.iso(now))
     problems = []
+    home = copy.deepcopy(state.get('tonightHome') or editorial.get('tonightHome') or {})
+    try:
+        home = tonight_plans.update_home(client, home, now, force)
+    except Exception as error:
+        problems.append('tonight:' + safe_error(error))
+        home.update(status='unavailable', attemptedAt=news.iso(now))
+    editorial['tonightHome'] = state['tonightHome'] = home
+    save(client.path, state)
     records = state.get('newsRecords', {})
     try:
         records = edit_news(client, data, state, now)
@@ -903,6 +918,10 @@ def run(data, previous, state, client, places, now, force=False):
             trip['attemptedRevision'] = OUTING_REVISION
     trip = complete_trip(data, places, research, trip, now, state.get('outingProfile', {}))
     editorial['trip'] = state['trip'] = trip
+    editorial['tonight'] = {'day': str(now.astimezone(news.BEIJING).date()), 'checkedAt': news.iso(now),
+        'researchedAt': research.get('searchedAt'), 'researchStatus': research.get('status'),
+        'events': tonight_plans.evening_events(
+            trip_candidates(data, [], research.get('items', []), now, state.get('outingProfile', {})), now)}
     editorial['usage'] = copy.deepcopy(state['usage'])
     editorial['status'] = 'partial' if problems else 'ok'
     save(client.path, state)

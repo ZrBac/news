@@ -68,6 +68,8 @@
     <script src="/assets/news/exchange-core.js" defer></script>
     <script src="/assets/news/outings-profile.js" defer></script>
     <script src="/assets/news/editorial.js" defer></script>
+    <script src="/assets/news/tonight-data.js" defer></script>
+    <script src="/assets/news/tonight.js" defer></script>
     <script src="/assets/news/app.js" defer></script>
     <script src="/assets/news/pwa.js" defer></script>
   </head>
@@ -130,6 +132,12 @@
             <span id="result-count" class="result-count"></span>
             <button id="outing-browse" class="text-button" hidden>全部活动与地点 ↓</button>
           </div>
+          <nav id="outing-nav" aria-label="安排时间" hidden>
+            <a href="#tonight" data-outing-mode="tonight">今晚</a>
+            <a href="#local" data-outing-mode="weekend">周末</a>
+          </nav>
+          <section id="tonight-plans" aria-label="今晚做点什么" hidden></section>
+          <div id="news-listing">
           <section id="outing-recommendations" aria-label="本周新发现与去处记录" hidden></section>
           <div id="outing-catalog-heading" class="outing-section-heading" hidden>
             <h2>全部活动与地点</h2>
@@ -369,6 +377,7 @@
           </button>
           <p id="archive-notice" class="view-note" role="status" hidden></p>
           <p id="list-end" class="list-end" hidden>已显示全部结果。</p>
+          </div>
         </section>
 
         <aside class="sidebar">

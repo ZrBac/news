@@ -60,7 +60,7 @@
         <p class="trip-note" role="status">${esc(window.OutingProfile?.status() || "记录保存在当前设备")}</p>
         <form data-outing-settings><label>出发地<input name="startArea" maxlength="50" value="${esc(settings.startArea || "")}" placeholder="例如：杭州五常"></label><label>人数<input name="people" type="number" min="1" max="10" value="${esc(settings.people || 2)}"></label><label>出行方式<select name="transport"><option value="car"${settings.transport !== "transit" ? " selected" : ""}>自驾</option><option value="transit"${settings.transport === "transit" ? " selected" : ""}>公共交通</option></select></label><button class="text-button" type="submit">保存偏好</button></form>
         ${window.OutingProfile?.connected() ? `<button class="text-button" data-outing-sync>同步共同记录</button><details class="outing-connection"><summary>更换连接码</summary>` : `<p class="trip-note">连接共同记录后，两台手机可共享反馈，后续自动整理也会参考。</p>`}<form data-outing-connect><label>专属连接码<input name="code" type="password" autocomplete="off" spellcheck="false"></label><button class="text-button" type="submit">连接</button></form>${window.OutingProfile?.connected() ? "</details>" : ""}
-        <ul class="outing-records">${profile.records.slice(0,50).map(r => `<li><span>${esc(r.title)} · ${esc(statuses[r.status] || "")}</span><button class="text-button" data-outing-remove="${esc(r.id)}">撤销</button></li>`).join("")}</ul>
+        <ul class="outing-records">${profile.records.slice(0,50).map(r => `<li><span>${esc(r.title)} · ${esc((r.id.startsWith("event:tonight-") ? {visited:"玩过",want:"喜欢",dismiss:"不感兴趣"} : statuses)[r.status] || "")}</span><button class="text-button" data-outing-remove="${esc(r.id)}">撤销</button></li>`).join("")}</ul>
       </details>
 `;
   }
@@ -78,7 +78,7 @@
     panel.hidden = true;
     panel.innerHTML = "";
     const profileOnly = () => { panel.hidden = false; panel.innerHTML = profileMarkup(profileOpen); window.OutingProfile?.sync(false); };
-    if (state.view !== "local") return;
+    if (state.view !== "local" || state.outingMode === "tonight") return;
     const trip = data.editorial && data.editorial.trip;
     const now = Date.now(), today = dayOf(new Date(now).toISOString());
     if (!trip || !validDate(trip.updatedAt) ||
@@ -174,5 +174,5 @@
       return;
     }
   });
-  window.NewsEditorial = { metadata, group, render };
+  window.NewsEditorial = { metadata, group, render, profileMarkup };
 })();

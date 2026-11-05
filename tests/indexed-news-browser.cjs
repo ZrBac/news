@@ -237,6 +237,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8769";
       title: "测试：同一条新闻",
       url: "https://one.example.test/story",
     };
+    // This fabricated headline must not inherit today's real AI event group.
+    delete sample.articles[0].editorial;
     sample.articles[1] = {
       ...sample.articles[0],
       id: "second-report",

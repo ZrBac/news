@@ -259,6 +259,9 @@ def main():
     shutil.copytree(ROOT / 'news/guide', output / 'guide')
     shutil.copytree(ROOT / 'news/homes', output / 'homes')
     shutil.copytree(ROOT / 'news/assets', output / 'assets/news', dirs_exist_ok=True)
+    catalog = json.loads((ROOT / 'news/tonight.json').read_text())
+    (output / 'assets/news/tonight-data.js').write_text(
+        'window.NewsTonightCatalog=' + json.dumps(catalog, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c') + ';\n')
     # Keep the retired notebook implementation in Git for recovery, not in the site.
     for name in ('homes.js', 'homes-sync.js', 'home-candidates.json'):
         (output / 'assets/news' / name).unlink(missing_ok=True)
@@ -282,7 +285,7 @@ def main():
     pages.update({path: (output / path.lstrip('/') / 'index.html').read_text() for path in static_paths})
     shell_files = ['/', '/games/', '/guide/', '/homes/', '/manifest.webmanifest', '/assets/news/icon-180.png',
                    '/assets/news/icon-192.png', '/assets/news/icon-512.png']
-    for filename in ('compat.js', 'compat.css', 'archive.js', 'personal.js', 'exchange-core.js', 'outings-profile.js', 'editorial.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json', 'homes-core.js', 'home-finder.js', 'homes.css'):
+    for filename in ('compat.js', 'compat.css', 'archive.js', 'personal.js', 'exchange-core.js', 'outings-profile.js', 'editorial.js', 'tonight-data.js', 'tonight.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json', 'homes-core.js', 'home-finder.js', 'homes.css'):
         asset = output / 'assets/news' / filename
         digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:12]
         versioned = asset.with_name(f'{asset.stem}.{digest}{asset.suffix}')

@@ -266,7 +266,7 @@ class EditorialTests(unittest.TestCase):
         response = {'output': [{'type':'web_search_call', 'action':{'sources':[{'url':item['url']}]}}]}
         client = Mock()
         client.state = {}
-        client.ask.side_effect = [({'items':[item]}, response), TimeoutError(), ({'items':[item]}, {})]
+        client.ask.side_effect = [({'items':[item]}, response), TimeoutError(), ({'items':[]}, {}), ({'items':[item]}, {})]
         result = ai.discover(client, [], {}, self.now, get=lambda _:body)
         self.assertEqual(len(result['items']), 1)
         self.assertEqual(result['status'], 'partial')
@@ -400,6 +400,7 @@ class EditorialTests(unittest.TestCase):
         places, trip = self.trip_fixture()
         previous = {'editorial': {'trip': trip, 'research': {'items': [], 'revision': ai.OUTING_REVISION,
             'searchedAt': trip['updatedAt'], 'attemptedAt': trip['attemptedAt'], 'attemptedRevision': ai.OUTING_REVISION}}}
+        previous['editorial']['tonightHome'] = {'day': '2026-11-02', 'revision': ai.tonight_plans.REVISION, 'ideas': []}
         with tempfile.TemporaryDirectory() as folder:
             transport = Mock(side_effect=AssertionError('No API call during cooldown'))
             client = ai.Client('x', self.config, {}, Path(folder) / 'state.json', self.now, transport)

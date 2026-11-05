@@ -85,6 +85,7 @@
     outingKind: "all",
     outingFiltersOpen: false,
     outingRange: "weekend",
+    outingMode: "weekend",
     saved: new Map(),
   };
   const pageSize = () => (state.view === "local" ? 3 : 12);
@@ -398,7 +399,7 @@
       else if (!local && node.previousSibling !== home) home.after(node);
     }
     $("#outing-catalog-heading").hidden = !local;
-    $("#outing-browse").hidden = !local;
+    $("#outing-browse").hidden = !local || state.outingMode === "tonight";
     $("#outing-filter-toggle").hidden = !local;
     $("#outing-filters").hidden = !local || !state.outingFiltersOpen;
     $("#outing-filter-toggle").setAttribute("aria-expanded", String(state.outingFiltersOpen));
@@ -1003,6 +1004,13 @@
     $(".main-layout").classList.toggle("outings-view", outings);
     $("#outing-news-heading").hidden = !outings;
     renderOutingLayout();
+    $("#outing-nav").hidden = !outings;
+    $("#news-listing").hidden = outings && state.outingMode === "tonight";
+    $$("[data-outing-mode]").forEach(el => {
+      if (el.dataset.outingMode === state.outingMode) el.setAttribute("aria-current", "page");
+      else el.removeAttribute("aria-current");
+    });
+    window.NewsTonight?.render(state.data || {}, state, formatTime);
     $$("[data-view]").forEach((el) => {
       const active =
         el.dataset.view === state.view ||
@@ -1115,12 +1123,13 @@
       partial || !articles.length || articles.length > state.limit;
   }
   function route(scroll = false) {
-    const hash = location.hash.slice(1);
+    const hash = location.hash === "#tonight" ? "local" : location.hash.slice(1);
     if (hash === "news-content" || hash === "section-title") {
       if (!state.data) return;
       render();
       return;
     }
+    state.outingMode = location.hash === "#tonight" ? "tonight" : "weekend";
     clearTimeout(searchTimer);
     searchTimer = null;
     state.view = [
@@ -1565,6 +1574,10 @@
   }).format(new Date());
   $("#year").textContent = new Date().getFullYear();
   function focusSearch() {
+    if (state.view === "local" && state.outingMode === "tonight") {
+      history.replaceState(null, "", "#local");
+      route();
+    }
     $(state.view === "local" ? "#outing-catalog-heading" : "#news-content").scrollIntoView({ behavior: "smooth" });
     $("#search").focus({ preventScroll: true });
   }

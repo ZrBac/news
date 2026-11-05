@@ -55,6 +55,31 @@
 .outing-facts summary { cursor: pointer; min-height: 36px; padding: 7px 0; }
 .outing-facts p { font-size: 13px; }
 .place-card { scroll-margin-top: 85px; }
+#outing-nav { display: flex; gap: 24px; border-bottom: 1px solid var(--line); margin: -4px 0 18px; }
+#outing-nav a { min-height: 44px; display: inline-flex; align-items: center; padding: 6px 4px; font-size: 15px; color: var(--secondary); text-decoration: none; border-bottom: 2px solid transparent; }
+#outing-nav a[aria-current] { color: var(--ink); border-bottom-color: var(--accent); font-weight: 600; }
+.tonight-controls { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 20px; margin-top: 14px; }
+.tonight-controls [role="group"] { display: flex; gap: 6px; }
+.tonight-controls button { min-height: 44px; padding: 7px 14px; border: 1px solid var(--line); background: var(--paper); color: var(--secondary); border-radius: 6px; font: inherit; font-size: 13px; cursor: pointer; }
+.tonight-controls button[aria-pressed="true"] { background: var(--surface); border-color: var(--ink); color: var(--ink); }
+.tonight-energy button { padding: 7px 10px; }
+.tonight-context { margin: 10px 0 0; }
+.tonight-list-heading { display: flex; align-items: center; justify-content: space-between; color: var(--muted); font-size: 12px; margin-top: 6px; }
+.tonight-list-heading button, [data-tonight-more] { min-height: 44px; }
+.tonight-list { margin-top: 0; }
+.tonight-summary { font-size: calc(14px * var(--reading-scale)); line-height: 1.7; }
+.tonight-details { font-size: 13px; line-height: 1.8; color: var(--secondary); }
+.tonight-details summary { min-height: 44px; padding: 10px 0; cursor: pointer; }
+.tonight-details ol { padding-left: 22px; }
+.tonight-details li { border: 0; padding: 4px 0; }
+.tonight-details p { overflow-wrap: anywhere; }
+@media (max-width: 600px) {
+  .tonight-controls { gap: 8px; }
+  .tonight-arrival { width: 100%; }
+  .tonight-arrival button { flex: 1; font-size: 14px; }
+  .tonight-energy button { border-color: transparent; border-radius: 4px; min-height: 44px; }
+  .tonight-energy button[aria-pressed="true"] { border-color: var(--line); }
+}
 @media (max-width: 600px) {
   .trip-list { grid-template-columns: minmax(0, 1fr); gap: 0; }
   #outing-recommendations { padding: 14px 0; }

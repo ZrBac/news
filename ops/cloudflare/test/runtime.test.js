@@ -49,11 +49,13 @@ test("Workers runtime: SQLite coordinator serializes requests and keeps cooldown
           updatedAt: new Date(Date.now() - 10_800_000).toISOString(),
         });
       assert.equal(url.origin, "https://api.github.com");
-      if (url.pathname === workflow + "/runs")
+      if (url.pathname === workflow + "/runs") {
+        assert.equal(url.searchParams.get("branch"), "main");
         return Response.json({ workflow_runs: [] });
+      }
       assert.equal(url.pathname, workflow + "/dispatches");
       assert.equal(request.method, "POST");
-      assert.deepEqual(await request.json(), { ref: "hexo" });
+      assert.deepEqual(await request.json(), { ref: "main" });
       dispatches++;
       return new Response(null, { status: 204 });
     },

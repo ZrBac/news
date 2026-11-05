@@ -2,8 +2,8 @@ name: Update and publish news
 
 on:
   push:
-    branches: [hexo]
-    paths: ["news/**", "scripts/**", "tests/**", "deploy/homes/**", ".github/workflows/news.yml"]
+    branches: [main]
+    paths: ["news/**", "scripts/**", "tests/**", ".github/workflows/news.yml"]
   schedule:
     - cron: "17 * * * *"
     - cron: "0 1,8 * * *"

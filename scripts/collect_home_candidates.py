@@ -498,7 +498,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument('--output', type=Path, default=ROOT / 'news/data/home-candidates.json')
     parser.add_argument('--previous-url')
-    parser.add_argument('--seed', type=Path, default=ROOT / 'news/assets/home-candidates.json')
+    parser.add_argument('--seed', type=Path, default=ROOT / 'news/home-candidates.json')
     parser.add_argument('--force', action='store_true')
     args = parser.parse_args()
     path = Path(args.output)

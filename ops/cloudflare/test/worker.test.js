@@ -54,11 +54,12 @@ function harness(t, initial = {}) {
     assert.equal(options.headers.Authorization, "Bearer test-only");
     if (url.endsWith("/dispatches")) {
       h.dispatches++;
-      assert.deepEqual(JSON.parse(options.body), { ref: "hexo" });
+      assert.deepEqual(JSON.parse(options.body), { ref: "main" });
       assert(stored.has("request"), "cooldown must be durable before dispatch");
       if (h.fail === "dispatch") throw new Error("timeout");
       return new Response(null, { status: 204 });
     }
+    assert.equal(new URL(url).searchParams.get("branch"), "main");
     h.queries++;
     if (h.fail === "runs") return new Response("", { status: 503 });
     return Response.json({ workflow_runs: h.runs });

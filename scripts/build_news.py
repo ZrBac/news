@@ -262,9 +262,6 @@ def main():
     catalog = json.loads((ROOT / 'news/tonight.json').read_text())
     (output / 'assets/news/tonight-data.js').write_text(
         'window.NewsTonightCatalog=' + json.dumps(catalog, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c') + ';\n')
-    # Keep the retired notebook implementation in Git for recovery, not in the site.
-    for name in ('homes.js', 'homes-sync.js', 'home-candidates.json'):
-        (output / 'assets/news' / name).unlink(missing_ok=True)
     chapters, static_paths = build_guide_reader(output)
     # Keep the previous edition available to older installed readers until they update.
     old_book = (ROOT / 'news/guide/book.json').read_bytes()
@@ -345,7 +342,7 @@ def main():
     from collect_home_candidates import public_snapshot
     candidates = ROOT / 'news/data/home-candidates.json'
     if not candidates.is_file():
-        candidates = ROOT / 'news/assets/home-candidates.json'
+        candidates = ROOT / 'news/home-candidates.json'
     (output / 'data/home-candidates.json').write_text(
         json.dumps(public_snapshot(json.loads(candidates.read_text())), ensure_ascii=False, separators=(',', ':')) + '\n')
     (output / '.nojekyll').touch()

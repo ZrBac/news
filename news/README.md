@@ -76,7 +76,7 @@ python -m http.server 8080 --directory _site
 
 ## 杭州房源
 
-`/homes/` 与 `/homes/live/` 是同一份公开房源列表，从“杭州房价”进入。看房手账、私人同步、收藏房源和笔记编辑已暂时停用；新版页面不读取或改写原有 IndexedDB，也不调用阿里云接口。原有服务端数据库及备份保留在原服务器，未迁入 GitHub 或静态站点。旧代码留在仓库用于恢复，`homes.js`、`homes-sync.js` 不再发布。
+`/homes/` 与 `/homes/live/` 是同一份公开房源列表，从“杭州房价”进入。看房手账、私人同步、收藏房源和笔记编辑已暂时停用；新版页面不读取或改写原有 IndexedDB，也不调用阿里云接口。原有服务端数据库及备份保留在原服务器，未迁入 GitHub 或静态站点。已停用的手帐前后端和服务器部署配置已从当前代码移除，可从 Git 历史恢复；升级回归测试仍验证旧浏览器记录完整保留。
 
 - GitHub Actions 运行 `scripts/collect_home_candidates.py --previous-url https://news.zacai.fun/data/home-candidates.json`，按北京时间 09:00、16:00 两个时段检查，实际执行可能随 Actions 排队延后。每小时新闻发布会复用本时段结果；全部来源失败时至多每小时重试一次。Actions 缓存与上一份已发布快照保留观察历史，仓库只提供不含私人记录的公开初始化快照。
 - 覆盖西湖、余杭、上城新房各最多 3 页；二手房读取三墩、蒋村、留下、西溪、未来科技城、闲林、仓前、良渚、勾庄及上城各自 300–350 万住宅列表前 30 条，另保留西雅图、西溪悦城、金地自在城搜索。只读取公开主列表，校验城市、板块、价格和住宅条件，不登录、不绕过验证。
@@ -85,7 +85,7 @@ python -m http.server 8080 --directory _site
 - `/data/home-candidates.json` 是独立静态数据，不进入 PWA 程序版本计算，房源更新不会反复触发“更新页面”。页面请求 8 秒超时，失败回退已保存结果；数据通过 localStorage 和独立 Cache Storage 保存，离线可以查看。重新读取按钮只下载已发布结果，不临时启动采集。
 - 两个入口都保留联网优先、3.5 秒内回退旧页面的导航方式；旧版缓存遮住新页面时可用 `/homes/live/` 入口。原有看房记录不会随缓存更新删除，但本版不提供查看/编辑入口。
 
-验证：`tests/test_home_finder.py` 检查来源解析、筛选、定时、失败保留及公开字段隔离；`tests/home-finder-browser.cjs` 检查纯静态加载、筛选、来源变化和离线恢复；`tests/home-upgrade-browser.cjs` 验证旧缓存升级及原看房数据保留。旧服务归档和停用步骤见 [部署说明](../deploy/homes/README.md)。
+验证：`tests/test_home_finder.py` 检查来源解析、筛选、定时、失败保留及公开字段隔离；`tests/home-finder-browser.cjs` 检查纯静态加载、筛选、来源变化和离线恢复；`tests/home-upgrade-browser.cjs` 验证旧缓存升级及原看房数据保留。现用服务及兼容入口见 [运行说明](../ops/README.md)。
 
 ## 安装与离线阅读（PWA）
 
@@ -166,9 +166,9 @@ NEWS_LEGACY_SAFARI=1 PLAYWRIGHT_MODULE=/path/to/playwright NEWS_BASE_URL=http://
 
 ## 自动发布
 
-`.github/workflows/news.yml` 在 `hexo` 分支相关文件更新、手动执行以及每小时第 17 分钟运行。GitHub Pages 发布方式使用 GitHub Actions。代码推送在上传发布包前运行手机首屏、杭州与民生栏目及其离线浏览、索引查找、收藏备份、旧格式兼容、PWA 更新、指南章节重试和小游戏冷启动恢复检查；按小时更新和手动刷新继续执行解析/保留规则检查，避免每次采集都重新安装浏览器。浏览器依赖锁定在 `tests/browser/package-lock.json`，可通过 `PLAYWRIGHT_MODULE=/path/to/playwright NEWS_TEST_SITE=_site node tests/check-mobile.cjs` 本地运行同一组检查。
+`.github/workflows/news.yml` 在 `main` 分支相关文件更新、手动执行以及每小时第 17 分钟运行。GitHub Pages 发布方式使用 GitHub Actions。代码推送在上传发布包前运行手机首屏、杭州与民生栏目及其离线浏览、索引查找、收藏备份、旧格式兼容、PWA 更新、指南章节重试和小游戏冷启动恢复检查；按小时更新和手动刷新继续执行解析/保留规则检查，避免每次采集都重新安装浏览器。浏览器依赖锁定在 `tests/browser/package-lock.json`，可通过 `PLAYWRIGHT_MODULE=/path/to/playwright NEWS_TEST_SITE=_site node tests/check-mobile.cjs` 本地运行同一组检查。
 
-构建从空目录生成资讯站，只发布资讯页面、小游戏、数据、RSS、站点地图和 PWA 资源。博客归档、历史文章和旧博客资源已下线，不再拉取旧博客快照；历史源码仍可从 Git 仓库中查阅。
+构建从空目录生成资讯站，只发布资讯页面、小游戏、数据、RSS、站点地图和 PWA 资源。博客归档、历史文章和旧博客资源已下线，不再拉取旧博客快照；历史源码可从 Git 历史查阅。
 
 采集时读取上次发布的 `/data/news.json`，合并去重，保留最近 30 天、最多 6000 条，历史随运行积累。达到上限时为十一个新闻分类各预留最多 545 条，分类内将预留空间分散到来源，剩余位置按最新发布时间补齐；未用满的预留空间不浪费。实际覆盖天数取决于发稿量，不保证 30 天齐全；已清理的旧数据无法凭空恢复。单来源失败时保留其历史并显示不可用状态；能正常解析的 RSS 暂无符合时间和主题条件的条目时，标为“已连接 · 暂无近期内容”，不累计连接失败，持续未新增仍由质量统计提示。网络错误、错误页面、无效 XML 与不支持的订阅格式仍标记不可用；所有来源均未取得有效条目时继续终止部署，线上保留上一个成功版本。页面分别显示最近检查时间和最新文章发布时间，超过两小时未检查会显示延迟提示。
 
@@ -191,4 +191,4 @@ GitHub 的计划任务不是严格实时调度，可能延迟或被跳过；公�
 - 修改采集：`scripts/collect_news.py`；修改构建：`scripts/build_news.py`。
 - 页面展示“资讯来源”中有每轮来源状态；更详细的错误见 GitHub Actions 日志。
 - 不要把 GitHub token、API key 或后台凭据写进静态资源。
-- 通过上述 GitHub Actions 工作流发布，不要运行旧 Hexo 的 `hexo deploy`。
+- 通过上述 GitHub Actions 工作流发布；默认分支为 `main`。

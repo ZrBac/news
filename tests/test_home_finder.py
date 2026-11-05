@@ -1,24 +1,13 @@
-import copy
 import datetime as dt
-import hashlib
-import io
 import json
 from pathlib import Path
-import sqlite3
 import sys
 import tempfile
 import unittest
 from unittest.mock import patch
-from concurrent.futures import ThreadPoolExecutor
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'scripts'))
 import collect_home_candidates as collector
-from homes_api import Application, MAX_BODY, backup, candidate_fits
-
-
-def empty_book():
-    return {'schema': 1, 'revision': 1, 'homes': [], 'profile': {'budgetMin': 300, 'budgetMax': 350,
-            'areas': '西湖、上城、西溪', 'priority': 'new', 'driver': 'undecided', 'maxDrive': None, 'maxTransit': None}}
 
 
 class CandidateTests(unittest.TestCase):
@@ -36,7 +25,7 @@ class CandidateTests(unittest.TestCase):
         self.assertTrue(due('2026-11-02T09:01:00Z'))
 
     def test_public_snapshot_never_publishes_notebook_fields(self):
-        value = json.loads((Path(__file__).resolve().parents[1] / 'news/assets/home-candidates.json').read_text())
+        value = json.loads((Path(__file__).resolve().parents[1] / 'news/home-candidates.json').read_text())
         value.update(homes=['private'], profile={'private': True}, token='private', notebook='private')
         value['items'][0].update(notes='private', photos=['private'], visits=['private'])
         value['sources'][0]['token'] = 'private'
@@ -45,10 +34,10 @@ class CandidateTests(unittest.TestCase):
         self.assertTrue(all(collector.candidate_fits(item) for item in public['items']))
         self.assertEqual(public['updatedAt'], value['updatedAt'])
         with self.assertRaises(ValueError):
-            collector.public_snapshot(empty_book())
+            collector.public_snapshot({'schema': 1, 'homes': []})
 
     def test_previous_snapshot_chooses_newest_and_does_not_call_private_server(self):
-        seed = Path(__file__).resolve().parents[1] / 'news/assets/home-candidates.json'
+        seed = Path(__file__).resolve().parents[1] / 'news/home-candidates.json'
         value = json.loads(seed.read_text())
         value['updatedAt'] = '2026-11-03T01:01:00Z'
         with tempfile.TemporaryDirectory() as folder:
@@ -61,7 +50,7 @@ class CandidateTests(unittest.TestCase):
                 collector.read_previous(saved, 'https://zacai.fun/api/homes/notebook', seed)
 
     def test_failed_pages_refresh_retains_observations_and_marks_failed_sources(self):
-        seed = json.loads((Path(__file__).resolve().parents[1] / 'news/assets/home-candidates.json').read_text())
+        seed = json.loads((Path(__file__).resolve().parents[1] / 'news/home-candidates.json').read_text())
         def unavailable(url):
             raise TimeoutError()
         result = collector.public_snapshot(collector.collect(seed, unavailable))
@@ -77,7 +66,7 @@ class CandidateTests(unittest.TestCase):
         cases = json.loads((Path(__file__).parent / 'fixtures/home-requirements.json').read_text())
         for case in cases:
             with self.subTest(case=case['label']):
-                self.assertEqual(candidate_fits(case), case['fits'])
+                self.assertEqual(collector.candidate_fits(case), case['fits'])
 
     def new_page(self, unit='per平方米', value=28000, tags='普通住宅', status='在售'):
         data = {'@type': 'ItemList', 'itemListElement': [{'item': {'name': '测试住宅', 'description': '西湖 三墩 三居 100-120㎡',
@@ -224,88 +213,6 @@ class CandidateTests(unittest.TestCase):
             with self.assertRaises(collector.urllib.error.HTTPError):
                 collector.fetch('https://example.com/')
             self.assertEqual(request.call_count, 1)
-
-
-class NotebookAPITests(unittest.TestCase):
-    def setUp(self):
-        self.temp = tempfile.TemporaryDirectory()
-        self.token = 'test-only-' + 'a' * 40
-        self.app = Application(self.temp.name, hashlib.sha256(self.token.encode()).hexdigest())
-
-    def tearDown(self):
-        self.temp.cleanup()
-
-    def call(self, method='GET', path='/api/homes/notebook', body=None, token=True, origin='https://news.zacai.fun', **extra):
-        raw = json.dumps(body).encode() if body is not None else b''
-        env = {'REQUEST_METHOD': method, 'PATH_INFO': path, 'HTTP_ORIGIN': origin, 'CONTENT_TYPE': 'application/json',
-               'CONTENT_LENGTH': str(len(raw)), 'wsgi.input': io.BytesIO(raw), **extra}
-        if token:
-            env['HTTP_AUTHORIZATION'] = 'Bearer ' + self.token
-        answer = []
-        chunks = self.app(env, lambda status, headers: answer.extend([int(status.split()[0]), dict(headers)]))
-        return answer[0], json.loads(b''.join(chunks)), answer[1]
-
-    def test_auth_cors_and_public_feed_separation(self):
-        self.assertEqual(self.call(token=False)[0], 401)
-        self.assertEqual(self.call(origin='https://unrelated.example')[0], 403)
-        code, _, headers = self.call('OPTIONS', token=False)
-        self.assertEqual(code, 200)
-        self.assertEqual(headers['Access-Control-Allow-Origin'], 'https://news.zacai.fun')
-        self.assertEqual(self.call(path='/api/homes/candidates', token=False)[0], 503)
-        Path(self.temp.name, 'candidates.json').write_text('{"schema":1,"items":[]}')
-        self.call('PUT', body={'baseRevision': 0, 'state': empty_book()})
-        public = self.call(path='/api/homes/candidates', token=False)
-        self.assertEqual(public[0], 200)
-        self.assertNotIn('profile', str(public[1]))
-        self.assertEqual(self.call()[2]['Cache-Control'], 'no-store')
-
-    def test_stale_device_cannot_overwrite_and_unchanged_reads_are_small(self):
-        book = empty_book()
-        first = self.call('PUT', body={'baseRevision': 0, 'state': book})
-        self.assertEqual(first[0], 200)
-        changed = copy.deepcopy(book)
-        changed['profile']['areas'] = '另一台设备'
-        self.assertEqual(self.call('PUT', body={'baseRevision': 0, 'state': changed})[0], 409)
-        self.assertEqual(self.call()[1]['state'], book)
-        response = self.call(QUERY_STRING='since=1')[1]
-        self.assertTrue(response['unchanged'])
-        self.assertNotIn('state', response)
-
-    def test_public_feed_filters_new_observations_without_changing_saved_records(self):
-        good = {'id': 'qualified', 'areas': [100, 100], 'layout': '3室2厅'}
-        bad = dict(good, id='two-rooms', layout='2室3厅')
-        path = Path(self.temp.name, 'candidates.json')
-        path.write_text(json.dumps({'schema': 1, 'items': [good, bad]}))
-        book = empty_book()
-        self.call('PUT', body={'baseRevision': 0, 'state': book})
-        self.assertEqual(self.call(path='/api/homes/candidates', token=False)[1]['items'], [good])
-        self.assertEqual(len(json.loads(path.read_text())['items']), 2, 'raw source history stays intact')
-        self.assertEqual(self.call()[1]['state'], book)
-        path.write_text(json.dumps({'schema': 1, 'items': [bad, dict(good, areas=[])]}))
-        self.assertEqual(self.call(path='/api/homes/candidates', token=False)[1]['items'], [])
-
-    def test_concurrent_writes_have_one_winner(self):
-        def save(_):
-            return self.call('PUT', body={'baseRevision': 0, 'state': empty_book()})[0]
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            self.assertEqual(sorted(pool.map(save, range(2))), [200, 409])
-
-    def test_invalid_or_large_uploads_do_not_touch_original(self):
-        self.call('PUT', body={'baseRevision': 0, 'state': empty_book()})
-        bad = empty_book()
-        bad['profile']['maxDrive'] = float('nan')
-        self.assertEqual(self.call('PUT', body={'baseRevision': 1, 'state': bad})[0], 400)
-        self.assertEqual(self.call('PUT', CONTENT_LENGTH=str(MAX_BODY + 1))[0], 413)
-        self.assertEqual(self.call('PUT', body={'baseRevision': True, 'state': empty_book()})[0], 400)
-        self.assertEqual(self.call()[1]['revision'], 1)
-
-    def test_backup_is_a_consistent_restorable_database(self):
-        self.call('PUT', body={'baseRevision': 0, 'state': empty_book()})
-        backup(self.temp.name)
-        path = next(Path(self.temp.name, 'backups').glob('*.sqlite3'))
-        with sqlite3.connect(path) as connection:
-            self.assertEqual(connection.execute('PRAGMA integrity_check').fetchone()[0], 'ok')
-            self.assertEqual(connection.execute('SELECT revision FROM notebook').fetchone()[0], 1)
 
 
 if __name__ == '__main__':

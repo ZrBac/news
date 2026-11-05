@@ -1,101 +1,61 @@
-# 资讯刷新云函数
+# 资讯云函数
 
-把手动刷新接口和停更补跑迁到 Cloudflare Workers，抓取与发布仍由 `ZrBac/news` 的 `news.yml` / `hexo` 执行。网页和新闻数据仍由 GitHub Pages 提供。
+Cloudflare Workers 提供手动刷新、停更补跑和去处共同记录。抓取与发布由 `ZrBac/news` 的 `news.yml` / `main` 执行，网页和公开数据由 GitHub Pages 提供。
 
-## 当前状态
+## 当前配置
 
-2026-09-24 已部署 `https://news-refresh.944052796.workers.dev` 并配置专用 `GITHUB_TOKEN`。真实浏览器通过云函数触发 GitHub run `35966590609`，抓取和发布成功，页面自动更新至 14:52。两个开关均开启，GitHub 仓库变量 `NEWS_REFRESH_ENDPOINT` 指向此 Worker 的 `/api/news-refresh`。
+- 服务地址：`https://news-refresh.944052796.workers.dev`。
+- `MANUAL_ENABLED` 与 `WATCHDOG_ENABLED` 均开启；Cron 每小时 07、37 分钟运行。
+- GitHub 仓库变量 `NEWS_REFRESH_ENDPOINT` 指向 Worker 的 `/api/news-refresh`；构建脚本默认也使用此地址。
+- GitHub Pages 环境的部署分支策略允许 `main`；修改分支名时须同步工作流、Worker 和这条策略。
+- 域名继续使用阿里云 DNS，目前未绑定 Worker 自定义域名。
 
-服务器上的 `zrbac-news-watchdog.timer` 和 `zrbac-news-refresh.service` 已停用且禁用开机启动。旧地址 `https://zacai.fun/api/news-refresh` 由 nginx 转发到同一 Worker，兼容已打开的旧页面；新页面直接访问 Worker，不依赖此兼容代理。生产代理配置为 `ops/news-refresh-cloud-location.conf`，安装于 `/etc/nginx/news-refresh-location.conf`，原配置备份于 `/var/backups/zrbac-news-refresh/news-refresh-location.before-cloud.conf`。证书校验保持开启，CA 路径适用于本机的 Linux 发行版。
+旧地址 `https://zacai.fun/api/news-refresh` 仍通过 nginx 转发到 Worker，兼容已打开的旧页面。配置见 [运行说明](../README.md)。服务器刷新服务与定时器已停用。
 
-资讯站和旅行网站域名继续使用阿里云 DNS；当前未绑定云函数自定义域名。定时规则仍为每小时 07、37 分钟，实际调度与执行情况可在 Worker 日志中查看。
+## 手动刷新与补跑
 
-## 行为
+- POST `/api/news-refresh` 和 GET `/api/news-refresh/status` 固定操作上述仓库、工作流和分支，不接受任意任务参数。
+- 浏览器须提供资讯站 Origin，POST 还需 `X-News-Refresh: 1`。Origin 不是登录认证；每 IP 每分钟最多 60 次请求，真正限制触发次数的是全站持久化冷却。
+- SQLite Durable Object 的 `idFromName('news')` 实例协调手动与自动请求；手动至少间隔 15 分钟，已有任务直接复用。
+- Cron 检查 `data/status.json`。停更超过两小时且没有近期或正在运行的任务时补跑；同次停更滚动 24 小时最多三次，两次至少间隔两小时。
+- 先持久化预算再调用 GitHub，失败和超时也消耗预算；新的发布时间重置自动补跑预算，较旧的 CDN 响应不能重置它。
+- 查询结果缓存 10 秒；上游异常短暂退避。GitHub 凭据仅存 Worker Secret，不打印原始响应或凭据。
 
-- POST `/api/news-refresh` 和 GET `/api/news-refresh/status` 与原接口兼容，固定仓库、工作流、分支，不接受任意任务参数。
-- 只允许资讯站 Origin；Origin 不是登录认证。每 IP 每分钟最多 60 次请求，真正限制工作流触发次数的是全站持久化冷却。
-- SQLite Durable Object 的单个 `news` 实例协调所有手动和自动请求；手动至少间隔 15 分钟，已有任务直接复用。
-- Cron 每小时第 07、37 分钟检查 `data/status.json`。停更超过两小时且没有近期/正在运行的任务时补跑；同一次停更滚动 24 小时最多三次，两次至少间隔两小时。
-- 预算先持久化再调用 GitHub，超时和失败也消耗预算；新的发布时间重置自动补跑预算，较旧的 CDN 响应不能重置它。
-- 查询结果缓存 10 秒；上游异常短暂退避，不盲目补发。GitHub 凭证只存 Worker Secret，不打印上游原始响应或凭证。
-- GitHub 自身的每小时计划任务保留。两套调度都不能保证 GitHub 排队和部署准点完成。
+GitHub 自身的每小时采集任务继续运行。两套调度均受 GitHub API、队列与部署耗时影响。
 
-## 本地检查
+## 去处共同记录
 
-### 去处共同记录
+`/api/outings/profile` 使用同一 `NewsCoordinator` 类的 `idFromName('outings')` 实例。GET/POST 必须提供 `Authorization: Bearer <OUTING_PROFILE_TOKEN>`；浏览器读写另校验资讯站 Origin，构建任务可不带 Origin 读取。POST 按单条反馈或设置更新，最多保存 300 条，可撤销；接口不缓存，不记录令牌和请求正文。
 
-`/api/outings/profile` 是独立的私有记录接口，使用同一 `NewsCoordinator` 类的 `idFromName('outings')` 实例，不动 `news` 的刷新状态。GET/POST 必须提供 `Authorization: Bearer <OUTING_PROFILE_TOKEN>`；浏览器读写另校验资讯站 Origin，构建任务可不带 Origin 读取。POST 按单条反馈或设置更新，最多保存 300 条，可撤销；禁止任意字段写入。接口不缓存，令牌和请求正文不写应用日志。
+连接码分别放在 Worker Secret 和 GitHub Actions 的 `OUTING_PROFILE_TOKEN` 中，两处必须一致。私人连接链接格式为 `https://news.zacai.fun/#local&outing-key=<连接码>`；浏览器保存连接码后立即清除地址中的令牌。两台手机各打开一次即可共用记录。轮换时更新两处 Secret 并给设备新的私人链接，原有记录继续保留。
 
-部署时生成足够长的随机连接码，分别用 stdin 写入 Worker Secret 和 GitHub Actions 的 `OUTING_PROFILE_TOKEN`（同一值）。不要放进命令参数、静态构建或仓库。给拥有者的私人连接链接格式是 `https://news.zacai.fun/#local&outing-key=<连接码>`，浏览器存入本机后立即清除地址中的令牌。两台手机分别打开一次，即可共用记录。轮换时更新两处 Secret，再给设备新的连接链接；原有记录不随密钥轮换删除。
+采集程序只在内存里使用记录，公开文件与 Actions 缓存不含个人偏好。同步失败先保留本机待发送操作，快速连续修改保留最后一次选择。
 
-采集程序只在内存里使用这些记录，公开数据和 Actions 缓存不含个人偏好。静态页面、离线阅读、新闻定时采集保持原架构；共同记录依赖 Cloudflare，不依赖当前服务器。同步失败先留本机待发送，快速连续修改保留最后一次选择。
+## 检查与部署
 
-使用 Node.js 22，工具依赖独立于根目录的旧 Hexo：
+使用 Node.js 22，在本目录执行：
 
 ```sh
-cd /root/workspace/zrbac-news/ops/cloudflare
 npm ci
 npm test
 npm run check
+npm run deploy
 ```
 
-测试涵盖并发、冷却、重启、失败预算、任务状态、CORS 和请求限制；Miniflare 使用真实 Workers 运行时和 SQLite 存储验证并发及重启持久化，所有 GitHub 请求均为模拟，不会触发线上任务。
+`npm test` 使用模拟 GitHub 请求检查冷却、并发、失败预算、查询分支、触发分支、权限和共同记录；Miniflare 验证真实 Workers 运行时及 SQLite 重启持久化。`npm run check` 只做打包检查，不上传。
 
-## 凭证与首次部署
+首次部署先通过 `npx wrangler login` 登录账号，再用 `npx wrangler secret put GITHUB_TOKEN` 配置仅限本仓库且具有 Actions 读写权限的专用令牌。首次部署期间可先关闭两个运行开关，完成凭据与接口检查后再开启。连接码通过 `npx wrangler secret put OUTING_PROFILE_TOKEN` 写入；秘密只从可信终端的隐藏输入传入，不写进仓库、命令参数或静态资源。
 
-1. 在可信终端执行 `npx wrangler login --device --browser=false --scopes account:read user:read workers_scripts:write workers_tail:read`，在自己的浏览器打开 CLI 给出的 Cloudflare 页面并输入短验证码完成授权，然后 `npx wrangler whoami` 确认正确账号。设备登录无需开放端口或转发 localhost 回调。这里只请求部署、查看账号和日志所需权限；whoami 可能提示缺少其他产品的可选权限，无需因此扩大授权。不要把密码或访问令牌贴进聊天、仓库或网页。
-2. 在 GitHub 创建细粒度访问令牌，仅选 `ZrBac/news`，仓库权限 `Actions: Read and write`。设置合适的有效期，并在过期前轮换。
-3. 在新账号首次部署时，先将 `MANUAL_ENABLED` 和 `WATCHDOG_ENABLED` 改成 `false`，再执行 `npm run deploy`，以免与旧服务重复运行。首次部署会建立 SQLite Durable Object。当前仓库配置为已经完成切换的生产状态。
-4. 执行 `npx wrangler secret put GITHUB_TOKEN`，在隐藏的输入提示中填入专用令牌。
-5. 从部署输出取得真实的 `*.workers.dev` 地址。如果使用 `news-api.zacai.fun`，先确认 Cloudflare 上该域名区域已激活，再添加 Worker 自定义域名；不要修改资讯主站或旅行网站的 DNS 记录。
+Worker 代码推送后由 `news-worker-check.yml` 自动检查。Pages 工作流不会上传 Worker，修改 Worker 后须单独部署。部署后检查状态接口，并确认它能找到 `main` 上的工作流任务：
 
-不要将服务器 `gh` 的广泛权限凭证直接复制到云函数。仓库不保存 account ID、令牌或未经验证的生产接口地址。
+```sh
+curl --fail -H 'Origin: https://news.zacai.fun' \
+  https://news-refresh.944052796.workers.dev/api/news-refresh/status
+```
 
-## 验证与切换顺序
+## 维护与回滚
 
-1. 先发布本站的构建改动，确认 `https://news.zacai.fun/data/status.json` 返回有效 `updatedAt`，且与 `data/news.json` 一致。
-2. 用部署得到的真实域名替换以下 `WORKER_HOST`，测试状态接口：
-
-   ```sh
-   curl --fail -H 'Origin: https://news.zacai.fun' \
-     'https://WORKER_HOST/api/news-refresh/status'
-   ```
-
-   应返回 `idle`、`running`、`ready` 或 `failed` 等正常状态，不应返回 503。验证手机和常用网络都能连通该接口。
-3. 记录旧服务状态和旧的 GitHub 仓库变量；停止旧 timer，等待其当前检查结束，再停止旧的刷新 API。确认 GitHub 没有正在执行的新闻工作流，且旧重试预算已因新发布清零；否则应转移预算，或等待旧补跑限制到期，避免迁移时重复触发。本次迁移时旧预算为空，且最后一次本机请求后已有新发布；手动 15 分钟间隔还会依据 GitHub 的运行记录检查。
-
-   ```sh
-   systemctl disable --now zrbac-news-watchdog.timer
-   systemctl is-active zrbac-news-watchdog.service
-   systemctl disable --now zrbac-news-refresh.service
-   ```
-
-4. 将 `wrangler.jsonc` 的 `MANUAL_ENABLED` 改成 `true`，暂时保持 `WATCHDOG_ENABLED` 为 `false`，重新部署。测试真实 POST → 工作流 → 发布 → 页面新时间。若返回 `fresh` / `cooldown`，等冷却结束后再验证实际触发。
-5. 验证成功后，把 `WATCHDOG_ENABLED` 改为 `true`，部署并观察下一次 cron 日志；应有 `watchdog` 事件，不能有持续 503。提交这两个开关的实际状态，避免日后重新部署关闭功能。
-6. 设置仓库变量为真实接口地址，再触发 Pages 发布：
-
-   ```sh
-   gh variable set NEWS_REFRESH_ENDPOINT --repo ZrBac/news \
-     --body 'https://WORKER_HOST/api/news-refresh'
-   gh workflow run news.yml --repo ZrBac/news --ref hexo
-   ```
-
-7. 等 Pages 部署成功，检查 HTML 的 `news-refresh-endpoint`，在浏览器验证刷新完成、连续点击冷却、接口故障时仍能读取已发布资讯。旧地址可以按 `ops/news-refresh-cloud-location.conf` 转发到同一 Worker，以兼容已经打开的页面；安装后验证并 reload nginx。
-
-只有全部通过才算迁移完成。旧脚本、状态和 nginx 配置保留用于回退；不要停止旅行网站或关闭整台服务器。
-
-## 回退与维护
-
-- 先关闭 Worker 两个开关并重新部署，确认没有在途触发，再恢复原服务器 timer/API，避免双系统同时补跑。将 `ops/news-refresh-location.conf` 重新安装到 `/etc/nginx/news-refresh-location.conf`，运行 `nginx -t` 后 reload nginx，让旧地址重新指向本机 Python 服务。
-- 删除 `NEWS_REFRESH_ENDPOINT` 仓库变量（或恢复之前的值），重新运行 `news.yml` 发布。未设置变量时构建默认使用原服务器地址。
-- `npx wrangler tail` 可检查日志；监控 GitHub 令牌到期、Worker 请求/CPU/存储额度。凭证失效会返回 503，但已发布新闻仍可阅读。
-- Worker 代码改动由 `news-worker-check.yml` 自动测试；云端部署使用 `npm run deploy`，不会随着 Pages 构建自动上传。
-- 不要删除 Durable Object 命名空间或改动 `idFromName('news')`，否则会丢失冷却和重试预算。
-
-## 生活指南
-
-阅读入口是 `https://news.zacai.fun/guide/`，正文、搜索、收藏和离线阅读由 GitHub Pages 与浏览器完成，不调用 Worker 或模型服务。
-
-首屏正文直接放在 HTML 中，剩余内容按章节加载。离线准备会显示章节进度，已成功保存的章节在重试时复用；指南不需要等全部游戏资源重新下载才检查自己的离线状态。每小时发布资讯时检查原项目版本，正文不变时复用已有版本。
-
-内容采用 CC BY 4.0，页面保留作者、项目、版本和改编说明。网页检索与性价比算法的上游代码许可见 `news/guide/LICENSE-CODE.txt`。
+- `npx wrangler tail` 查看运行日志；检查令牌有效期及 Worker 用量。凭据失效会导致接口返回 503，已发布页面仍可阅读。
+- 保持 Durable Object 命名空间及 `news`、`outings` 实例名称不变，保留冷却状态和共同记录。
+- 应用回滚通过 Git revert 与重新部署完成；工作流和 Worker 的目标分支继续保持 `main`。
+- Cloudflare 凭据只用于云函数，`OPENAI_API_KEY` 只配置在 GitHub Actions 的 AI 整理步骤中。

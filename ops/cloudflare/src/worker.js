@@ -2,6 +2,7 @@ const ORIGINS = new Set(["https://news.zacai.fun", "http://news.zacai.fun"]);
 const API = "/api/news-refresh";
 const WORKFLOW =
   "https://api.github.com/repos/ZrBac/news/actions/workflows/news.yml";
+const BRANCH = "main";
 const HEALTH = "https://news.zacai.fun/data/status.json";
 const MANUAL_INTERVAL = 900_000;
 const RECOVERY_INTERVAL = 7_200_000;
@@ -229,7 +230,7 @@ export class NewsCoordinator {
   async runs() {
     if (this.runsCache && Date.now() - this.runsCache.at < 10_000)
       return this.runsCache.runs;
-    const data = await this.github("/runs?branch=hexo&per_page=20");
+    const data = await this.github(`/runs?branch=${BRANCH}&per_page=20`);
     if (!Array.isArray(data?.workflow_runs)) throw new Error("invalid_runs");
     const runs = data.workflow_runs.map((r) => {
       if (!Number.isSafeInteger(r.id) || typeof r.status !== "string")
@@ -293,7 +294,7 @@ export class NewsCoordinator {
     this.runsCache = null;
     await this.github("/dispatches", {
       method: "POST",
-      body: JSON.stringify({ ref: "hexo" }),
+      body: JSON.stringify({ ref: BRANCH }),
     });
     return { status: "running", baselineAt };
   }

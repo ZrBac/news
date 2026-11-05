@@ -1,7 +1,7 @@
 name: Check news cloud worker
 on:
   push:
-    branches: [hexo]
+    branches: [main]
     paths: ["ops/cloudflare/**", ".github/workflows/news-worker-check.yml"]
   pull_request:
     paths: ["ops/cloudflare/**", ".github/workflows/news-worker-check.yml"]

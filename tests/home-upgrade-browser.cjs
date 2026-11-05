@@ -7,7 +7,7 @@ const http = require("node:http");
 const fs = require("node:fs/promises");
 const path = require("node:path");
 const waitForBrowser = require("./browser-poll.cjs");
-const H = require("../news/assets/homes-core.js");
+const legacyBook = require("./fixtures/home-notebook-legacy.json");
 const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
 const legacyHTML = `<!doctype html><meta charset="utf-8"><title>旧版我的看房</title>
   <h1>我的看房</h1><p>从收藏一套，到选好一个家</p><p>仅保存在当前浏览器，不自动同步。</p>
@@ -125,17 +125,7 @@ async function readBook(page) {
     await cdp.send("ServiceWorker.enable");
     await page.goto(base + "/homes/");
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
-    const book = H.defaults();
-    book.revision = 1;
-    book.homes.push(
-      H.home({
-        id: "kept-home",
-        name: "升级前收藏的房子",
-        detail: "旧版留下的现场记录",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-      }),
-    );
+    const book = structuredClone(legacyBook);
     await page.evaluate(async (book) => {
       const db = await new Promise((resolve, reject) => {
         const request = indexedDB.open("zrbac-home-book", 1);

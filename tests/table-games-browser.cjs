@@ -129,6 +129,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.equal((await saved("spider")).history.length, 0);
     await page.locator("#table-play .back").tap();
     await page.locator('a[href="#sudoku"]').tap();
+    await page.locator("#sudoku-board").waitFor();
     await page.setViewportSize({ width: 390, height: 664 });
     assert.equal(await page.locator(".sudoku-cell").count(), 81);
     const puzzle = (await saved("sudoku")).state;
@@ -203,6 +204,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await dp.locator("#spider-deal").tap();
     await dp.locator("#table-play .back").tap();
     await dp.locator('a[href="#spider"]').tap();
+    await dp.locator("#spider-board").waitFor();
     assert((await dp.locator("#spider-deal").textContent()).includes("4"));
     await denied.close();
     // Completion and undo through the UI, using legitimate states one move from finishing.

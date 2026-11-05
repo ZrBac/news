@@ -141,6 +141,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     await page.locator("#extra-play .back").tap();
     await page.locator('a[href="#defense"]').tap();
+    await page.locator("#defense-tools").waitFor();
     const tapTile = async (x, y) => {
       const box = await page.locator("#extra-canvas").boundingBox();
       await page.touchscreen.tap(
@@ -175,11 +176,14 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert((await page.locator("#defense-speed").textContent()).includes("2"));
     await page.screenshot({ path: "/tmp/news-extra-defense.png" });
     await page.setViewportSize({ width: 844, height: 390 });
+    await page.locator("#extra-overlay").waitFor();
     assert(await page.locator("#extra-overlay").isVisible());
     await page.screenshot({ path: "/tmp/news-extra-defense-wide.png" });
     await page.locator("#extra-play .back").tap();
     await page.setViewportSize({ width: 390, height: 664 });
     await page.locator('a[href="#blocks"]').tap();
+    await page.locator("#blocks-controls").waitFor();
+    await page.locator("#extra-overlay").waitFor();
     assert(await page.locator("#extra-overlay").isVisible());
     await page.locator("#extra-resume").tap();
     await page.locator('[data-block="left"]').tap();
@@ -312,6 +316,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     // The new router still opens the existing card and arcade games.
     await page.locator("#extra-play .back").tap();
     await page.locator('a[href="#spider"]').tap();
+    await page.locator("#spider-board").waitFor();
     assert.equal(await page.locator(".spider-column").count(), 10);
     await page.locator("#table-play .back").tap();
     await page.locator('a[href="#breakout"]').tap();
@@ -335,6 +340,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await dp.locator(".dungeon-choice").first().tap();
     await dp.locator("#extra-play .back").tap();
     await dp.locator('a[href="#dungeon"]').tap();
+    await dp.locator("#dungeon-end").waitFor();
     assert(await dp.locator("#dungeon-end").isVisible());
     await denied.close();
     await page.evaluate(() => {

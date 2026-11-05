@@ -137,6 +137,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         );
       }
       await page.locator("#play .back").tap();
+      await page.locator("#library").waitFor();
     }
     for (const path of ["/games/index.html", "/games"]) {
       await page.goto(base + path);
@@ -168,6 +169,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert(await page.locator("#help-dialog").isVisible());
     await page.locator("#close-help").tap();
     await page.locator("#play .back").tap();
+    await page.locator("#library").waitFor();
     assert(
       !(await page.evaluate(() => document.body.classList.contains("playing"))),
     );

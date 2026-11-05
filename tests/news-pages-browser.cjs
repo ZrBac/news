@@ -79,7 +79,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         Array.from(document.querySelectorAll(".article a")).some(
           (link) => link.href === url,
         ),
-      oldestNews.originalUrl || oldestNews.url,
+      new URL(oldestNews.originalUrl || oldestNews.url).href,
     );
     const date = await page.evaluate((value) => {
       const parts = Object.fromEntries(

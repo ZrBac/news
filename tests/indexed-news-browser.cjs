@@ -27,7 +27,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8769";
           Array.from(document.querySelectorAll(".article a")).some(
             (link) => link.href === url,
           ),
-        target.originalUrl || target.url,
+        new URL(target.originalUrl || target.url).href,
       );
     }
     const recentGameSources = new Set(

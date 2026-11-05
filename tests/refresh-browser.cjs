@@ -16,6 +16,10 @@ const endpoint = process.env.NEWS_REFRESH_ENDPOINT || "https://news-refresh.9440
     ).json();
     const updated = structuredClone(original);
     updated.updatedAt = new Date(Date.now()).toISOString();
+    // Prefer a source outside the initial packet: refreshing that selection
+    // must also restore the matching history, which loads asynchronously.
+    const visibleSources = new Set(original.articles.filter(a => a.category === "sports").map(a => a.sourceId));
+    const selectedSource = original.archive.categories.sports.find(id => !visibleSources.has(id)) || "chinanews-sports";
     let mode = "running";
     let posts = 0;
     await page.route(endpoint + "**", (route) => {
@@ -32,7 +36,8 @@ const endpoint = process.env.NEWS_REFRESH_ENDPOINT || "https://news-refresh.9440
     });
     await page.goto(base + "/#sports", { waitUntil: "networkidle" });
     await page.locator(".article").first().waitFor();
-    await page.selectOption("#source-filter", "chinanews-sports");
+    await page.selectOption("#source-filter", selectedSource);
+    await page.locator(".article").first().waitFor();
     await page.route("**/data/latest.json*", (route) =>
       route.fulfill({ json: updated }),
     );
@@ -45,7 +50,8 @@ const endpoint = process.env.NEWS_REFRESH_ENDPOINT || "https://news-refresh.9440
     );
     assert.equal(posts, 1);
     assert.equal(await page.locator("#section-title").innerText(), "体育");
-    assert.equal(await page.inputValue("#source-filter"), "chinanews-sports");
+    assert.equal(await page.inputValue("#source-filter"), selectedSource);
+    await page.locator(".article").first().waitFor();
     assert(!(await page.locator("#refresh-news").isDisabled()));
     mode = "cooldown";
     await page.click("#refresh-news");
@@ -61,6 +67,7 @@ const endpoint = process.env.NEWS_REFRESH_ENDPOINT || "https://news-refresh.9440
         .querySelector("#refresh-notice")
         .textContent.includes("暂时无法确认"),
     );
+    await page.locator(".article").first().waitFor();
     assert((await page.locator(".article").count()) > 0);
     assert(!(await page.locator("#refresh-news").isDisabled()));
     for (const width of [360, 390, 768, 1440]) {

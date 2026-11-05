@@ -29,6 +29,9 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.goto(base + "/");
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+    // Prepare the game library once, before opening any individual game.
+    await page.goto(base + "/games/");
+    await page.locator("#offline-status.ready").waitFor();
     await context.setOffline(true);
     await page.goto(base + "/games/#spider");
     await page.locator("#table-play").waitFor();

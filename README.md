@@ -1,34 +1,70 @@
 # 资讯
 
-[news.zacai.fun](https://news.zacai.fun/) 的源码，默认分支为 `main`。
+一个日常使用的小网站：看新闻、查汇率、找杭州的去处，也能读指南、玩小游戏。
 
-网站包含新闻、今晚与周末去处、杭州房源、汇率、生活指南和离线小游戏。页面由 GitHub Pages 托管，GitHub Actions 负责采集、AI 整理和发布；Cloudflare Workers 提供手动刷新、停更补跑和去处共同记录。
+**访问：[news.zacai.fun](https://news.zacai.fun/)**
 
-## 目录
+## 可以做什么
 
-- `news/`：页面、样式、浏览器脚本、来源配置和公开初始化数据。
-- `scripts/`：采集、AI 整理与静态构建，使用 Python 标准库。
-- `tests/`：采集规则、浏览器、离线和旧版本升级回归测试。
-- `ops/cloudflare/`：云函数、独立 Node.js 依赖和测试。
-- `.github/workflows/`：网站发布与云函数检查任务。
+| 入口 | 功能 |
+| --- | --- |
+| [资讯](https://news.zacai.fun/) | 每日速览与分类阅读，支持搜索、日期筛选、收藏和来源状态查看 |
+| [今晚](https://news.zacai.fun/#tonight) | 按 19 点或 21 点到家、精力情况，挑选附近活动或居家玩法 |
+| [周末](https://news.zacai.fun/#local) | 杭州及周边的新活动、爬山、骑行、露营和雨天备选 |
+| [汇率](https://news.zacai.fun/#exchange) | 美元、日元、泰铢兑人民币的近一个月走势、金额换算与 30 天最低提醒 |
+| [杭州房价](https://news.zacai.fun/#housing) | 成交报告、市场数据与楼盘资讯，可继续查看自动采集的房源 |
+| [生活指南](https://news.zacai.fun/guide/) | 按章节阅读、搜索和收藏《高性价比人生指南》 |
+| [小游戏](https://news.zacai.fun/games/) | 纸牌、数独、卡牌地牢、塔防、俄罗斯方块、扫雷等触屏小游戏 |
 
-## 本地检查
+新闻按栏目整理，去处独立展示。部分资讯摘要和活动推荐经过 AI 整理，保留原文与来源，方便核对。
 
-使用 Python 3.12 和 Node.js 22。在根目录执行：
+## 更新与离线
+
+- 新闻计划每小时检查一次；去处补充检索和房源计划每天北京时间 9 点、16 点检查。实际完成时间受来源、排队和发布耗时影响。
+- 页面上的“刷新资讯”可以请求一次更新。已有任务时复用该任务，重复请求有冷却时间。
+- 普通刷新会读取最新页面，无需再手动点击版本更新提示。
+- 支持安装到桌面。指南、小游戏和房源可在各自页面准备离线资源；新闻和收藏可读取已保存的内容。
+- iPhone 添加到主屏幕后，从桌面图标联网打开一次，完成离线准备后再断网使用。
+
+## 项目结构
+
+前端使用原生 HTML、CSS 和 JavaScript，采集与构建使用 Python 标准库。GitHub Pages 托管网页，GitHub Actions 定时采集并发布，Cloudflare Workers 提供刷新协调和去处记录同步。
+
+```text
+news/                 页面、样式、脚本与内容来源配置
+scripts/              采集、内容整理和静态构建
+tests/                数据规则、浏览器、离线与升级检查
+ops/cloudflare/       云函数及其测试
+.github/workflows/    自动检查与发布
+```
+
+## 本地预览
+
+使用 Python 3.12，在仓库根目录执行：
 
 ```sh
-python3 -m unittest discover -s tests -v
-python3 scripts/collect_news.py --previous-url https://news.zacai.fun/data/news.json
+python3 scripts/previous_snapshot.py --url https://news.zacai.fun/data/news.json --output news/data/news.json
 python3 scripts/build_news.py
 python3 -m http.server 8765 --bind 127.0.0.1 --directory _site
 ```
 
-浏览器依赖位于 `tests/browser/`，云函数依赖位于 `ops/cloudflare/`，分别在对应目录运行 `npm ci`。完整检查和配置见 [网站维护说明](news/README.md) 与 [云函数说明](ops/cloudflare/README.md)。
+打开 <http://127.0.0.1:8765>。新闻和相关数据沿用公开快照；未单独采集时，房源使用仓库内的初始数据。生成结果位于 `_site/`，不直接修改生成文件。
 
-## 发布与密钥
+## 检查与维护
 
-推送 `main` 后自动检查并发布；定时采集和手动刷新使用同一条 `news.yml` 工作流。云函数修改通过独立检查后，在 `ops/cloudflare/` 执行 `npm run deploy` 发布。
+```sh
+python3 -m unittest discover -s tests -v
+npm ci --prefix tests/browser
+tests/browser/node_modules/.bin/playwright install --with-deps chromium
+PLAYWRIGHT_MODULE="$PWD/tests/browser/node_modules/playwright" node tests/check-mobile.cjs
+```
 
-`OPENAI_API_KEY` 放在 GitHub Actions Secrets 中，只注入 AI 整理步骤。浏览器读取已生成的结果，不持有 API Key。去处连接令牌放在 Actions 与 Worker Secrets 中；密钥文件、本地缓存和生成数据均不提交。
+浏览器检查使用 Node.js 22 或更新版本，覆盖资讯、去处、汇率、房价、指南、全部小游戏，以及手机布局、旧版浏览器兼容和离线恢复。
 
-旧博客、看房手帐和服务器刷新程序已从当前分支移除；需要查阅时可使用 Git 历史。旧版浏览器升级与离线兼容测试继续保留。
+默认分支为 `main`，网站代码推送后自动检查并发布。详见[网站维护说明](news/README.md)和[运行说明](ops/README.md)。
+
+## 内容来源
+
+新闻标题、摘要和数据归原发布方所有，阅读详情请访问原文。
+
+生活指南来自 [eternity4719/HowToLiveBetter](https://github.com/eternity4719/HowToLiveBetter)，正文按 [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/) 使用；网站调整了阅读排版，保留来源和版本说明。天气来自 [Open-Meteo](https://open-meteo.com/)，汇率依据欧洲央行公开参考数据换算。

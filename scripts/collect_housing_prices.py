@@ -452,13 +452,14 @@ def collect_market(kind, previous, today, get=fetch):
 def main():
     p = argparse.ArgumentParser()
     p.add_argument('--previous-url')
+    p.add_argument('--previous-file', type=Path)
     args = p.parse_args()
     seed = json.loads((ROOT / 'news/housing-prices.json').read_text())
     previous = seed['records'][:]
     previous_market = seed.get('market', {}).copy()
-    if args.previous_url:
+    if args.previous_url or args.previous_file:
         try:
-            old = json.loads(fetch(args.previous_url)).get('housingPrices', {})
+            old = json.loads(args.previous_file.read_text() if args.previous_file else fetch(args.previous_url)).get('housingPrices', {})
             previous += old.get('records', [])
             for kind, record in old.get('market', {}).items():
                 if valid_market(kind, record, datetime.now(timezone.utc).date()) and record['periodEnd'] >= previous_market.get(kind, {}).get('periodEnd', ''):

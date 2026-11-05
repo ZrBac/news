@@ -322,15 +322,16 @@ def select_articles(articles, now):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--previous-url')
+    parser.add_argument('--previous-file', type=Path)
     parser.add_argument('--input', type=Path, default=ROOT / 'news/data/news.json')
     parser.add_argument('--force-search', action='store_true')
     args = parser.parse_args()
     path = args.input
     data = json.loads(path.read_text())
     old = {}
-    if args.previous_url:
+    if args.previous_url or args.previous_file:
         # Abort rather than silently lose a successful search or cached outings.
-        old = json.loads(news.fetch(args.previous_url).decode('utf-8'))
+        old = json.loads(args.previous_file.read_text() if args.previous_file else news.fetch(args.previous_url))
     now = datetime.now(news.UTC)
     sources = [s for s in json.loads((ROOT / 'news/sources.json').read_text()) if s['category'] == 'local']
     revision = hashlib.sha256((RULE_REVISION + json.dumps(sources, sort_keys=True)).encode()).hexdigest()[:12]

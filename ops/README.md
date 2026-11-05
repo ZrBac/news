@@ -1,12 +1,24 @@
-# 运行与维护
+# 运行说明
 
-当前网站使用 GitHub Pages、GitHub Actions 和 [Cloudflare Workers](cloudflare/README.md)。默认分支为 `main`；发布入口是 `news.yml`，云函数也只触发此分支的同一工作流。
+网站运行在 GitHub Pages、GitHub Actions 和 Cloudflare Workers 上。默认分支为 `main`，日常阅读、采集与发布不依赖常驻服务器。
 
-`cloudflare/` 包含手动刷新、停更补跑与去处共同记录的实现和测试。旧 Python 刷新服务、systemd 定时器和看房手帐服务已退役，其代码及部署说明可从 Git 历史恢复。
+| 部分 | 职责 |
+| --- | --- |
+| GitHub Pages | 提供页面、静态资源和公开数据 |
+| GitHub Actions | 定时采集、内容整理、检查和发布 |
+| [Cloudflare Workers](cloudflare/README.md) | 手动刷新、停更补跑和去处记录同步 |
 
-这里还保留两份已打开旧页面使用的 nginx 兼容配置：
+修改默认分支时，需要同时检查工作流的触发分支、云函数的目标分支，以及 Pages 环境的部署规则。
 
-- `news-refresh-cloud-location.conf`：将旧地址 `https://zacai.fun/api/news-refresh` 转发到现有 Worker。
-- `news-refresh-limit.conf`：上述兼容入口的请求限流。
+## 兼容入口
 
-新页面直接请求 Worker。nginx 配置只用于维护旧入口，不参与 GitHub Pages 构建或定时采集。服务器上的私人数据库、访问凭据和备份由原部署单独管理。
+本目录的 `news-refresh-cloud-location.conf` 和 `news-refresh-limit.conf` 仅用于兼容以前打开的页面，将旧刷新地址转到云函数。当前页面直接使用云函数，这两份配置不参与网站构建和定时采集。
+
+## 排查顺序
+
+1. 查看 `Update and publish news` 最近一次任务，确认采集、检查和发布分别是否完成。
+2. 查看网站 `data/status.json` 的更新时间，区分已发布和仍在排队。
+3. 查看页面“来源状态”，确认是否只有个别来源异常。
+4. 若页面内容较旧，联网刷新；离线资源不完整时，在相应页面重新准备。
+
+临时采集失败会保留现有数据。完整快照及其备份都不可用时停止发布，不用空数据覆盖历史。

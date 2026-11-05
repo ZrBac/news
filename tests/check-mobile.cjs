@@ -42,6 +42,7 @@ const server = http.createServer(async (request, response) => {
   };
   try {
     for (const name of [
+      "brief-browser.cjs",
       "indexed-news-browser.cjs",
       "local-livelihood-browser.cjs",
       "weekend-browser.cjs",
@@ -49,14 +50,23 @@ const server = http.createServer(async (request, response) => {
       "tonight-browser.cjs",
       "outings-profile-browser.cjs",
       "housing-browser.cjs",
+      "exchange-browser.cjs",
+      "models-browser.cjs",
       "home-finder-browser.cjs",
       "home-upgrade-browser.cjs",
       "article-links-browser.cjs",
       "news-loading-browser.cjs",
+      "news-recovery-browser.cjs",
+      "refresh-browser.cjs",
       "source-quality-browser.cjs",
       "news-pages-browser.cjs",
       "pwa-browser.cjs",
       "guide-download-browser.cjs",
+      "guide-browser.cjs",
+      "games-browser.cjs",
+      "table-games-browser.cjs",
+      "extra-games-browser.cjs",
+      "casual-games-browser.cjs",
       "offline-recovery-browser.cjs",
     ]) {
       console.log("Checking " + name);

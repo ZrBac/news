@@ -112,12 +112,13 @@ def collect_all(previous, now, get=fetch):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--previous-url')
+    parser.add_argument('--previous-file', type=Path)
     args = parser.parse_args()
     seed = ROOT / 'news/exchange-rates.json'
     previous = json.loads(seed.read_text()) if seed.exists() else {}
-    if args.previous_url:
+    if args.previous_url or args.previous_file:
         try:
-            old = json.loads(fetch(args.previous_url)).get('exchangeRates')
+            old = json.loads(args.previous_file.read_text() if args.previous_file else fetch(args.previous_url)).get('exchangeRates')
             if old and old.get('series') == SERIES:
                 previous = dict(old, currencies={**previous.get('currencies', {}), **old.get('currencies', {})})
         except Exception as exc:

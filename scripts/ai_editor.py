@@ -940,6 +940,7 @@ def main():
     parser.add_argument('--input', type=Path, default=ROOT / 'news/data/news.json')
     parser.add_argument('--state', type=Path, default=ROOT / '.cache/news-ai/state.json')
     parser.add_argument('--previous-url')
+    parser.add_argument('--previous-file', type=Path)
     parser.add_argument('--key-file', type=Path)
     parser.add_argument('--force', action='store_true')
     args = parser.parse_args()
@@ -952,9 +953,9 @@ def main():
             raise SystemExit('Invalid key file format; no credentials displayed.')
         key = matches.pop()
     previous = data
-    if args.previous_url:
+    if args.previous_url or args.previous_file:
         try:
-            previous = json.loads(news.fetch(args.previous_url))
+            previous = json.loads(args.previous_file.read_text() if args.previous_file else news.fetch(args.previous_url))
         except Exception:
             # Without the last ledger we cannot safely start a fresh budget.
             print('AI editing skipped: previous snapshot unavailable.')

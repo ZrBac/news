@@ -67,6 +67,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.setViewportSize({width: 390, height: 844});
     await page.locator("#theme-toggle").click();
     assert.equal(await page.locator("html").getAttribute("data-theme"), "dark");
+    assert.equal(await page.locator("#theme-toggle").getAttribute("aria-label"), "切换浅色模式");
     await page.locator("#install-app").click();
     assert(await page.locator("#info-dialog").isVisible());
     await page.locator("#close-dialog").click();

@@ -200,11 +200,13 @@ def refresh(places, previous, candidates, now, get=fetch_feed, resolve=news.reso
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--previous-url')
+    parser.add_argument('--previous-file', type=Path)
     parser.add_argument('--force-search', action='store_true')
     args = parser.parse_args()
     path = ROOT / 'news/data/news.json'
     data = json.loads(path.read_text())
-    old = json.loads(news.fetch(args.previous_url).decode('utf-8')) if args.previous_url else data
+    old = (json.loads(args.previous_file.read_text()) if args.previous_file else
+           json.loads(news.fetch(args.previous_url)) if args.previous_url else data)
     places = json.loads((ROOT / 'news/places.json').read_text())['places']
     candidates = data.get('weekendArticles', []) + [a for a in data.get('articles', []) if a.get('category') == 'local']
     data['placeUpdates'] = refresh(places, old.get('placeUpdates', {}), candidates, datetime.now(news.UTC), force=args.force_search)

@@ -41,6 +41,13 @@ def candidate_fits(item):
     return bool(rooms) and all(n.is_integer() and n >= 3 for n in rooms)
 
 
+def clean_address(value):
+    if not isinstance(value, str):
+        return ''
+    value = re.sub(r'[\[【(（]\s*(?:undefined|null|nan)\s*[\]】)）]', '', value, flags=re.I).strip()
+    return '' if value.lower() in ('undefined', 'null', 'nan') else value
+
+
 def public_snapshot(value):
     """Allow only public listing fields; never carry notebook data into Pages."""
     if (not isinstance(value, dict) or value.get('schema') != 1
@@ -63,6 +70,7 @@ def public_snapshot(value):
                 or not re.fullmatch(r'https://(?:hz\.newhouse\.fang\.com/loupan/\d+\.htm|m\.fang\.com/esf/hz/\d+_\d+\.html)', item.get('url', ''))):
             raise ValueError('Invalid public listing')
         row = {k: item[k] for k in fields if k in item}
+        row['address'] = clean_address(row.get('address'))
         row['history'] = [
             {'at': event['at'], 'changes': {k: {p: change.get(p) for p in ('from', 'to')}
              for k, change in event.get('changes', {}).items()
@@ -229,7 +237,7 @@ def parse_new(source, config):
         match_total = re.search(r'(\d+(?:\.\d+)?)\s*万元/套', card.first(cls='zj_price').text())
         if total is None and match_total:
             total = positive(match_total[1])
-        address = card.first(cls='address').first('a').attrs.get('title', '')
+        address = clean_address(card.first(cls='address').first('a').attrs.get('title', ''))
         description = item.get('description', '')
         areas = area_range(card.first(cls='house_type').text()) or area_range(description)
         district = config['district']

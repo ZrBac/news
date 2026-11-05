@@ -770,6 +770,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--output', type=Path, default=ROOT / 'news/data/news.json')
     parser.add_argument('--previous-url')
+    parser.add_argument('--previous-file', type=Path)
     args = parser.parse_args()
     sources = json.loads((ROOT / 'news/sources.json').read_text())
     previous, previous_models, previous_housing, quality_states = [], [], [], []
@@ -780,9 +781,9 @@ def main():
         previous_housing = old.get('housingArticles', [])
         if old.get('sourceQualityState') is not None:
             quality_states.append(validate_quality_state(old['sourceQualityState']))
-    if args.previous_url:
+    if args.previous_url or args.previous_file:
         try:
-            old = json.loads(fetch(args.previous_url, 30_000_000))
+            old = json.loads(args.previous_file.read_text() if args.previous_file else fetch(args.previous_url, 30_000_000))
             previous += old.get('articles', [])
             previous_models += old.get('modelReleases', [])
             previous_housing += old.get('housingArticles', [])

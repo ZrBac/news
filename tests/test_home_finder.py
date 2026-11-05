@@ -11,6 +11,15 @@ import collect_home_candidates as collector
 
 
 class CandidateTests(unittest.TestCase):
+    def test_publisher_address_placeholders_are_removed_from_saved_snapshots(self):
+        seed = json.loads((Path(__file__).resolve().parents[1] / 'news/home-candidates.json').read_text())
+        for address, expected in [('[undefined]余杭闲富中路', '余杭闲富中路'),
+                                  ('【null】西湖区', '西湖区'), ('null', ''),
+                                  ('[余杭]闲富中路', '[余杭]闲富中路')]:
+            seed['items'][0]['address'] = address
+            result = collector.public_snapshot(seed)
+            self.assertEqual(result['items'][0]['address'], expected)
+
     def test_pages_schedule_checks_at_nine_and_sixteen_beijing(self):
         previous = {'scheduleRevision': collector.REVISION, 'updatedAt': '2026-11-02T01:01:00Z', 'sources': [{'ok': True}]}
         def due(stamp):

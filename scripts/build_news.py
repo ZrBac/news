@@ -348,7 +348,8 @@ def main():
     (output / '.nojekyll').touch()
     data = json.loads((output / 'data/news.json').read_text())
     price_file = ROOT / 'news/data/housing.json'
-    data['housingPrices'] = json.loads((price_file if price_file.exists() else ROOT / 'news/housing-prices.json').read_text())
+    data['housingPrices'] = (json.loads(price_file.read_text()) if price_file.exists() else
+                             data.get('housingPrices') or json.loads((ROOT / 'news/housing-prices.json').read_text()))
     # Remove retired sections from older cached price data.
     prices = data['housingPrices']
     prices.pop('samples', None)
@@ -356,7 +357,8 @@ def main():
     prices.pop('xihuHotspots', None)
     (output / 'data/housing.json').write_text(json.dumps(prices, ensure_ascii=False, separators=(',', ':')) + '\n')
     exchange_file = ROOT / 'news/data/exchange.json'
-    data['exchangeRates'] = json.loads((exchange_file if exchange_file.exists() else ROOT / 'news/exchange-rates.json').read_text())
+    data['exchangeRates'] = (json.loads(exchange_file.read_text()) if exchange_file.exists() else
+                            data.get('exchangeRates') or json.loads((ROOT / 'news/exchange-rates.json').read_text()))
     (output / 'data/news.json').write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n')
     build_news_pages(data, output)
     # A tiny health file avoids downloading and parsing the entire archive in Workers.

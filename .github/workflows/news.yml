@@ -54,16 +54,24 @@ jobs:
           node --check news/assets/casual-games.js
           node --check news/assets/casual-games-core.js
           node --test tests/casual-games-core.cjs tests/extra-games-core.cjs tests/games-core.cjs tests/table-games-core.cjs tests/sw-compat.cjs
+      - name: Restore the last validated snapshot
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/news-snapshot/last-good.json
+          key: news-snapshot-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: news-snapshot-v1-
+      - name: Read the previous publication once
+        run: python scripts/previous_snapshot.py --url https://news.zacai.fun/data/news.json
       - name: Collect news and retain the previous archive
-        run: python scripts/collect_news.py --previous-url https://news.zacai.fun/data/news.json
+        run: python scripts/collect_news.py --previous-file .cache/news-snapshot/previous.json
       - name: Prepare Hangzhou outings and twice-daily searches
-        run: python scripts/collect_weekend.py --previous-url https://news.zacai.fun/data/latest.json
+        run: python scripts/collect_weekend.py --previous-file .cache/news-snapshot/previous.json
       - name: Refresh hiking, camping and cycling place news
-        run: python scripts/collect_places.py --previous-url https://news.zacai.fun/data/latest.json
+        run: python scripts/collect_places.py --previous-file .cache/news-snapshot/previous.json
       - name: Update Hangzhou transaction price reports
-        run: python scripts/collect_housing_prices.py --previous-url https://news.zacai.fun/data/latest.json
+        run: python scripts/collect_housing_prices.py --previous-file .cache/news-snapshot/previous.json
       - name: Update foreign currency to CNY reference rates
-        run: python scripts/collect_exchange_rates.py --previous-url https://news.zacai.fun/data/latest.json
+        run: python scripts/collect_exchange_rates.py --previous-file .cache/news-snapshot/previous.json
       - name: Restore public home listing observations
         uses: actions/cache/restore@v4
         with:
@@ -95,7 +103,7 @@ jobs:
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
           OUTING_PROFILE_TOKEN: ${{ secrets.OUTING_PROFILE_TOKEN }}
-        run: python scripts/ai_editor.py --previous-url https://news.zacai.fun/data/latest.json
+        run: python scripts/ai_editor.py --previous-file .cache/news-snapshot/previous.json
       - name: Save editorial usage even if a later build fails
         if: always() && steps.ai-editor.outcome != 'skipped'
         uses: actions/cache/save@v4
@@ -138,6 +146,12 @@ jobs:
         env:
           PLAYWRIGHT_MODULE: ${{ github.workspace }}/tests/browser/node_modules/playwright
         run: node tests/check-mobile.cjs
+      - name: Retain the validated data for recovery
+        run: cp _site/data/news.json .cache/news-snapshot/last-good.json
+      - uses: actions/cache/save@v4
+        with:
+          path: .cache/news-snapshot/last-good.json
+          key: news-snapshot-v1-${{ github.run_id }}-${{ github.run_attempt }}
       - uses: actions/upload-pages-artifact@v4
         with:
           path: _site

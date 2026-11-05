@@ -20,9 +20,13 @@ const book = require("../news/guide/book.json");
       await page.goto(base + "/guide/");
       await page.locator(".guide-entry").first().waitFor();
       await page.evaluate(() => window.guideInitialLoad);
+      await page.locator("#theme-toggle").click();
+      assert.equal(await page.locator("#theme-toggle").getAttribute("aria-label"), "切换浅色模式");
+      await page.locator("#theme-toggle").click();
+      assert.equal(await page.locator("#theme-toggle").getAttribute("aria-label"), "切换深色模式");
       assert.equal(await page.locator(".guide-entry").count(), 12);
       assert(
-        (await page.locator("#guide-edition").innerText()).includes("676"),
+        (await page.locator("#guide-edition").innerText()).includes(String(book.entries.length)),
       );
       assert.equal(
         await page.evaluate(

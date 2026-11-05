@@ -301,10 +301,14 @@
   $("#candidate-refresh").addEventListener("click", load);
   window.addEventListener("online", load);
   $("#close-dialog").addEventListener("click", () => $("#info-dialog").close());
+  const themeLabel = () => $("#theme-toggle").setAttribute("aria-label",
+    document.documentElement.dataset.theme === "dark" ? "切换浅色模式" : "切换深色模式");
+  themeLabel();
   $("#theme-toggle").addEventListener("click", () => {
     const theme = document.documentElement.dataset.theme === "dark" ? "light" : "dark";
     document.documentElement.dataset.theme = theme;
     $('meta[name="theme-color"]').content = theme === "dark" ? "#181818" : "#ffffff";
+    themeLabel();
     try { localStorage.setItem("zrbac-news-theme", theme); } catch {}
   });
   // Retired shared links must not leave their private fragment visible in this public reader.

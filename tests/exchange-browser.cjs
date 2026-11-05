@@ -18,6 +18,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.goto(base + "/#exchange");
     await page.locator(".fx-value").waitFor();
     assert.equal(await page.locator("#section-title").innerText(), "汇率");
+    assert.equal(await page.title(), "汇率 · 资讯");
     assert.equal(
       await page
         .locator('[data-filter="exchange"]')
@@ -122,6 +123,11 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator('[data-filter="all"]').click();
     await page.locator(".article").first().waitFor();
     assert(await page.locator("#search").isVisible());
+    await page.locator('[data-filter="exchange"]').click();
+    await page.locator(".fx-value").waitFor();
+    await page.keyboard.press("Control+k");
+    assert.equal(await page.locator("#search").evaluate(el => el === document.activeElement), true);
+    assert.equal(await page.title(), "最新资讯 · 资讯");
     assert.deepEqual(errors, []);
     await context.close();
     const request = await browser.newContext();

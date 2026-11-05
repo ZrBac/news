@@ -14,10 +14,12 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const errors = [];
     page.on("pageerror", (e) => errors.push(e.message));
     await page.goto(base + "/");
-    await page.locator(".games-link").waitFor();
+    await page.locator('header a[href="/games/"]').waitFor();
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
-    // Visiting the news page alone prepares games, even before a first game visit.
+    // Prepare the game library once, before opening any individual game.
+    await page.goto(base + "/games/");
+    await page.locator("#offline-status.ready").waitFor();
     await context.setOffline(true);
     await page.goto(base + "/games/");
     await page.locator("#offline-status.ready").waitFor();
@@ -196,7 +198,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert(await privatePage.locator("#storage-notice").isVisible());
     assert.deepEqual(errors, []);
     console.log(
-      "PASS: mobile entry, first offline game visit, all three arcade games offline, immersive portrait/landscape, relative drag without teleporting, touch, keyboard, pause/resume, visibility pause, restart, saved records, route aliases, five widths, denied storage.",
+      "PASS: mobile entry, offline games after library preparation, all three arcade games offline, immersive portrait/landscape, relative drag without teleporting, touch, keyboard, pause/resume, visibility pause, restart, saved records, route aliases, five widths, denied storage.",
     );
   } finally {
     await browser.close();

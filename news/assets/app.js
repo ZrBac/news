@@ -998,6 +998,9 @@
       saved: "我的收藏",
     };
     $("#section-title").textContent = titles[state.view] || titles.all;
+    document.title = (state.view === "local"
+      ? state.outingMode === "tonight" ? "今晚做点什么" : "周末去处"
+      : titles[state.view] || titles.all) + " · 资讯";
     const outings = state.view === "local";
     $(".filter-tabs").hidden = outings;
     $(".sidebar").hidden = outings;
@@ -1539,7 +1542,7 @@
     sourceDialogToken++;
     $("#dialog-title").textContent = "关于本站";
     $("#dialog-content").innerHTML =
-      '<p>个人新闻订阅页，汇总综合、财经、民生、科技、AI、模型、文娱、游戏、体育和杭州房市资讯，计划每小时检查更新。顶部「去处」独立整理杭州及周边出游消息，不混入新闻列表。</p><h3>排序与分类</h3><p>新闻按来源标注的发布时间排列，AI 分类依据标题关键词及来源。模型栏目筛选模型发布、升级与开放消息，标题识别可能遗漏；普通产品功能更新与发布传闻不收录到该栏目。每日速览从不同分类与来源中选取最多 10 条，不代表热度排名。</p><h3>内容与收藏</h3><p>标题及短摘要来自对应资讯源，点击标题阅读原文。收藏仅保存在当前浏览器，不会跨设备同步。</p><p><a href="https://github.com/ZrBac/news/issues" target="_blank" rel="noopener noreferrer">问题反馈</a></p>';
+      '<p>个人新闻订阅页，汇总综合、财经、民生、科技、AI、模型、文娱、游戏、体育和杭州房市资讯，计划每小时检查更新。顶部「去处」提供晚间安排与杭州及周边的周末玩法。</p><h3>排序与分类</h3><p>新闻按来源标注的发布时间排列。模型栏目筛选模型发布、升级与开放消息，标题识别可能遗漏；普通产品功能更新与发布传闻不收录到该栏目。每日速览从不同分类与来源中选取最多 10 条，不代表热度排名。</p><h3>内容与收藏</h3><p>标题和原始摘要来自对应资讯源，部分短摘要经 AI 整理并标注，点击标题可核对原文。收藏仅保存在当前浏览器，不会跨设备同步。</p><p><a href="https://github.com/ZrBac/news/issues" target="_blank" rel="noopener noreferrer">问题反馈</a></p>';
     $("#info-dialog").showModal();
   }
   function theme(value) {
@@ -1574,14 +1577,15 @@
   }).format(new Date());
   $("#year").textContent = new Date().getFullYear();
   function focusSearch() {
-    if (state.view === "local" && state.outingMode === "tonight") {
-      history.replaceState(null, "", "#local");
+    if (state.view === "exchange" || (state.view === "local" && state.outingMode === "tonight")) {
+      history.replaceState(null, "", state.view === "exchange" ? "#all" : "#local");
       route();
     }
     $(state.view === "local" ? "#outing-catalog-heading" : "#news-content").scrollIntoView({ behavior: "smooth" });
     $("#search").focus({ preventScroll: true });
   }
   document.addEventListener("keydown", (e) => {
+    if ($("#info-dialog").open || e.isComposing) return;
     if (
       (e.key === "k" && (e.ctrlKey || e.metaKey)) ||
       (e.key === "/" &&
@@ -2303,7 +2307,7 @@
         notice.textContent =
           result.status === "ready"
             ? "发布已完成，正在读取最新资讯…"
-            : "正在抓取和发布，通常需要约一分钟；排队时可能更久。";
+            : "正在采集和发布，通常需要几分钟；排队时可能更久。";
         await new Promise((resolve) => setTimeout(resolve, 5000));
         result = await requestJSON(
           endpoint + "/status",

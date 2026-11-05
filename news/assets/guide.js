@@ -224,6 +224,7 @@
   });
   function theme(value) {
     document.documentElement.dataset.theme = value;
+    $("#theme-toggle").setAttribute("aria-label", value === "dark" ? "切换浅色模式" : "切换深色模式");
     $('meta[name="theme-color"]').content =
       value === "dark" ? "#181818" : "#ffffff";
   }

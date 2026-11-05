@@ -15,6 +15,21 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     page.on("request", (r) => {
       if (r.url().includes("/data/archive/")) archives.push(r.url());
     });
+    const packet = await (await page.request.get(base + "/data/latest.json")).json();
+    const sources = packet.sources.filter(s => s.category === "models").slice(0, 2);
+    assert.equal(sources.length, 2);
+    // Fixed releases keep pagination independent of live news and editorial merges.
+    // Two reports describe one release; the other model versions stay separate.
+    const releases = Array.from({length: 18}, (_, i) => ({
+      id: "model-test-" + i, category: "models", sourceId: sources[i % 2].id,
+      title: `示例模型 ${i + 1}.0 正式发布`, excerpt: "新版本开放使用。",
+      url: "https://example.com/model/" + i,
+      publishedAt: new Date(Date.parse(packet.updatedAt) - i * 3600000).toISOString(),
+      editorial: {eventId: "event-" + i.toString(16).padStart(24, "0"), summary: "模型发布。", updatedAt: packet.updatedAt},
+    }));
+    packet.modelReleases = [releases[0], {...releases[0], id: "model-copy", sourceId: sources[1].id,
+      title: "另一来源：示例模型 1.0 正式发布", url: "https://example.com/other-report"}, ...releases.slice(1)];
+    await page.route("**/data/latest.json*", route => route.fulfill({json: packet}));
     await page.goto(base + "/#models");
     await page.evaluate(() => window.newsInitialLoad);
     const data = await page.evaluate(() =>
@@ -29,7 +44,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert(await page.locator("#view-note").isVisible());
     assert.equal(
       await page.locator(".article").count(),
-      Math.min(12, data.modelReleases.length),
+      Math.min(12, releases.length),
     );
     assert(
       (await page.locator(".category-label").allTextContents()).every(
@@ -38,8 +53,9 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     assert.deepEqual(
       await page.locator(".article h3").allTextContents(),
-      data.modelReleases.slice(0, 12).map((a) => a.title),
+      releases.slice(0, 12).map((a) => a.title),
     );
+    assert.equal(await page.locator(".article-reports a").count(), 1);
     assert.equal(
       archives.length,
       0,
@@ -50,11 +66,11 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       .evaluateAll((els) => els.map((e) => e.dataset.filter));
     assert.equal(tabs[tabs.indexOf("ai") + 1], "models");
     assert.equal(tabs.at(-1), "housing");
-    if (data.modelReleases.length > 12) {
+    if (releases.length > 12) {
       await page.locator("#load-more").click();
       assert.equal(
         await page.locator(".article").count(),
-        Math.min(24, data.modelReleases.length),
+        Math.min(24, releases.length),
       );
     }
     const article =
@@ -105,7 +121,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.evaluate(() => window.newsInitialLoad);
     assert.deepEqual(
       await page.locator(".article h3").allTextContents(),
-      data.modelReleases.slice(0, 12).map((a) => a.title),
+      releases.slice(0, 12).map((a) => a.title),
     );
     await page.fill("#search", article.title);
     assert(

@@ -98,15 +98,22 @@ MODEL_VERSION = re.compile(r'GPT[-\s]?\d|gpt-oss|\bo[134](?:\b|-)|'
                            r'Qwen[-\w.]*\d|Llama\s*\d|Grok[-\s]*\d|GLM[-\s]?\d|'
                            r'Kimi[-\s]?K\d|MiniMax[-\s]?M\d|Mistral[-\s]*(?:Large|Small|Medium)|'
                            r'Seedream|Seedance|Veo[-\s]*\d|Imagen[-\s]*\d', re.I)
-MODEL_RELEASE = re.compile(r'发布|推出|上线|开源|升级|开放|正式商用|亮相|'
+MODEL_RELEASE = re.compile(r'发布|推出|上线|升级|开放|正式商用|亮相|'
                            r'\b(?:introducing|announc\w*|launch\w*|releas\w*|unveil\w*|debut\w*|'
                            r'upgrad\w*|available|open[- ](?:source|weight))\b', re.I)
 MODEL_RUMOR = re.compile(r'即将|或将|有望|预计|传闻|据传|消息称|爆料|泄露|曝光|不等|提议|计划|'
+                         r'^曝|正(?:在)?(?:开发|研发)|最快.{0,12}(?:发布|上线)|预测|将于|'
                          r'\b(?:rumou?rs?|leaked?|reportedly|upcoming|expected)\b', re.I)
 MODEL_PRODUCT = re.compile(r'智能体|\bagent\b|插件|画布|登陆|登录|客户端|应用商店|'
                            r'Claude Code|ChatGPT|\b(?:canvas|extension|app)\b', re.I)
 MODEL_OTHER_NEWS = re.compile(r'巴士|汽车|氢燃料|基础组件|芯片软件|代码库|开源.*王座|额度|对话服务|'
-                              r'早报|午报|新品一览|审批机制|\b(?:DGX|RTX|GPU)\b', re.I)
+                              r'早报|午报|新品一览|审批机制|适配|工作负载|模型研发|'
+                              r'(?:发布|推出).{0,40}(?:研发工具|开发工具|可复用工具)|\b(?:DGX|RTX|GPU)\b', re.I)
+MODEL_OPEN_RELEASE = re.compile(
+    r'(?:宣布|正式|全面|首次|全量|现已|今日|今天)开源|'
+    r'开源(?:了|其)?\s*(?:[1-9]\d*|[一二三四五六七八九十两]+)\s*(?:款|个|种).{0,12}模型|'
+    r'开源(?:了|其)?(?:\s|大语言模型|多模态模型|大模型|模型)*(?:' + MODEL_NAME.pattern + r')|'
+    r'(?:模型|' + MODEL_VERSION.pattern + r').{0,20}开源(?:[，。!！]|$)', re.I)
 OFFICIAL_MODEL_SOURCES = {'openai-models', 'gnews-anthropic-models', 'gnews-qwen-models', 'deepmind'}
 
 
@@ -125,7 +132,7 @@ def is_model_release(title, source_id=''):
         return False
     if re.search(r'押注|采用|评测|如何|教程', title) and not re.search(r'发布|推出|上线|升级|开放|亮相', title):
         return False
-    if MODEL_RELEASE.search(title):
+    if MODEL_RELEASE.search(title) or MODEL_OPEN_RELEASE.search(title):
         return True
     # Official model posts often use “Qwen-X: ...” or “Gemini X: ...”.
     return bool(source_id in OFFICIAL_MODEL_SOURCES and named and named.start() <= 5

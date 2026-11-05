@@ -41,7 +41,7 @@ const server = http.createServer(async (request, response) => {
     NEWS_LEGACY_SAFARI: "1",
   };
   try {
-    for (const name of [
+    const checks = [
       "brief-browser.cjs",
       "indexed-news-browser.cjs",
       "local-livelihood-browser.cjs",
@@ -68,7 +68,13 @@ const server = http.createServer(async (request, response) => {
       "extra-games-browser.cjs",
       "casual-games-browser.cjs",
       "offline-recovery-browser.cjs",
-    ]) {
+    ];
+    const requested = process.argv.slice(2);
+    if (requested.some(name => !checks.includes(name)))
+      throw new Error("Unknown browser check");
+    const selected = requested.length ? [...new Set(requested)] : checks;
+    const failures = [];
+    for (const name of selected) {
       console.log("Checking " + name);
       await new Promise((resolve, reject) => {
         const child = spawn(process.execPath, [path.join(__dirname, name)], {
@@ -87,8 +93,13 @@ const server = http.createServer(async (request, response) => {
           clearTimeout(timer);
           code === 0 ? resolve() : reject(new Error(name + " failed: " + code));
         });
+      }).catch(error => {
+        console.error(error);
+        failures.push(name);
       });
     }
+    if (failures.length) throw new Error("Browser checks failed: " + failures.join(", "));
+    console.log(`Passed all ${selected.length} browser checks.`);
   } finally {
     server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));

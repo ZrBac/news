@@ -371,6 +371,21 @@ class FeedTests(unittest.TestCase):
         self.assertTrue(collector.is_model_release('Qwen-Image-2.1: Compact Image Creation - Qwen', 'gnews-qwen-models'))
         self.assertFalse(collector.is_model_release('Qwen3.8: a review of existing models', 'example'))
 
+    def test_model_column_excludes_development_adaptation_and_open_source_commentary(self):
+        for title in ('曝 OpenAI 新一代 GPT-6.2 模型最快周五发布',
+                      'Anthropic 正开发开源系统：证明 AI 输出来自哪个模型',
+                      '阿里云自研超节点适配 Kimi K3.1，开源模型落地云端',
+                      '腾讯混元团队称 Hy4 跻身最强开源模型队列',
+                      '阿里：只有开源才能推动 AI 普及，千问开源模型已超 470 款',
+                      'IDC 预测：企业将在开源模型上运行多数工作负载',
+                      '腾讯混元发布 Hyra 2.0：为模型研发打造可复用工具'):
+            with self.subTest(title=title):
+                self.assertFalse(collector.is_model_release(title))
+        for title in ('腾讯开源混元 Hy4 大语言模型', 'Qwen3 模型正式开源',
+                      'DeepSeek V3.2 模型开源，权重可下载', '阿里开源大模型 Qwen3'):
+            with self.subTest(title=title):
+                self.assertTrue(collector.is_model_release(title))
+
     def test_model_history_is_independent_of_the_busy_news_archive(self):
         release = collector.parse_feed(self.feed(), self.source, self.now)[0]
         release.update(title='通义发布 Qwen3.8 模型', category='ai', publishedAt='2026-09-15T03:00:00Z')

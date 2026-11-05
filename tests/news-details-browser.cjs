@@ -23,9 +23,9 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const model = story("model-detail", "models", "示例模型发布新版本", "b");
     const fallback = story("model-fallback", "models", "另一模型开放预览", "c");
     const report = { ...general, id: "other-report", url: "https://example.com/other-report", title: "同一服务的另一篇报道" };
-    const details = (article, summary) => ({revision: "news-details-v1", inputHash: "f".repeat(24),
+    const details = (article, summary) => ({revision: "news-details-v2", inputHash: "f".repeat(24),
       summary, sourceUrl: article.url, updatedAt: "2026-11-05T07:30:00Z"});
-    general.newsDetail = details(general, "符合条件的申请人可在工作日通过官方平台办理，材料齐全后按公布流程完成登记。原文还列明了线上查询进度的入口。");
+    general.newsDetail = details(general, "登记已开放，工作日可在官方平台提交申请。");
     model.newsDetail = details(model, "模型已面向现有开发者开放预览，新增图表理解功能；模型权重仍待开放，申请体验需要已有开发者账号。");
     report.newsDetail = details(report, "这是另一篇报道专属的补充内容，不能覆盖当前卡片自己的原文依据或混入另一条新闻的摘要。");
     fallback.newsDetail = { ...details(fallback, model.newsDetail.summary), sourceUrl: "https://elsewhere.test/wrong" };

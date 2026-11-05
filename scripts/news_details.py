@@ -12,7 +12,7 @@ from html.parser import HTMLParser
 
 import collect_news as news
 
-REVISION = 'news-details-v1'
+REVISION = 'news-details-v2'
 CATEGORIES = ('general', 'finance', 'livelihood', 'tech', 'ai', 'models',
               'entertainment', 'gaming', 'sports', 'housing')
 RULES = {
@@ -29,7 +29,7 @@ RULES = {
 }
 PROMPT = (
     '你为每日速览和模型栏目补充原文要点。每条材料包含标题、原摘要、正文和栏目要求。'
-    '只提取正文里有、标题和原摘要未交代清楚的具体事实，写成一到两句自然简体中文。所有text合计30—120字，计入英文和空格，最多140字。优先信息放在第一句。'
+    '只提取正文里有、标题和原摘要未交代清楚的具体事实，写成一到两句自然简体中文。所有text合计16—120字，计入英文和空格，最多140字。能说清楚即可，不为凑字数补背景；优先信息放在第一句。'
     '句子必须能独立理解，保留对象、时间、数字口径、否定和条件。不得猜测未说明的费用、资格或开放日期。'
     '不要写“报道指出”“值得关注”“重大突破”等套话，不加背景长文、评价或泛泛影响。'
     '来源自称的性能、排名必须保留“官方称/厂商公布”等归属。'
@@ -294,36 +294,42 @@ def candidates(data, records, now):
     return result
 
 
-def validate_points(points, article, body):
-    if not isinstance(points, list) or not 1 <= len(points) <= 2:
+def validate_points(points, article, body, failures=None):
+    def reject(reason):
+        if failures is not None:
+            failures[reason] = failures.get(reason, 0) + 1
         return None
+    if not isinstance(points, list) or not 1 <= len(points) <= 2:
+        return reject('no_new_facts' if points == [] else 'invalid_points')
     texts, quotes = [], []
     original = text_key(article['title'] + article.get('excerpt', ''))
     for point in points:
         if not isinstance(point, dict) or not all(isinstance(point.get(k), str) for k in ('text', 'quote')):
-            return None
+            return reject('invalid_point')
         text, quote = compact_text(point['text']), compact_text(point['quote'])
-        if (not 12 <= len(quote) <= 240 or not 12 <= len(text) <= 140 or
-                re.sub(r'\s+', '', quote) not in re.sub(r'\s+', '', body) or
-                re.search(r'https?://|<[^>]+>|重大里程碑|重塑行业|值得关注|点击.*链接', text)):
-            return None
+        if not 12 <= len(quote) <= 240 or not 12 <= len(text) <= 140:
+            return reject('point_length')
+        if re.sub(r'\s+', '', quote) not in re.sub(r'\s+', '', body):
+            return reject('quote_mismatch')
+        if re.search(r'https?://|<[^>]+>|重大里程碑|重塑行业|值得关注|点击.*链接', text):
+            return reject('non_factual_text')
         # A valid quotation must support each numerical claim, not just coexist
         # with an invented date, price or release version in the generated text.
         def numbers(value):
             return {re.sub(r'[,，\s]', '', n).replace('％', '%') for n in
                     re.findall(r'\d+(?:[,，]\d{3})*(?:\.\d+)*(?:\s*[%％])?', value)}
         if not numbers(text).issubset(numbers(quote)):
-            return None
+            return reject('unsupported_number')
         # Do not turn a promised release into availability, or a publisher's
         # benchmark claim into an independent assessment.
         for action in ('开源', '开放', '上线', '发布'):
             if (action in text and re.search(r'(?:尚未|暂未|计划|预计|将于|即将).{0,18}' + action, quote) and
-                    not re.search(r'尚未|暂未|计划|预计|将|拟', text)):
-                return None
+                    not re.search(r'未|计划|预计|将|拟|待', text)):
+                return reject('release_status')
         if (article['category'] in ('models', 'ai') and
                 re.search(r'得分|\d+(?:\.\d+)?\s*分|排名|位列|超过|领先|提升\s*\d', text) and
                 not re.search(r'官方|厂商|团队|公司称|公布|自测|论文|报告|介绍|表示|声称', text)):
-            return None
+            return reject('claim_attribution')
         texts.append(text if re.search(r'[。！？.!?]$', text) else text + '。')
         quotes.append(quote)
     # A lengthy optional second point must not discard a useful first sentence.
@@ -332,15 +338,16 @@ def validate_points(points, article, body):
         texts.pop()
         quotes.pop()
     summary = ''.join(texts)
-    if (not 30 <= len(summary) <= 150 or len(set(texts)) != len(texts) or
-            text_key(summary) in original or all(text_key(q) in original for q in quotes)):
-        return None
+    if not 16 <= len(summary) <= 150 or len(set(texts)) != len(texts):
+        return reject('summary_length_or_duplicate')
+    if text_key(summary) in original or all(text_key(q) in original for q in quotes):
+        return reject('repeats_excerpt')
     return {'summary': summary, 'quotes': quotes}
 
 
 def public_detail(article, record):
     if (not isinstance(record, dict) or record.get('hash') != input_hash(article) or
-            not isinstance(record.get('summary'), str) or not 30 <= len(record['summary']) <= 150 or
+            not isinstance(record.get('summary'), str) or not 16 <= len(record['summary']) <= 150 or
             not news.parse_date(record.get('updatedAt')) or
             not record.get('sourceUrl') or record['sourceUrl'] != publisher_target(article)):
         return None
@@ -366,7 +373,7 @@ def update(client, data, records, state, now, sources, get=fetch_article):
             selected.append(article)
         if len(selected) == maximum:
             break
-    material, pages, failed, reused = [], {}, 0, 0
+    material, pages, failed, reused, rejected = [], {}, 0, 0, {}
     def read(article):
         try:
             return get(article, allowed)
@@ -413,7 +420,7 @@ def update(client, data, records, state, now, sources, get=fetch_article):
             results[identifier] = result
         for identifier in ids:
             article, page = pages[identifier]
-            checked = None if identifier in duplicates else validate_points(results.get(identifier, {}).get('points'), article, page['body'])
+            checked = None if identifier in duplicates else validate_points(results.get(identifier, {}).get('points'), article, page['body'], rejected)
             record = cache[identifier]
             if checked:
                 record.update(checked, updatedAt=news.iso(now), sourceUrl=page['url'], status='ok')
@@ -425,7 +432,8 @@ def update(client, data, records, state, now, sources, get=fetch_article):
                   key=lambda pair: pair[1].get('publishedAt', ''), reverse=True)[:1500]
     state['newsDetails'] = dict(kept)
     return {'status': 'partial' if failed else 'ok', 'checkedAt': news.iso(now),
-            'attempted': len(selected), 'reused': reused,
+            'attempted': len(selected), 'fetched': sum(bool(p) for p in fetched), 'reused': reused,
+            'rejected': rejected,
             'processed': sum(bool(public_detail(a, state['newsDetails'].get(a['id'])))
                              for a in candidates(data, records, now))}
 

@@ -21,8 +21,8 @@
   }
   function detail(article) {
     const d = article.newsDetail;
-    if (!d || d.revision !== "news-details-v1" ||
-        typeof d.summary !== "string" || d.summary.length < 30 || d.summary.length > 150 ||
+    if (!d || !/^news-details-v[12]$/.test(d.revision) ||
+        typeof d.summary !== "string" || d.summary.length < 16 || d.summary.length > 150 ||
         !validDate(d.updatedAt) || !/^[a-f0-9]{24}$/.test(d.inputHash)) return null;
     try {
       const original = new URL(article.originalUrl || article.url);

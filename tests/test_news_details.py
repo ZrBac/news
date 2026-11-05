@@ -95,10 +95,20 @@ class NewsDetailTests(unittest.TestCase):
         quote = '星河模型权重计划于下月开源，采用新的图表解析流程，支持多页表格内容合并。'
         text = '星河模型权重已开源，采用新的图表解析流程，支持多页表格内容合并。'
         self.assertIsNone(detail.validate_points([{'text': text, 'quote': quote}], self.article, quote))
+        self.assertIsNotNone(detail.validate_points([{'text': text.replace('已开源', '待开源'), 'quote': quote}], self.article, quote))
         quote = '官方公布，星河模型在图表解析测试中得分90分，测试覆盖表格合并和内容提取。'
         text = '星河模型在图表解析测试中得分90分，测试覆盖表格合并和内容提取。'
         self.assertIsNone(detail.validate_points([{'text': text, 'quote': quote}], self.article, quote))
         self.assertIsNotNone(detail.validate_points([{'text': '官方公布，' + text, 'quote': quote}], self.article, quote))
+
+    def test_concise_useful_facts_do_not_need_padding_to_thirty_characters(self):
+        quote = '官方表示，该研究目前处于科研原型阶段，并已完成内部仿真实验。'
+        text = '官方称，星河模型目前处于科研原型阶段。'
+        result = detail.validate_points([{'text': text, 'quote': quote}], self.article, quote)
+        self.assertEqual(result['summary'], text)
+        failures = {}
+        self.assertIsNone(detail.validate_points([{'text': text, 'quote': '正文里找不到的完整引用内容'}], self.article, quote, failures))
+        self.assertEqual(failures, {'quote_mismatch': 1})
 
     def test_candidates_cover_categories_models_and_do_not_spend_twice_on_one_event(self):
         rows = [{**self.article, 'id': category, 'category': category, 'title': category + ' new update'}

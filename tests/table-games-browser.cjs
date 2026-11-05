@@ -228,7 +228,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         JSON.stringify({ state: s, history: [] }),
       );
     });
-    await page.goto(base + "/games/#spider");
+    // Reload the document so this persisted fixture replaces the earlier in-memory game.
+    await page.goto(base + "/games/?spider-completion=1#spider");
     await page.locator('[data-col="1"][data-index="0"]').tap();
     await page.locator('[data-col="0"][data-index="11"]').tap();
     assert(await page.locator("#table-result").isVisible());

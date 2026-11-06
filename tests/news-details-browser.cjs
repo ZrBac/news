@@ -47,8 +47,26 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert(await page.evaluate(a => window.NewsEditorial.detail(a) === null,
       {...model, newsDetail: {...model.newsDetail, revision: "unknown"}}));
     await page.locator('[data-filter="general"]').click();
-    assert.equal(await page.locator('[data-summary-source="article"]').count(), 0, "ordinary categories keep existing summaries");
-    assert.match(await page.locator('[data-article-id="brief-detail"]').innerText(), /原订阅摘要/);
+    assert.equal(await page.locator('[data-article-id="brief-detail"] .editorial-summary').innerText(), general.newsDetail.summary, "ordinary categories use verified details too");
+    await page.fill('#search', '工作日');
+    assert.equal(await page.locator('.article').count(), 1, 'ordinary category details are searchable');
+    await page.fill('#search', '');
+    const expanded = ['finance','livelihood','tech','ai','entertainment','gaming','sports','housing'].map((category,index) => {
+      const article = story('detail-' + category, category, category + '栏目的最新报道', 'def01234'[index]);
+      article.newsDetail = details(article, '本次已公布该栏目特有的新安排及适用范围，具体条件需在公布期限内核对。');
+      return article;
+    });
+    packet.articles.push(...expanded);
+    packet.gamingArticles = expanded.filter(a => a.category === 'gaming');
+    packet.housingArticles = expanded.filter(a => a.category === 'housing');
+    await page.reload({waitUntil:'domcontentloaded'});
+    for (const article of expanded) {
+      await page.locator(`[data-filter="${article.category}"]`).click();
+      const container = article.category === 'housing' ? '#housing-news' : '#articles';
+      const card = page.locator(`${container} [data-article-id="${article.id}"]`);
+      await card.waitFor();
+      assert.equal(await card.locator('.editorial-summary').innerText(), article.newsDetail.summary, article.category + ' displays source-backed detail');
+    }
     await page.locator('[data-filter="models"]').click();
     assert.equal(await page.locator('[data-summary-source="article"]').count(), 1);
     assert.match(await page.locator('[data-article-id="model-fallback"]').innerText(), /原订阅摘要/);
@@ -72,6 +90,6 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.deepEqual(errors, []);
     assert.deepEqual(external, [], "reading source details never downloads original articles or calls an external API");
     await context.close();
-    console.log("News details passed: brief/model scope, attribution, fallback, grouping, mobile and offline reading");
+    console.log("News details passed: category-wide details, attribution, fallback, grouping, search, mobile and offline reading");
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode = 1; });

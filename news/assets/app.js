@@ -526,7 +526,7 @@
       aggregated &&
       excerptKey.length >= 8 &&
       textKey(article.title).startsWith(excerptKey);
-    const detail = ["brief", "models"].includes(state.view) && window.NewsEditorial?.detail(article);
+    const detail = window.NewsEditorial?.detail(article);
     const summary = detail?.summary || (state.view === "brief" && window.NewsEditorial?.metadata(article)?.summary);
     const publishedLabel = article.dateOnly ? dayOf(article.publishedAt) : relativeTime(article.publishedAt);
     const publishedTitle = article.dateOnly ? dayOf(article.publishedAt) + "（来源仅提供日期）" : "北京时间 " + formatTime(article.publishedAt);
@@ -664,7 +664,7 @@
         .split(/\s+/)
         .filter(Boolean);
       articles = articles.filter((a) => {
-        const summary = ["brief", "models"].includes(state.view) && window.NewsEditorial?.detail(a)?.summary;
+        const summary = window.NewsEditorial?.detail(a)?.summary;
         const text = `${a.title} ${a.excerpt} ${summary || ""} ${sourceFor(a).name} ${a.outing?.venue || ""} ${a.category === "local" ? outingLabel(a) : ""}`.toLocaleLowerCase();
         return words.every(word => text.includes(word));
       });

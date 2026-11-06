@@ -131,6 +131,15 @@ class NewsDetailTests(unittest.TestCase):
         self.assertEqual(client.ask.call_count, 1)
         self.assertNotIn('body', state['newsDetails']['a'])
 
+    def test_all_categories_get_more_than_two_recent_candidates_even_outside_initial_packet(self):
+        rows = [{**self.article, 'id': f'{category}-{i}', 'category': category,
+                 'title': f'{category} 独立新闻 {i}', 'publishedAt': '2026-11-04T07:00:00Z'}
+                for category in detail.CATEGORIES for i in range(10)]
+        chosen = detail.candidates({'articles': rows}, {}, self.now)
+        self.assertEqual(len(chosen), 100)
+        self.assertEqual({a['category'] for a in chosen[:10]}, set(detail.CATEGORIES))
+        self.assertEqual({a['category'] for a in chosen[10:20]}, set(detail.CATEGORIES))
+
     def test_no_new_facts_is_cached_as_a_result(self):
         state, client = {}, self.client(points=[])
         self.update(state, client)

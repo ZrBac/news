@@ -5,12 +5,14 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto").webcrypto;
 const source = fs.readFileSync(path.join(__dirname, "../news/assets/tonight-journal.js"), "utf8");
-function device() {
+function device(request) {
   const stored = new Map();
   const storage = {getItem:k => stored.get(k) ?? null, setItem:(k,v) => stored.set(k,v)};
-  const context = vm.createContext({window:{}, localStorage:storage, crypto});
+  const online = {onLine:true};
+  const context = vm.createContext({window:{dispatchEvent:()=>{},...(request?{OutingProfile:{connected:()=>true,journalRequest:request}}:{})},
+    localStorage:storage, crypto, navigator:online, setTimeout:()=>0, Event:class {}});
   vm.runInContext(source, context);
-  return {journal:context.window.TonightJournal, stored, storage};
+  return {journal:context.window.TonightJournal, stored, storage, online};
 }
 const pick = {id:"event:tonight-reading", name:"把一本书慢慢读完"};
 
@@ -70,4 +72,70 @@ test("delete and undo restore the actual note and next step", () => {
   assert.equal(journal.snapshot().length, 0);
   assert.equal(journal.restore({schema:1,app:"zacai-tonight-journal",records:[removed]}), 1);
   assert.equal(journal.snapshot()[0].next, "下次核对例子");
+});
+
+function remote() {
+  const rows = new Map(), seen = new Set();
+  let version = 0;
+  const request = async (body, known) => {
+    if (!body) return known === version ? {schema:1,version,unchanged:true} :
+      {schema:1,version,records:[...rows.values()]};
+    for (const op of body.operations) {
+      if (seen.has(op.id)) continue;
+      seen.add(op.id);
+      if (op.action === "remove") rows.delete(op.recordId);
+      else if (!rows.has(op.record.id)) rows.set(op.record.id,structuredClone(op.record));
+      version++;
+    }
+    return {schema:1,version,acknowledged:body.operations.map(op=>op.id)};
+  };
+  return {request,rows};
+}
+
+test("two devices migrate existing notes, merge offline additions and respect remote deletes", async()=>{
+  const server=remote(), first=device(server.request), second=device(server.request);
+  const old=first.journal.add(pick,"升级前留下的笔记","继续旧进度");
+  first.stored.set(first.journal.key,JSON.stringify({schema:1,records:[old]}));
+  await first.journal.sync(true);
+  await second.journal.sync(true);
+  assert.equal(second.journal.snapshot()[0].note,"升级前留下的笔记");
+  first.online.onLine=second.online.onLine=false;
+  first.journal.add(pick,"第一台手机离线新增","");
+  second.journal.add(pick,"第二台手机离线新增","");
+  first.online.onLine=second.online.onLine=true;
+  await first.journal.sync(true);
+  await second.journal.sync(true);
+  await first.journal.sync(true);
+  assert.equal(first.journal.snapshot().length,3);
+  assert.equal(second.journal.snapshot().length,3);
+  second.journal.remove(old.id);
+  await second.journal.sync(true);
+  await first.journal.sync(true);
+  assert.equal(first.journal.snapshot().some(r=>r.id===old.id),false);
+  assert.equal(first.journal.backup().records.length,2);
+});
+
+test("edits during a download survive and an upload with a lost response can retry", async()=>{
+  const server=remote();
+  let lose=true, pendingPull, release;
+  const first=device(async(body,known)=>{
+    const response=await server.request(body,known);
+    if (body && lose) {lose=false; throw new Error("response lost");}
+    if (!body && pendingPull) {pendingPull=false; await new Promise(resolve=>{release=resolve;});}
+    return response;
+  });
+  first.journal.add(pick,"第一次保存","");
+  await first.journal.sync(true);
+  assert.match(first.journal.status(),/暂未同步/);
+  assert.equal(server.rows.size,1);
+  pendingPull=true;
+  const syncing=first.journal.sync(true);
+  while (!release) await new Promise(resolve=>setImmediate(resolve));
+  first.journal.add(pick,"下载期间写的新记录","");
+  release();
+  await syncing;
+  assert.equal(first.journal.snapshot().length,2);
+  await first.journal.sync(true);
+  assert.equal(server.rows.size,2);
+  assert.equal(JSON.parse(first.stored.get(first.journal.key)).pending.length,0);
 });

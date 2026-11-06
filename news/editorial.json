@@ -8,6 +8,6 @@
   "maxSearchCalls": 6,
   "newsDetails": {
     "enabled": true,
-    "maxPerRun": 24
+    "maxPerRun": 80
   }
 }

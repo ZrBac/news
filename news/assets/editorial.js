@@ -72,12 +72,24 @@
     market: "市集节庆", culture: "展览演出", outdoor: "户外周边" };
   function profileMarkup(profileOpen) {
     const profile = window.OutingProfile?.snapshot() || {settings:{},records:[]};
-    const settings = profile.settings || {};
+    const focused = document.activeElement, form = focused?.closest(".outing-profile form");
+    const attribute = form?.matches("[data-outing-connect]") ? "data-outing-connect" : form ? "data-outing-settings" : "";
+    const field = focused?.name, caret = typeof focused?.selectionStart === "number" ? [focused.selectionStart,focused.selectionEnd] : null;
+    const settings = attribute === "data-outing-settings" ? {startArea:form.elements.startArea.value,
+      people:form.elements.people.value,transport:form.elements.transport.value} : profile.settings || {};
+    const code = attribute === "data-outing-connect" ? form.elements.code.value : "";
+    const connectionOpen = !!document.querySelector(".outing-connection[open]") || attribute === "data-outing-connect";
+    // A background sync must not replace a partially typed preference or code.
+    if (form && field) Promise.resolve().then(() => {
+      const input = document.querySelector(`[${attribute}] [name="${field}"]`);
+      input?.focus({preventScroll:true});
+      if (input && caret) input.setSelectionRange(...caret);
+    });
     const statuses = { visited:"去过", want:"想去", dismiss:"不感兴趣" };
-    return `      <details class="outing-profile"${profileOpen ? " open" : ""}><summary>我的去处 · ${profile.records.length} 条记录</summary>
+    return `      <details class="outing-profile"${profileOpen ? " open" : ""}><summary>偏好与反馈 · ${profile.records.length} 条记录</summary>
         <p class="trip-note" role="status">${esc(window.OutingProfile?.status() || "记录保存在当前设备")}</p>
-        <form data-outing-settings><label>出发地<input name="startArea" maxlength="50" value="${esc(settings.startArea || "")}" placeholder="例如：杭州五常"></label><label>人数<input name="people" type="number" min="1" max="10" value="${esc(settings.people || 2)}"></label><label>出行方式<select name="transport"><option value="car"${settings.transport !== "transit" ? " selected" : ""}>自驾</option><option value="transit"${settings.transport === "transit" ? " selected" : ""}>公共交通</option></select></label><button class="text-button" type="submit">保存偏好</button></form>
-        ${window.OutingProfile?.connected() ? `<button class="text-button" data-outing-sync>同步共同记录</button><details class="outing-connection"><summary>更换连接码</summary>` : `<p class="trip-note">连接共同记录后，两台手机可共享反馈，后续自动整理也会参考。</p>`}<form data-outing-connect><label>专属连接码<input name="code" type="password" autocomplete="off" spellcheck="false"></label><button class="text-button" type="submit">连接</button></form>${window.OutingProfile?.connected() ? "</details>" : ""}
+        <form data-outing-settings><label>出发地<input name="startArea" maxlength="50" value="${esc(settings.startArea || "")}" placeholder="例如：杭州五常"></label><label>人数<input name="people" type="number" min="1" max="10" value="${esc(settings.people ?? 2)}"></label><label>出行方式<select name="transport"><option value="car"${settings.transport !== "transit" ? " selected" : ""}>自驾</option><option value="transit"${settings.transport === "transit" ? " selected" : ""}>公共交通</option></select></label><button class="text-button" type="submit">保存偏好</button></form>
+        ${window.OutingProfile?.connected() ? `<details class="outing-connection"${connectionOpen ? " open" : ""}><summary>同步设置</summary><p class="trip-note">修改后自动上传，打开去处时检查另一台设备的更新；离线操作联网后补传。</p><button class="text-button" data-outing-sync>立即检查同步</button>` : `<p class="trip-note">两台设备各输入一次共用的六位码，偏好、反馈和“我的积累”随后自动同步。</p>`}<form data-outing-connect><label>六位连接码<input name="code" type="password" inputmode="numeric" autocomplete="one-time-code" maxlength="6" minlength="6" pattern="[0-9]{6}" required aria-label="六位连接码" value="${esc(code)}"></label><button class="text-button" type="submit">${window.OutingProfile?.connected() ? "重新连接" : "开启自动同步"}</button></form>${window.OutingProfile?.connected() ? "</details>" : ""}
         <ul class="outing-records">${profile.records.slice(0,50).map(r => `<li><span>${esc(r.title)} · ${esc((r.id.startsWith("event:tonight-") ? {visited:"玩过",want:"喜欢",dismiss:"不感兴趣"} : statuses)[r.status] || "")}</span><button class="text-button" data-outing-remove="${esc(r.id)}">撤销</button></li>`).join("")}</ul>
       </details>
 `;
@@ -165,7 +177,9 @@
   window.addEventListener("outing-feedback-change", () => { if (lastRender) render(...lastRender); });
   document.addEventListener("submit", event => {
     if (event.target.matches("[data-outing-connect]")) {
-      event.preventDefault(); window.OutingProfile?.connect(new FormData(event.target).get("code").trim());
+      event.preventDefault(); const code = event.target.elements.code.value.trim();
+      event.target.elements.code.value = event.target.elements.code.defaultValue = "";
+      event.target.elements.code.blur(); window.OutingProfile?.connect(code);
     } else if (event.target.matches("[data-outing-settings]")) {
       event.preventDefault(); const f = new FormData(event.target);
       window.OutingProfile?.update({action:"settings",startArea:f.get("startArea").trim(),people:Number(f.get("people")),transport:f.get("transport")});

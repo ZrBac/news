@@ -83,10 +83,19 @@ test("Workers runtime: SQLite coordinator serializes requests and keeps cooldown
     const saved = await mf.dispatchFetch(profileUrl, {method:"POST", headers:profileHeaders,
       body:JSON.stringify({action:"record",id:"place:craft",title:"室内手作",status:"visited"})});
     assert.equal(saved.status,200);
+    const journalUrl="https://api.example.com/api/outings/journal";
+    const record={id:"evening-"+"a".repeat(24),activityId:"event:tonight-reading",title:"阅读进展",
+      note:"这个内容不应出现在AI的偏好输入",next:"下一页继续",createdAt:"2026-11-06T01:00:00Z"};
+    const journalSaved=await mf.dispatchFetch(journalUrl,{method:"POST",headers:profileHeaders,
+      body:JSON.stringify({schema:1,operations:[{id:"op-"+"b".repeat(24),action:"put",record}]})});
+    assert.equal(journalSaved.status,200);
     await mf.dispose();
     mf = new Miniflare(convertV4MiniflareOptions(options));
     const stored = await (await mf.dispatchFetch(profileUrl,{headers:profileHeaders})).json();
     assert.equal(stored.records[0].status,"visited", "private records persist in their separate SQLite object");
+    assert.equal(JSON.stringify(stored).includes(record.note),false);
+    const journalStored=await (await mf.dispatchFetch(journalUrl,{headers:profileHeaders})).json();
+    assert.equal(journalStored.records[0].note,record.note,"journal survives a real SQLite runtime restart");
     assert.equal((await request()).status, "cooldown");
     assert.equal(dispatches, 1);
   } finally {

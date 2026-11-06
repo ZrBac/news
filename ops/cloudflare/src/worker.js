@@ -69,21 +69,28 @@ export default {
       response.headers.set("X-Content-Type-Options", "nosniff");
       return response;
     };
-    const { pathname, search } = new URL(request.url);
-    if (pathname === "/api/outings/profile" && !search) {
+    const { pathname, search, searchParams } = new URL(request.url);
+    const outingRoute = {"/api/outings/profile":"/outing-profile", "/api/outings/journal":"/outing-journal",
+      "/api/outings/connect":"/outing-connect"}[pathname];
+    const journalVersion = pathname === "/api/outings/journal" && /^\?version=\d{1,15}$/.test(search);
+    if (outingRoute && (!search || journalVersion)) {
       if (origin && !ORIGINS.has(origin)) return reply({ status: "forbidden" }, 403);
       if (request.method === "OPTIONS" && ORIGINS.has(origin)) return reply({ status: "ok" });
-      if (!env.OUTING_PROFILE_TOKEN || request.headers.get("Authorization") !== "Bearer " + env.OUTING_PROFILE_TOKEN)
+      const connecting = outingRoute === "/outing-connect";
+      if (!connecting && (!env.OUTING_PROFILE_TOKEN || request.headers.get("Authorization") !== "Bearer " + env.OUTING_PROFILE_TOKEN))
         return reply({ status: "unauthorized" }, 401);
-      if (!["GET", "POST"].includes(request.method)) return reply({ status: "method_not_allowed" }, 405);
+      if (!(connecting ? ["POST"] : ["GET", "POST"]).includes(request.method)) return reply({ status: "method_not_allowed" }, 405);
       if (request.method === "POST" && !ORIGINS.has(origin)) return reply({ status: "forbidden" }, 403);
       try {
         const { success } = await env.REQUEST_LIMITER.limit({ key: "outings:" + (request.headers.get("CF-Connecting-IP") || "build") });
         if (!success) return reply({ status: "busy" }, 429);
-        const body = request.method === "POST" ? await boundedText(request, 8192) : undefined;
+        let body;
+        try { body = request.method === "POST" ? await boundedText(request, connecting ? 128 : 32768) : undefined; }
+        catch { return reply({status:"invalid_request"}, 413); }
         const object = env.COORDINATOR.get(env.COORDINATOR.idFromName("outings"));
-        const response = await object.fetch(new Request("https://internal/outing-profile", {
+        const response = await object.fetch(new Request("https://internal" + outingRoute + (journalVersion ? "?version=" + searchParams.get("version") : ""), {
           method: request.method, ...(body !== undefined ? { body } : {}),
+          headers: connecting ? {"X-Connect-IP":request.headers.get("CF-Connecting-IP") || "unknown"} : {},
         }));
         return reply(await response.json(), response.status);
       } catch { return reply({ status: "unavailable" }, 503); }
@@ -153,6 +160,8 @@ export class NewsCoordinator {
           return json({ status: "unavailable" }, 503);
         const action = new URL(request.url).pathname;
         if (action === "/outing-profile") return await this.outingProfile(request);
+        if (action === "/outing-connect") return await this.outingConnect(request);
+        if (action === "/outing-journal") return await this.outingJournal(request);
         if (action === "/status") return json(await this.status());
         if (action === "/trigger" && this.env.MANUAL_ENABLED === "true")
           return json(await this.trigger());
@@ -194,6 +203,85 @@ export class NewsCoordinator {
     profile.updatedAt = stamp;
     await this.ctx.storage.put("outingProfile", profile);
     return json(profile);
+  }
+
+  async outingConnect(request) {
+    if (!/^\d{6}$/.test(this.env.OUTING_PAIRING_PIN || "") || !this.env.OUTING_PROFILE_TOKEN)
+      return json({status:"unavailable"}, 503);
+    let input;
+    try { input = JSON.parse(await boundedText(request, 128)); }
+    catch { return json({status:"invalid_request"}, 400); }
+    if (!input || typeof input.code !== "string" || !/^\d{6}$/.test(input.code))
+      return json({status:"invalid_request"}, 400);
+    const now = Date.now(), interval = 900000, ip = request.headers.get("X-Connect-IP") || "unknown";
+    let attempts = await this.ctx.storage.get("outingConnectAttempts");
+    if (!attempts || now - attempts.start >= interval) attempts = {start:now, total:0, ips:{}};
+    if (attempts.total >= 30 || (attempts.ips[ip] || 0) >= 5)
+      return json({status:"busy", retryAfter:Math.ceil((attempts.start + interval - now) / 1000)}, 429);
+    attempts.total++; attempts.ips[ip] = (attempts.ips[ip] || 0) + 1;
+    await this.ctx.storage.put("outingConnectAttempts", attempts);
+    let difference = 0;
+    for (let i = 0; i < 6; i++) difference |= input.code.charCodeAt(i) ^ this.env.OUTING_PAIRING_PIN.charCodeAt(i);
+    if (difference) return json({status:"unauthorized"}, 401);
+    // The short pairing code is exchanged once; subsequent requests use the
+    // existing high-entropy credential. Neither is part of any public build.
+    return json({token:this.env.OUTING_PROFILE_TOKEN});
+  }
+
+  async outingJournal(request) {
+    const storage = this.ctx.storage;
+    const meta = await storage.get("journalMeta") || {version:0, count:0};
+    if (request.method === "GET") {
+      const version = new URL(request.url).searchParams.get("version");
+      if (version !== null && Number(version) === meta.version)
+        return json({schema:1, version:meta.version, unchanged:true});
+      const records = [];
+      let startAfter;
+      do {
+        const page = await storage.list({prefix:"journal-entry:", limit:500, ...(startAfter ? {startAfter} : {})});
+        for (const [key, entry] of page) {
+          if (!entry.deleted) records.push(entry);
+          startAfter = key;
+        }
+        if (page.size < 500) break;
+      } while (true);
+      records.sort((a,b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+      return json({schema:1, version:meta.version, records});
+    }
+    let input;
+    try { input = JSON.parse(await boundedText(request, 32768)); }
+    catch { return json({status:"invalid_request"}, 400); }
+    const idValid = id => typeof id === "string" && /^evening-[a-f0-9]{24}$/.test(id);
+    const recordValid = r => r && idValid(r.id) && /^event:tonight-[a-z0-9-]{1,70}$/.test(r.activityId) &&
+      typeof r.title === "string" && r.title.trim() && r.title.length <= 80 &&
+      typeof r.createdAt === "string" && /^\d{4}-\d{2}-\d{2}T/.test(r.createdAt) && Number.isFinite(Date.parse(r.createdAt)) &&
+      typeof r.note === "string" && r.note.trim() && r.note.length <= 500 && typeof r.next === "string" && r.next.length <= 200;
+    const ops = input?.operations;
+    if (input?.schema !== 1 || !Array.isArray(ops) || !ops.length || ops.length > 10 ||
+        !ops.every(op => op && typeof op.id === "string" && /^op-[a-f0-9]{24}$/.test(op.id) &&
+          (op.action === "put" ? recordValid(op.record) : op.action === "remove" && idValid(op.recordId))) ||
+        new Set(ops.map(op => op.id)).size !== ops.length) return json({status:"invalid_request"}, 400);
+    const writes = {}, acknowledged = [];
+    for (const op of ops) {
+      acknowledged.push(op.id);
+      const receipt = "journal-op:" + op.id;
+      if (await storage.get(receipt)) continue;
+      const key = "journal-entry:" + (op.action === "put" ? op.record.id : op.recordId);
+      const previous = writes[key] || await storage.get(key);
+      if (op.action === "put" && (!previous || previous.deleted)) {
+        if (meta.count >= 2000) return json({status:"journal_full"}, 409);
+        const r = op.record;
+        writes[key] = {id:r.id, activityId:r.activityId, title:r.title, createdAt:r.createdAt, note:r.note, next:r.next};
+        meta.count++; meta.version++;
+      } else if (op.action === "remove" && previous && !previous.deleted) {
+        writes[key] = {deleted:true}; meta.count--; meta.version++;
+      }
+      writes[receipt] = true;
+    }
+    // Save individual small entries, receipts and the revision in one atomic
+    // write. A lost response can be retried without resurrecting a deletion.
+    await storage.put({...writes, journalMeta:meta});
+    return json({schema:1, version:meta.version, acknowledged});
   }
 
   async upstream(url, options = {}, maximum = 300_000) {

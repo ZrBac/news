@@ -6,6 +6,26 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
   const browser = await chromium.launch({ args: ["--no-sandbox"] });
   try {
     const token = "test-private-connection-" + "a".repeat(24);
+    let journalVersion=0;
+    const journalRows=new Map(), receipts=new Set();
+    const journalRoute=async route=>{
+      const req=route.request();
+      assert.equal(req.headers().authorization,"Bearer "+token);
+      if(req.method()==="POST") {
+        const {operations}=req.postDataJSON();
+        for(const op of operations) {
+          if(receipts.has(op.id)) continue;
+          receipts.add(op.id);
+          if(op.action==="remove") journalRows.delete(op.recordId);
+          else if(!journalRows.has(op.record.id)) journalRows.set(op.record.id,op.record);
+          journalVersion++;
+        }
+        return route.fulfill({json:{schema:1,version:journalVersion,acknowledged:operations.map(op=>op.id)}});
+      }
+      const known=new URL(req.url()).searchParams.get("version");
+      return route.fulfill({json:known!==null && Number(known)===journalVersion ? {schema:1,version:journalVersion,unchanged:true} :
+        {schema:1,version:journalVersion,records:[...journalRows.values()]}});
+    };
     const context = await browser.newContext({ ...devices["iPhone 13"], serviceWorkers:"block" });
     await context.addInitScript(require("./legacy-safari.cjs"));
     const page = await context.newPage(), errors = [], requests = [];
@@ -23,11 +43,14 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       }
       await route.fulfill({json:remote});
     });
+    await context.route("**/api/outings/journal*",journalRoute);
     await context.route("**/profile-fixture", route => route.fulfill({contentType:"text/html",body:
       '<meta name="news-refresh-endpoint" content="https://worker.example/api/news-refresh"><p>Feedback test</p>'}));
     const script = path.resolve(__dirname,"../news/assets/outings-profile.js");
     await page.goto(base + "/profile-fixture#local&outing-key=" + token);
     await page.addScriptTag({path:script});
+    const journalScript=path.resolve(__dirname,"../news/assets/tonight-journal.js");
+    await page.addScriptTag({path:journalScript});
     assert.equal(new URL(page.url()).hash, "#local", "connection token is removed from browser URL");
     await page.evaluate(() => OutingProfile.sync(true));
     assert.equal(await page.evaluate(() => OutingProfile.snapshot().settings.startArea), "测试出发地");
@@ -62,13 +85,44 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       return route.fulfill({json:remote});
     });
     const second = await secondContext.newPage();
-    await second.goto(base + "/profile-fixture#local&outing-key=" + token);
+    await secondContext.route("**/api/outings/journal*",journalRoute);
+    await secondContext.route("**/api/outings/connect",route=>{
+      assert.equal(route.request().postDataJSON().code,"246810");
+      return route.fulfill({json:{token}});
+    });
+    await second.goto(base + "/profile-fixture#local");
     await second.addScriptTag({path:script});
-    await second.evaluate(() => OutingProfile.sync(true));
+    await second.addScriptTag({path:journalScript});
+    await second.evaluate(() => OutingProfile.connect("246810"));
     assert.equal(await second.evaluate(() => OutingProfile.snapshot().records[0].status),"dismiss");
+    assert.equal(await second.evaluate(()=>JSON.stringify(localStorage).includes("246810")),false,"short pairing code is not persisted");
+    const pick={id:"event:tonight-reading",name:"慢慢读完一本书"};
+    await page.evaluate(pick=>TonightJournal.add(pick,"第一台手机的进展","第37页继续"),pick);
+    await page.waitForFunction(()=>JSON.parse(localStorage.getItem(TonightJournal.key)).pending.length===0);
+    await second.bringToFront();
+    await second.evaluate(()=>document.dispatchEvent(new Event("visibilitychange")));
+    await second.waitForFunction(()=>TonightJournal.snapshot().length===1);
+    await context.setOffline(true);
+    await secondContext.setOffline(true);
+    await page.evaluate(pick=>TonightJournal.add(pick,"离线时第一台新增",""),pick);
+    await second.evaluate(pick=>TonightJournal.add(pick,"离线时第二台新增",""),pick);
+    await context.setOffline(false);
+    await secondContext.setOffline(false);
+    await page.waitForFunction(()=>JSON.parse(localStorage.getItem(TonightJournal.key)).pending.length===0);
+    await second.waitForFunction(()=>JSON.parse(localStorage.getItem(TonightJournal.key)).pending.length===0);
+    await page.bringToFront();
+    await page.evaluate(()=>document.dispatchEvent(new Event("visibilitychange")));
+    await page.waitForFunction(()=>TonightJournal.snapshot().length===3);
+    const removed=await page.evaluate(()=>{const note=TonightJournal.snapshot().find(r=>r.note==="第一台手机的进展");TonightJournal.remove(note.id);return note.id;});
+    await page.waitForFunction(()=>JSON.parse(localStorage.getItem(TonightJournal.key)).pending.length===0);
+    await second.bringToFront();
+    await second.evaluate(()=>document.dispatchEvent(new Event("visibilitychange")));
+    await second.waitForFunction(id=>!TonightJournal.snapshot().some(r=>r.id===id),removed);
+    assert.equal(journalRows.size,2);
+    assert.equal(JSON.stringify(remote).includes("进展"),false,"notes never enter the AI profile endpoint");
     assert.deepEqual(errors,[]);
     await secondContext.close();
     await context.close();
-    console.log("Outing feedback browser checks passed: private auth, offline queue, concurrent taps, undo and sync");
+    console.log("Outing sync passed: one-time six-digit pairing, automatic feedback/journal sync, offline merge, deletes and private AI separation");
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode=1; });

@@ -97,7 +97,9 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     const page = await context.newPage();
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
-    await page.goto(base, { waitUntil: "networkidle" });
+    // Offline/update behavior must also be testable with yesterday's snapshot,
+    // when today's daily brief correctly has no articles yet.
+    await page.goto(base + "/#all", { waitUntil: "networkidle" });
     await page.locator(".article").first().waitFor();
     await page.evaluate(() => navigator.serviceWorker.ready);
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);

@@ -29,6 +29,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8766";
     await page.goto(base + "/#tonight");
     await page.evaluate(() => window.newsInitialLoad);
     assert.equal(await page.locator('[data-outing-mode="tonight"]').getAttribute("aria-current"), "page");
+    assert.match(await page.locator('.outing-profile > summary').innerText(), /偏好与反馈/);
     assert(await page.locator("#news-listing").isHidden());
     assert(await page.locator("#outing-browse").isHidden());
     assert.equal(await page.locator(".tonight-list > li:visible").count(), 3);

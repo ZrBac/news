@@ -1,4 +1,4 @@
-"""Prepare short, source-backed details for model releases and the daily brief."""
+"""Prepare short, source-backed details across all news categories."""
 import concurrent.futures
 import gzip
 import hashlib
@@ -28,7 +28,7 @@ RULES = {
     'general': '说明已经发生的具体变化、相关对象与时间；只在原文明示时说明影响或行动条件。',
 }
 PROMPT = (
-    '你为每日速览和模型栏目补充原文要点。每条材料包含标题、原摘要、正文和栏目要求。'
+    '你为各新闻栏目补充原文要点。每条材料包含标题、原摘要、正文和栏目要求，按各栏目要求提炼，不套用科技稿的写法。'
     '只提取正文里有、标题和原摘要未交代清楚的具体事实，写成一到两句自然简体中文。所有text合计16—120字，计入英文和空格，最多140字。能说清楚即可，不为凑字数补背景；优先信息放在第一句。'
     '句子必须能独立理解，保留对象、时间、数字口径、否定和条件。不得猜测未说明的费用、资格或开放日期。'
     '不要写“报道指出”“值得关注”“重大突破”等套话，不加背景长文、评价或泛泛影响。'
@@ -237,11 +237,6 @@ def candidates(data, records, now):
                 pool[article['id']] = article
     rows = sorted(pool.values(), key=lambda a: a['publishedAt'], reverse=True)
     today = now.astimezone(news.BEIJING).date()
-    # Use the builder's priority-aware candidate selection, including important
-    # announcements that have already left the latest 150 stories.
-    visible = {a['id'] for a in data.get('articles', [])[:150]}
-    visible.update(a['id'] for a in data.get('modelReleases', [])[:60])
-    visible.update(a['id'] for a in [a for a in rows if a['category'] == 'gaming'][:60])
     chosen, seen = [], set()
     def take(article):
         meta = records.get(article['id'], {})
@@ -250,34 +245,20 @@ def candidates(data, records, now):
         if key not in seen:
             chosen.append(article)
             seen.add(key)
+    # Round-robin through each category's recent reading queue. A busy model
+    # feed must not consume the entire enrichment pass or limit other topics to
+    # the two stories that happened to qualify for today's brief.
+    queues = []
     for category in CATEGORIES:
-        items = [a for a in rows if a['category'] == category and
-                 news.parse_date(a['publishedAt']).astimezone(news.BEIJING).date() == today]
-        visible.update(a['id'] for a in news.brief_candidates(items, records))
-        items = [a for a in items if a['id'] in visible]
-        items.sort(key=lambda a: news.brief_rank(a, records), reverse=True)
-        before = len(chosen)
-        for article in items:
-            take(article)
-            if len(chosen) - before == 2:
-                break
-    # Alternate brief candidates and releases so either set can make progress.
-    models, used = [], set()
-    for article in rows:
-        if article['category'] == 'models':
-            key = records.get(article['id'], {}).get('eventId') or text_key(article['title'].rsplit(' - ', 1)[0])
-            if key not in used:
-                models.append(article)
-                used.add(key)
-    result, ids = [], set()
-    while chosen or models:
-        for queue in (chosen, models):
-            if queue:
-                article = queue.pop(0)
-                if article['id'] not in ids:
-                    result.append(article)
-                    ids.add(article['id'])
-    return result
+        items = [a for a in rows if a['category'] == category]
+        items.sort(key=lambda a: (news.parse_date(a['publishedAt']).astimezone(news.BEIJING).date() == today,
+                                  news.brief_rank(a, records)), reverse=True)
+        queues.append(items[:60])
+    for index in range(max((len(q) for q in queues), default=0)):
+        for queue in queues:
+            if index < len(queue):
+                take(queue[index])
+    return chosen
 
 
 def validate_points(points, article, body, failures=None):
@@ -345,12 +326,16 @@ def update(client, data, records, state, now, sources, get=fetch_article):
     settings = client.config.get('newsDetails', {})
     if not settings.get('enabled', False):
         return {'status': 'disabled', 'processed': 0}
-    maximum = settings.get('maxPerRun', 24)
-    if type(maximum) is not int or not 1 <= maximum <= 40:
+    maximum = settings.get('maxPerRun', 80)
+    if type(maximum) is not int or not 1 <= maximum <= 120:
         raise ValueError('invalid_detail_limit')
     cache = state.setdefault('newsDetails', {})
     allowed, selected = domains(sources), []
-    for article in candidates(data, records, now):
+    queue = candidates(data, records, now)
+    # Existing complete results can be checked later; new headlines get the
+    # first slots without changing the fair ordering between categories.
+    queue.sort(key=lambda a: cache.get(a['id'], {}).get('hash') == input_hash(a))
+    for article in queue:
         old = cache.get(article['id'], {})
         checked = news.parse_date(old.get('checkedAt'))
         if old.get('hash') == input_hash(article) and checked and now - checked < timedelta(hours=12 if old.get('status') in ('ok', 'no_detail') else 2):
@@ -415,11 +400,14 @@ def update(client, data, records, state, now, sources, get=fetch_article):
     # Keep short results and literal evidence in the build cache, never full articles.
     valid_ids = {a['id'] for key in ('articles', 'modelReleases', 'housingArticles') for a in data.get(key, [])}
     kept = sorted(((k, v) for k, v in cache.items() if k in valid_ids),
-                  key=lambda pair: pair[1].get('publishedAt', ''), reverse=True)[:1500]
+                  key=lambda pair: pair[1].get('publishedAt', ''), reverse=True)[:6000]
     state['newsDetails'] = dict(kept)
     return {'status': 'partial' if failed else 'ok', 'checkedAt': news.iso(now),
             'attempted': len(selected), 'fetched': sum(bool(p) for p in fetched), 'reused': reused,
             'rejected': rejected,
+            'categories': {category: {'attempted': sum(a['category'] == category for a in selected),
+                'ready': sum(a['category'] == category and bool(public_detail(a, state['newsDetails'].get(a['id']))) for a in queue)}
+                for category in CATEGORIES},
             'processed': sum(bool(public_detail(a, state['newsDetails'].get(a['id'])))
                              for a in candidates(data, records, now))}
 

@@ -95,10 +95,10 @@
   function journalMarkup(isOpen, formatTime) {
     const records = window.TonightJournal.snapshot();
     return `<details class="tonight-journal"${isOpen ? " open" : ""}><summary>我的积累 · ${records.length} 条记录</summary>
-      <p class="trip-note">只保存在当前浏览器，不随共同记录同步，也不发送给 AI。照片、录音仍放在自己的相册或文件里。更换设备或清理浏览器前，请导出备份。</p>
+      <p class="trip-note">连接后，两台设备自动同步这些文字；离线先保存，联网后补传。积累内容不发送给 AI，照片、录音仍放在自己的相册或文件里。也可导出备份。</p>
       <div class="trip-links"><button class="text-button" data-tonight-export${records.length ? "" : " disabled"}>导出记录</button>
       <button class="text-button" data-tonight-import>导入记录</button><input type="file" data-tonight-file accept=".json,application/json" aria-label="选择今晚记录文件" hidden></div>
-      ${window.TonightJournal.status() ? `<p class="trip-note" role="alert">${esc(window.TonightJournal.status())}</p>` : ""}
+      ${window.TonightJournal.status() ? `<p class="trip-note" role="status">${esc(window.TonightJournal.status())}</p>` : ""}
       ${records.length ? `<ul class="tonight-history">${records.slice(0,historyLimit).map(r => `<li>
         <p><strong>${esc(r.title)}</strong> <span class="trip-note">${esc(formatTime(r.createdAt))}</span></p>
         <p class="tonight-record-text">${esc(r.note)}</p>${r.next ? `<p class="tonight-record-text"><strong>下次：</strong>${esc(r.next)}</p>` : ""}
@@ -112,7 +112,7 @@
       <form data-tonight-record="${esc(p.id)}">
         <label>这次留下了什么<textarea name="note" required maxlength="500" rows="3" placeholder="${esc(p.project.prompt)}">${esc(draft.note)}</textarea></label>
         <label>下次接着做<input name="next" maxlength="200" value="${esc(draft.next)}"></label>
-        <p class="trip-note">文字只存本机，可离线记录；完整记录和备份在下方“我的积累”。</p>
+        <p class="trip-note">可离线记录，连接后自动同步；完整记录和备份在下方“我的积累”。</p>
         <button class="text-button" type="submit">保存这次进展</button>
       </form></details>`;
   }
@@ -213,7 +213,7 @@
     try {
       window.TonightJournal.add(pick, form.elements.note.value, form.elements.next.value);
       drafts.delete(pick.id);
-      message = "进展已保存在本机，下次会接着这一步。";
+      message = window.OutingProfile?.connected() ? "进展已保存，正在自动同步。下次接着这一步。" : "进展已保存在本机；在“偏好与反馈”连接后自动同步。";
       // Close the editor before re-rendering, so its saved draft is not restored.
       form.closest("details").open = false;
       render(...lastRender);
@@ -295,6 +295,10 @@
     if (event.target.closest("[data-tonight-shuffle]")) { round++; expanded = false; message = ""; render(...lastRender); }
   });
   window.addEventListener("outing-feedback-change", () => { if (lastRender) render(...lastRender); });
+  window.addEventListener("tonight-journal-change", () => {
+    if (message === "进展已保存，正在自动同步。下次接着这一步。") message = window.TonightJournal.status();
+    if (lastRender) render(...lastRender);
+  });
   window.addEventListener("storage", event => { if (event.key === window.TonightJournal.key && lastRender) render(...lastRender); });
   document.addEventListener("visibilitychange", () => { if (!document.hidden && lastRender) render(...lastRender); });
   setInterval(() => {

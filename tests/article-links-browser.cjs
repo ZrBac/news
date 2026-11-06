@@ -13,13 +13,16 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const latest = await (
       await page.request.get(base + "/data/latest.json")
     ).json();
-    const direct = latest.articles[0],
-      fallback = latest.articles[1];
-    direct.title = "原文链接检查一";
-    direct.url = "https://news.google.com/rss/articles/CBMiTest";
-    direct.originalUrl = "https://publisher.example/story";
-    fallback.title = "原文链接检查二";
-    fallback.originalUrl = "javascript:alert(1)";
+    // Isolate URL handling from today's AI event groups; two live feed rows
+    // may be reports of the same event and share one visible card.
+    const direct = {id:"link-direct",title:"原文链接检查一",category:"general",
+      sourceId:latest.sources.find(s => s.category === "general").id,
+      publishedAt:new Date().toISOString(),excerpt:"原始摘要。",
+      url:"https://news.google.com/rss/articles/CBMiTest",originalUrl:"https://publisher.example/story"};
+    const fallback = {...direct,id:"link-fallback",title:"原文链接检查二",
+      url:"https://publisher.example/fallback",originalUrl:"javascript:alert(1)"};
+    latest.articles = [direct, fallback];
+    delete latest.archive;
     await page.route("**/data/latest.json*", (route) =>
       route.fulfill({ json: latest }),
     );

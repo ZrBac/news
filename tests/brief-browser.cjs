@@ -189,13 +189,17 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator('[data-filter="all"]').click();
     assert.equal(await page.locator("#section-title").innerText(), "最新资讯");
     assert.equal(await page.locator(".article").count(), 12);
-    assert.deepEqual(
-      await page.locator(".article h3").allTextContents(),
-      data.articles
-        .filter((a) => a.category !== "local")
-        .slice(0, 12)
-        .map((a) => a.title),
-    );
+    // The newest feed items can contain several reports of the same event.
+    // Check chronological representatives and that merged reports remain
+    // accessible, rather than expecting twelve ungrouped feed rows.
+    const visibleIds = await page.locator(".article").evaluateAll(nodes => nodes.map(n => n.dataset.articleId));
+    const news = data.articles.filter(a => a.category !== "local");
+    const positions = visibleIds.map(id => news.findIndex(a => a.id === id));
+    assert.equal(positions[0], 0);
+    assert(positions.every((position, i) => position >= 0 && (!i || position > positions[i - 1])));
+    const reports = await page.locator(".article-reports a").allTextContents();
+    for (const article of news.slice(0, positions[positions.length - 1] + 1))
+      assert(visibleIds.includes(article.id) || reports.some(text => text.endsWith(article.title)), "newest story remains visible or grouped: " + article.id);
     assert.equal(await page.inputValue("#date-filter"), "");
     await page.goto(base);
     await page.evaluate(() => window.newsInitialLoad);

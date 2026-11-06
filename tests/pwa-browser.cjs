@@ -143,7 +143,11 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     await page.click("#close-dialog");
     assert(await page.locator("#info-dialog").isHidden());
     await page.click(".save-button >> nth=0");
-    const savedTitle = await page.locator(".article h3").first().innerText();
+    // The publisher suffix is hidden on phones and visible on desktop. Check
+    // the complete accessible title and article identity across both layouts.
+    const savedTitle = await page.locator(".article h3 a").first().getAttribute("aria-label");
+    const savedId = await page.locator(".article").first().getAttribute("data-article-id");
+    const savedUrl = await page.locator(".article h3 a").first().getAttribute("href");
     const before = await page.evaluate(
       () => JSON.parse(localStorage.getItem("zrbac-news-cache-v1")).updatedAt,
     );
@@ -165,7 +169,7 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     );
     await page.click(".saved-link");
     assert.equal(
-      await page.locator(".article h3").first().innerText(),
+      await page.locator(".article h3 a").first().getAttribute("aria-label"),
       savedTitle,
     );
     assert(
@@ -197,9 +201,11 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
       "refreshing news data must not prompt for an application update",
     );
     assert.equal(
-      await page.locator(".article h3").first().innerText(),
+      await page.locator(".article h3 a").first().getAttribute("aria-label"),
       savedTitle,
     );
+    assert.equal(await page.locator(".article").first().getAttribute("data-article-id"), savedId);
+    assert.equal(await page.locator(".article h3 a").first().getAttribute("href"), savedUrl);
     const cachedUrls = await page.evaluate(async () => {
       const keys = (await caches.keys()).filter((k) =>
         k.startsWith("news-shell-"),

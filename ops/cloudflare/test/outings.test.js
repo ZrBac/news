@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import worker, { NewsCoordinator } from "../src/worker.js";
 
 test("private outing feedback requires a token, survives restart and can be undone", async () => {
@@ -49,7 +50,7 @@ function fixture() {
   let object=new NewsCoordinator(ctx,env);
   env.COORDINATOR={idFromName:n=>n,get:()=>({fetch:r=>object.fetch(r)})};
   const call=(path,body,auth=true,origin="https://news.zacai.fun",ip="test-ip")=>worker.fetch(new Request("https://worker.example/api/outings/"+path,{
-    method:body?"POST":"GET",headers:{Origin:origin,"CF-Connecting-IP":ip,...(auth?{Authorization:"Bearer "+env.OUTING_PROFILE_TOKEN}:{})},
+    method:body?"POST":"GET",headers:{Origin:origin,"CF-Connecting-IP":ip,...(auth?{Authorization:"Bearer "+(typeof auth === "string" ? auth : env.OUTING_PROFILE_TOKEN)}:{})},
     ...(body?{body:JSON.stringify(body)}:{})}),env);
   return {call,data,restart:()=>{object=new NewsCoordinator(ctx,env);}};
 }
@@ -66,6 +67,18 @@ test("automatic sync keeps shared data private and the removed pairing endpoint 
   assert.equal((await call("journal",null,false)).status,401);
   assert.equal((await call("journal",null,true,"https://evil.example")).status,403);
   assert.equal((await call("journal")).headers.get("Cache-Control"),"no-store");
+});
+
+test("browser entrance and existing devices share records without publishing the collection credential", async()=>{
+  const {call}=fixture();
+  const entrance=createHash("sha256").update("outings-browser-entry-v1:test-private-connection-abcdefghijklmnopqrstuvwxyz").digest("hex");
+  assert.equal((await call("profile",null,"0".repeat(64))).status,401);
+  assert.equal((await call("profile",{action:"record",id:"event:reading",title:"阅读",status:"want"},entrance)).status,200);
+  assert.equal((await (await call("profile")).json()).records.length,1);
+  assert.equal((await call("journal",batch(put("1",entry("a"))),entrance)).status,200);
+  const saved=await (await call("journal")).json();
+  assert.equal(saved.records.length,1);
+  assert.equal(JSON.stringify(saved).includes(entrance),false);
 });
 
 test("journal merges two devices, keeps data separate, and retry cannot resurrect another device's deletion", async()=>{

@@ -49,6 +49,19 @@ function coordinator(env) {
   return env.COORDINATOR.get(env.COORDINATOR.idFromName("news"));
 }
 
+async function outingAuthorized(request, env) {
+  const authorization = request.headers.get("Authorization");
+  if (!env.OUTING_PROFILE_TOKEN || !authorization) return false;
+  if (authorization === "Bearer " + env.OUTING_PROFILE_TOKEN) return true;
+  if (!/^Bearer [a-f0-9]{64}$/.test(authorization)) return false;
+  // Browser entrances use a separate derived credential; the server's
+  // collection credential does not need to appear in a shared entrance URL.
+  const digest = await crypto.subtle.digest("SHA-256",
+    new TextEncoder().encode("outings-browser-entry-v1:" + env.OUTING_PROFILE_TOKEN));
+  const entry = Array.from(new Uint8Array(digest), n => n.toString(16).padStart(2, "0")).join("");
+  return authorization === "Bearer " + entry;
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get("Origin");
@@ -75,7 +88,7 @@ export default {
     if (outingRoute && (!search || journalVersion)) {
       if (origin && !ORIGINS.has(origin)) return reply({ status: "forbidden" }, 403);
       if (request.method === "OPTIONS" && ORIGINS.has(origin)) return reply({ status: "ok" });
-      if (!env.OUTING_PROFILE_TOKEN || request.headers.get("Authorization") !== "Bearer " + env.OUTING_PROFILE_TOKEN)
+      if (!await outingAuthorized(request, env))
         return reply({ status: "unauthorized" }, 401);
       if (!["GET", "POST"].includes(request.method)) return reply({ status: "method_not_allowed" }, 405);
       if (request.method === "POST" && !ORIGINS.has(origin)) return reply({ status: "forbidden" }, 403);

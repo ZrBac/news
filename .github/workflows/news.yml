@@ -130,7 +130,7 @@ jobs:
           # Keep the complete dependency installation, using Ubuntu's main mirror.
           sudo python3 - <<'PY'
           from pathlib import Path
-          files = [Path('/etc/apt/sources.list'), *Path('/etc/apt/sources.list.d').glob('*.sources'), *Path('/etc/apt/sources.list.d').glob('*.list')]
+          files = [Path('/etc/apt/sources.list'), Path('/etc/apt/apt-mirrors.txt'), *Path('/etc/apt/sources.list.d').glob('*.sources'), *Path('/etc/apt/sources.list.d').glob('*.list')]
           for path in files:
               if path.is_file():
                   original = path.read_text()

@@ -1892,12 +1892,17 @@
     const settings = profile.settings || {};
     if (!suggestionDirty) $("#outing-suggestion").value = settings.weekendNote || "";
     $("#outing-suggestion-status").textContent = profile.pending.some(op => op.action === "suggestion")
-      ? navigator.onLine ? "建议已保存在本机，正在等待同步。" : "建议已保存在本机，联网后自动同步。"
+      ? navigator.onLine ? window.OutingProfile.status() : "建议已保存在本机，联网后自动同步。"
       : settings.weekendNoteUpdatedAt
         ? settings.weekendNoteUpdatedAt === state.data?.editorial?.trip?.suggestionAppliedAt
           ? "这些建议已用于本轮推荐。清空后保存即可撤销。"
           : "建议已同步，下次更新会参考；也可以点“重新找一批”。"
         : "两人共用这些建议，下次更新会参考。";
+    const notice = $("#outing-refresh-notice");
+    if (notice.dataset.syncPending && !profile.pending.length) {
+      delete notice.dataset.syncPending;
+      notice.textContent = "建议和反馈已同步，可以再点“重新找一批”。";
+    }
   }
   function saveOutingSuggestion() {
     const text = $("#outing-suggestion").value.trim();
@@ -2330,6 +2335,7 @@
     $("#refresh-news").disabled = $("#refresh-outings").disabled = true;
     button.textContent = outings ? "正在重新检索…" : "正在刷新…";
     notice.hidden = false;
+    delete notice.dataset.syncPending;
     notice.textContent = "正在请求更新…";
     const endpoint =
       document.querySelector('meta[name="news-refresh-endpoint"]')?.content ||
@@ -2339,9 +2345,11 @@
     try {
       if (outings) {
         saveOutingSuggestion();
+        notice.textContent = "正在同步建议和反馈…";
         await window.OutingProfile.sync(true);
         if (window.OutingProfile.snapshot().pending.length) {
-          notice.textContent = "建议或反馈暂未同步成功，已保存在本机。同步后再重新检索，才能用上最新想法。";
+          notice.dataset.syncPending = "true";
+          notice.textContent = window.OutingProfile.status() + " 同步完成后可再点“重新找一批”。";
           return;
         }
       }

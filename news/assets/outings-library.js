@@ -69,7 +69,7 @@
     document.querySelector('#place-catalog-status').textContent=catalog.updatedAt?`${current.length} 个 · 最近检索 ${formatTime(catalog.updatedAt)}`:`${current.length} 个地点参考`;
   }
   function articleRecord(a) {
-    return {id:a.outingId || 'event:story-'+a.id.replace(/[^a-z0-9-]/gi,'').slice(0,65),name:a.outing?.eventName || a.title,
+    return {id:a.outingId || 'event:story-'+a.id.toLowerCase().replace(/[^a-z0-9-]/g,'').slice(0,65),name:a.outing?.eventName || a.title,
       area:a.outing?.venue || '',day:a.outing?.start || '',url:a.originalUrl || a.url};
   }
   document.addEventListener('click',event=>{

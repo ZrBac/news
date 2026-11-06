@@ -10,8 +10,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const page = await context.newPage(), errors = [], posts = [];
     page.on("pageerror", e => errors.push(e.message));
     let profile = {schema:1, settings:{people:2,transport:"car"}, records:[{id:"place:old",title:"已去的地方",status:"visited"}]};
+    let syncUnavailable = false;
     const profileRoute = async route => {
       if (route.request().method() === "POST") {
+        if (syncUnavailable) return route.fulfill({status:503,json:{status:"unavailable"}});
         const op = route.request().postDataJSON();
         assert.equal(op.action,"suggestion");
         profile.settings = {...profile.settings,weekendNote:op.text,weekendNoteUpdatedAt:new Date().toISOString()};
@@ -86,7 +88,15 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await second.goto(base+"/#local");
     await second.waitForFunction(() => document.querySelector("#outing-suggestion").value === "这周想做陶艺");
     await secondContext.close();
+    syncUnavailable = true;
     await input.fill("想试木工，别再推荐书店");
+    await page.locator("#refresh-outings").click();
+    await page.waitForFunction(() => document.querySelector("#outing-refresh-notice").textContent.includes("同步服务暂时不可用"));
+    assert.equal(posts.length,0,"never dispatch a new search before feedback reaches shared storage");
+    assert.equal(await page.evaluate(() => OutingProfile.snapshot().pending.length),1);
+    syncUnavailable = false;
+    await page.waitForFunction(() => document.querySelector("#outing-refresh-notice").textContent.includes("建议和反馈已同步"),{},{timeout:15000});
+    assert.equal(posts.length,0,"background sync does not itself start a search");
     await page.locator("#refresh-outings").click();
     await page.waitForFunction(() => document.querySelector("#outing-refresh-notice").textContent.includes("已有更新"));
     assert.equal(posts.length,1);

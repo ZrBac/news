@@ -77,7 +77,7 @@
     const settings = form ? {startArea:form.elements.startArea.value,people:form.elements.people.value,transport:form.elements.transport.value} : profile.settings || {};
     if(form && field) Promise.resolve().then(()=>{const input=document.querySelector(`[data-outing-settings] [name="${field}"]`);input?.focus({preventScroll:true});if(input&&caret)input.setSelectionRange(...caret);});
     return `<details class="outing-profile"${profileOpen?' open':''}><summary>偏好设置</summary>
-      <form data-outing-settings><label>出发地<input name="startArea" maxlength="50" value="${esc(settings.startArea||'')}" placeholder="例如：杭州五常"></label><label>人数<input name="people" type="number" min="1" max="10" value="${esc(settings.people??2)}"></label><label>出行方式<select name="transport"><option value="car"${settings.transport!=='transit'?' selected':''}>自驾</option><option value="transit"${settings.transport==='transit'?' selected':''}>公共交通</option></select></label><button class="text-button" type="submit">保存偏好</button></form></details>`;
+      <form data-outing-settings><label>出发地<input name="startArea" maxlength="50" value="${esc(settings.startArea||'')}" placeholder="例如：杭州五常"></label><label>人数<input name="people" type="number" min="1" max="10" required value="${esc(settings.people??2)}"></label><label>出行方式<select name="transport"><option value="car"${settings.transport!=='transit'?' selected':''}>自驾</option><option value="transit"${settings.transport==='transit'?' selected':''}>公共交通</option></select></label><button class="text-button" type="submit">保存偏好</button></form></details>`;
   }
   let recordsRender;
   function renderRecords(data,state,formatTime) {

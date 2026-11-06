@@ -31,12 +31,19 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const page = await context.newPage(), errors = [], requests = [];
     page.on("pageerror", e => errors.push(e.message));
     let remote = {schema:1, settings:{startArea:"测试出发地",people:2,transport:"car"},records:[]};
-    let holdFirstPost = false, release;
+    let holdFirstPost = false, release, failuresLeft = 0, failuresSeen = 0;
     await context.route("**/api/outings/profile", async route => {
       const request = route.request();
       requests.push({ method:request.method(), authorization:request.headers().authorization });
       if (request.method() === "POST") {
         const op = request.postDataJSON();
+        if (failuresLeft) { failuresLeft--; failuresSeen++; return route.fulfill({status:503,json:{status:"unavailable"}}); }
+        if (op.action === "settings" && !op.people) return route.fulfill({status:400,json:{status:"invalid_request"}});
+        if (op.action === "record" && (!/^(place|event):[a-z0-9-]{1,100}$/.test(op.id) || op.title.length > 150 ||
+          op.url?.length > 1500 || op.area?.length > 120 || op.day?.length > 120))
+          return route.fulfill({status:400,json:{status:"invalid_request"}});
+        if (op.action === "suggestion") remote.settings = {...remote.settings,weekendNote:op.text};
+        if (op.action === "settings") remote.settings = {...remote.settings,startArea:op.startArea,people:op.people,transport:op.transport};
         if (holdFirstPost) { holdFirstPost=false; await new Promise(resolve => { release=resolve; }); }
         remote.records = remote.records.filter(r => r.id !== op.id);
         if (op.action === "record") remote.records.push({id:op.id,title:op.title,status:op.status});
@@ -77,6 +84,58 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.evaluate(() => OutingProfile.update({action:"remove",id:"event:two"}));
     await page.waitForFunction(() => !OutingProfile.snapshot().pending.length);
     assert.equal(remote.records.some(r=>r.id==="event:two"), false);
+    // A transient write failure is retried within the sync awaited by Refresh.
+    failuresLeft = 1;
+    await page.evaluate(async () => {
+      OutingProfile.update({action:"suggestion",text:"本周想做木工"});
+      await OutingProfile.sync(true);
+    });
+    assert.equal(failuresSeen,1);
+    assert.equal(remote.settings.weekendNote,"本周想做木工");
+    assert.equal(await page.evaluate(() => OutingProfile.snapshot().pending.length),0);
+    await page.evaluate(async () => {
+      OutingProfile.update({action:"record",id:"event:Legacy-Story",title:"旧活动标题".repeat(40),status:"visited",
+        url:"https://example.com/"+"a".repeat(1500),area:"地点".repeat(100),day:"日期".repeat(100)});
+      await OutingProfile.sync(true);
+    });
+    assert.equal(await page.evaluate(() => OutingProfile.snapshot().pending.length),0,"old display metadata no longer permanently blocks upload");
+    assert.equal(remote.records.find(r=>r.id==="event:legacy-story").status,"visited");
+    await page.evaluate(async () => {OutingProfile.update({action:"remove",id:"event:legacy-story"});await OutingProfile.sync(true);});
+    // Reproduce an old invalid setting ahead of a new suggestion. Save the
+    // valid operation and retain the rejected one instead of stopping the queue.
+    await context.setOffline(true);
+    await page.evaluate(() => {
+      OutingProfile.update({action:"settings",startArea:"五常",people:0,transport:"car"});
+      OutingProfile.update({action:"suggestion",text:"新建议不能被旧偏好挡住"});
+    });
+    await context.setOffline(false);
+    await page.evaluate(() => OutingProfile.sync(true));
+    assert.equal(remote.settings.weekendNote,"新建议不能被旧偏好挡住");
+    assert.deepEqual(await page.evaluate(() => OutingProfile.snapshot().pending.map(op=>op.action)),["settings"]);
+    assert.match(await page.evaluate(() => OutingProfile.status()),/格式不兼容/);
+    assert.equal(await page.evaluate(() => OutingProfile.snapshot().settings.people),0,"rejected local edit is preserved");
+    await page.evaluate(async () => {
+      OutingProfile.update({action:"settings",startArea:"五常",people:2,transport:"car"});
+      await OutingProfile.sync(true);
+    });
+    assert.equal(await page.evaluate(() => OutingProfile.snapshot().pending.length),0);
+    // A connected device retries without needing an offline/online transition,
+    // even when Save leaves focus inside the suggestion form.
+    await page.evaluate(() => {
+      const form=document.createElement("form");form.innerHTML='<input name="draft" value="还没保存的文字">';
+      document.body.append(form);form.firstElementChild.focus();
+    });
+    failuresLeft = 2;
+    await page.evaluate(async () => {
+      OutingProfile.update({action:"suggestion",text:"网络恢复后自动补传"});
+      await OutingProfile.sync(true);
+    });
+    assert.equal(await page.evaluate(() => OutingProfile.snapshot().pending.length),1);
+    assert.match(await page.evaluate(() => OutingProfile.status()),/同步服务暂时不可用/);
+    await page.waitForFunction(() => !OutingProfile.snapshot().pending.length,{},{timeout:15000});
+    assert.equal(remote.settings.weekendNote,"网络恢复后自动补传");
+    assert.equal(await page.locator('input[name="draft"]').inputValue(),"还没保存的文字");
+    assert.equal(remote.records[0].status,"dismiss");
     // A fresh browser opens the ordinary website, with no stored credential or special link.
     const secondContext = await browser.newContext({ ...devices["iPhone 13"], serviceWorkers:"block" });
     await secondContext.route("**/api/outings/profile", route => {

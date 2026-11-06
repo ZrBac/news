@@ -320,9 +320,11 @@ const root = path.resolve(process.env.NEWS_TEST_SITE || "_site");
     await page.goto(base + "/#saved", { waitUntil: "networkidle" });
     await page.locator(".article").first().waitFor();
     assert.equal(
-      await page.locator(".article h3").first().innerText(),
+      await page.locator(".article h3 a").first().getAttribute("aria-label"),
       savedTitle,
     );
+    assert.equal(await page.locator(".article").first().getAttribute("data-article-id"), savedId);
+    assert.equal(await page.locator(".article h3 a").first().getAttribute("href"), savedUrl);
     for (const width of [360, 390, 768, 1440]) {
       await page.setViewportSize({ width, height: 900 });
       assert(

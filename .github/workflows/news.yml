@@ -5,6 +5,11 @@ on:
     branches: [main]
     paths: ["news/**", "scripts/**", "tests/**", ".github/workflows/news.yml"]
   workflow_dispatch:
+    inputs:
+      refresh_outings:
+        description: Recheck weekend activities and places now
+        type: boolean
+        default: false
 
 concurrency:
   group: news-pages
@@ -64,9 +69,9 @@ jobs:
       - name: Collect news and retain the previous archive
         run: python scripts/collect_news.py --previous-file .cache/news-snapshot/previous.json
       - name: Prepare Hangzhou outings and twice-daily searches
-        run: python scripts/collect_weekend.py --previous-file .cache/news-snapshot/previous.json
+        run: python scripts/collect_weekend.py --previous-file .cache/news-snapshot/previous.json ${{ inputs.refresh_outings && '--force-search' || '' }}
       - name: Refresh hiking, camping, cycling and indoor place news
-        run: python scripts/collect_places.py --previous-file .cache/news-snapshot/previous.json
+        run: python scripts/collect_places.py --previous-file .cache/news-snapshot/previous.json ${{ inputs.refresh_outings && '--force-search' || '' }}
       - name: Update Hangzhou transaction price reports
         run: python scripts/collect_housing_prices.py --previous-file .cache/news-snapshot/previous.json
       - name: Update foreign currency to CNY reference rates
@@ -101,7 +106,7 @@ jobs:
         timeout-minutes: 23
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-        run: python scripts/ai_editor.py --previous-file .cache/news-snapshot/previous.json
+        run: python scripts/ai_editor.py --previous-file .cache/news-snapshot/previous.json ${{ inputs.refresh_outings && '--force-outings' || '' }}
       - name: Save editorial usage even if a later build fails
         if: always() && steps.ai-editor.outcome != 'skipped'
         uses: actions/cache/save@v4

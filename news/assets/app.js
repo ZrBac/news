@@ -4,6 +4,7 @@
   const $$ = (selector) => [...document.querySelectorAll(selector)];
   new MutationObserver(() => {
     $("#update-status").hidden = !$("#load-notice").hidden;
+    $("#outing-load-status").hidden = state.view !== "local" || $("#load-notice").hidden;
   }).observe($("#load-notice"), {
     attributes: true,
     attributeFilter: ["hidden"],
@@ -384,6 +385,10 @@
     const local = state.view === "local";
     if (!outingControlHomes) {
       outingControlHomes = [
+        ["#load-notice", "#outing-load-status"],
+        ["#outing-catalog-heading", "#outing-library-content"], [".filter-row", "#outing-library-content"],
+        ["#outing-filters", "#outing-library-content"], ["#outing-library-updates", "#outing-library-content"],
+        ["#outing-places", "#outing-library-content"], ["#outing-news-panel", "#outing-library-content"],
         [".source-select", "#outing-source-controls"], ["#date-trigger", "#outing-source-controls"],
         ["#date-panel", "#outing-filters"], [".reading-options", "#outing-filters"],
         ["#weekend-tools", "#outing-topic-controls"], ["#result-count", "#outing-catalog-count"],
@@ -399,7 +404,10 @@
       else if (!local && node.previousSibling !== home) home.after(node);
     }
     $("#outing-catalog-heading").hidden = !local;
-    $("#outing-browse").hidden = !local || state.outingMode === "tonight";
+    $("#outing-load-status").hidden = !local || $("#load-notice").hidden;
+    $("#outing-library").hidden = !local || state.outingMode === "tonight";
+    $("#outing-adjust").hidden = !local || state.outingMode === "tonight";
+    $("#outing-refresh-notice").hidden = !local || state.outingMode === "tonight" || !$("#outing-refresh-notice").textContent;
     $("#outing-filter-toggle").hidden = !local;
     $("#outing-filters").hidden = !local || !state.outingFiltersOpen;
     $("#outing-filter-toggle").setAttribute("aria-expanded", String(state.outingFiltersOpen));
@@ -1017,6 +1025,7 @@
     $(".filter-tabs").hidden = outings;
     $(".sidebar").hidden = outings;
     $(".main-layout").classList.toggle("outings-view", outings);
+    $(".update-bar").hidden = outings;
     $("#outing-news-panel").hidden = !outings;
     renderOutingLayout();
     $("#outing-nav").hidden = !outings;
@@ -1094,6 +1103,8 @@
     renderHousingPrices();
     renderExchangeRates();
     const referenceCount = renderWeekendTools();
+    $("#outing-library-count").textContent = `${window.OutingLibrary.places().length} 个地点`;
+    renderOutingSuggestion();
     window.NewsEditorial?.render(state.data, state, formatTime);
     window.NewsEditorial?.renderRecords(state.data, state, formatTime);
     if (outings && (state.query || state.source !== "all" || state.date || state.outingType !== "all")) $("#outing-news-panel").open = true;
@@ -1595,6 +1606,7 @@
       history.replaceState(null, "", state.view === "exchange" ? "#all" : "#local");
       route();
     }
+    if (state.view === "local") $("#outing-library").open = true;
     $(state.view === "local" ? "#outing-catalog-heading" : "#news-content").scrollIntoView({ behavior: "smooth" });
     $("#search").focus({ preventScroll: true });
   }
@@ -1611,10 +1623,6 @@
     }
   });
   let searchTimer;
-  $("#outing-browse").addEventListener("click", () => {
-    $("#outing-catalog-heading").scrollIntoView({ behavior: "smooth", block: "start" });
-    $("#search").focus({ preventScroll: true });
-  });
   $("#outing-filter-toggle").addEventListener("click", () => {
     state.outingFiltersOpen = !state.outingFiltersOpen;
     renderOutingLayout();
@@ -1686,7 +1694,6 @@
     );
   });
   document.addEventListener("click", (e) => {
-    if(e.target.closest('#outing-records-trigger')) {const root=$('#outing-records');root.querySelector('details').open=true;root.scrollIntoView({behavior:'smooth',block:'start'});return;}
     const tonightOpen=e.target.closest('[data-tonight-open]');
     if(tonightOpen) {history.replaceState(null,'','#tonight');route(false);window.NewsTonight.reveal(tonightOpen.dataset.tonightOpen);return;}
     const saveOuting = e.target.closest("[data-outing-story]");
@@ -1737,6 +1744,7 @@
     const tripPlace = e.target.closest("[data-trip-place]");
     if (tripPlace) {
       if(state.outingMode === "tonight") {history.replaceState(null,"","#local");route(false);}
+      $("#outing-library").open = true;
       const card = $$("[data-place-id]").find(
         (place) => place.dataset.placeId === tripPlace.dataset.tripPlace,
       );
@@ -1877,6 +1885,31 @@
   let archiveJob = null;
   let loading = false;
   let refreshing = false;
+  let suggestionDirty = false;
+  function renderOutingSuggestion() {
+    const profile = window.OutingProfile.snapshot();
+    const settings = profile.settings || {};
+    if (!suggestionDirty) $("#outing-suggestion").value = settings.weekendNote || "";
+    $("#outing-suggestion-status").textContent = profile.pending.some(op => op.action === "suggestion")
+      ? navigator.onLine ? "建议已保存在本机，正在等待同步。" : "建议已保存在本机，联网后自动同步。"
+      : settings.weekendNoteUpdatedAt
+        ? settings.weekendNoteUpdatedAt === state.data?.editorial?.trip?.suggestionAppliedAt
+          ? "这些建议已用于本轮推荐。清空后保存即可撤销。"
+          : "建议已同步，下次更新会参考；也可以点“重新找一批”。"
+        : "两人共用这些建议，下次更新会参考。";
+  }
+  function saveOutingSuggestion() {
+    const text = $("#outing-suggestion").value.trim();
+    suggestionDirty = false;
+    if (text !== (window.OutingProfile.snapshot().settings?.weekendNote || ""))
+      window.OutingProfile.update({action:"suggestion", text});
+    renderOutingSuggestion();
+  }
+  $("#outing-suggestion").addEventListener("input", () => { suggestionDirty = true; });
+  $("#outing-suggestion-form").addEventListener("submit", event => {
+    event.preventDefault();
+    saveOutingSuggestion();
+  });
   function validateData(data) {
     if (
       !data ||
@@ -2281,26 +2314,36 @@
       ensureArticles();
     }
   }
-  $("#refresh-news").addEventListener("click", async () => {
+  async function refresh(scope = "news") {
     if (refreshing || loading) return;
+    const outings = scope === "outings";
+    const button = $(outings ? "#refresh-outings" : "#refresh-news");
+    const notice = $(outings ? "#outing-refresh-notice" : "#refresh-notice");
     if (!navigator.onLine) {
-      $("#refresh-notice").textContent =
-        "当前离线，可继续阅读已缓存的资讯；联网后再刷新。";
-      $("#refresh-notice").hidden = false;
+      if (outings) saveOutingSuggestion();
+      notice.textContent = outings ? "当前离线，建议会先保存在本机；联网后再重新检索。" : "当前离线，可继续阅读已缓存的资讯；联网后再刷新。";
+      notice.hidden = false;
       return;
     }
     refreshing = true;
-    const button = $("#refresh-news");
-    const notice = $("#refresh-notice");
-    button.disabled = true;
-    button.textContent = "正在刷新…";
+    $("#refresh-news").disabled = $("#refresh-outings").disabled = true;
+    button.textContent = outings ? "正在重新检索…" : "正在刷新…";
     notice.hidden = false;
     notice.textContent = "正在请求更新…";
     const endpoint =
       document.querySelector('meta[name="news-refresh-endpoint"]')?.content ||
       "https://news-refresh.944052796.workers.dev/api/news-refresh";
     let baseline = Date.parse(state.data?.updatedAt || "") || 0;
+    const tripBaseline = Date.parse(state.data?.editorial?.trip?.updatedAt || "") || 0;
     try {
+      if (outings) {
+        saveOutingSuggestion();
+        await window.OutingProfile.sync(true);
+        if (window.OutingProfile.snapshot().pending.length) {
+          notice.textContent = "建议或反馈暂未同步成功，已保存在本机。同步后再重新检索，才能用上最新想法。";
+          return;
+        }
+      }
       let result = await requestJSON(
         endpoint,
         {
@@ -2310,11 +2353,15 @@
             "Content-Type": "application/json",
             "X-News-Refresh": "1",
           },
-          body: "{}",
+          body: JSON.stringify(outings ? {scope:"outings"} : {}),
         },
         90000,
       );
       if (result.status === "fresh" || result.status === "cooldown") {
+        if (outings) {
+          notice.textContent = `刚提交过检索，请约 ${Math.max(1, Math.ceil((result.retryAfter || 900) / 60))} 分钟后再试；现有推荐仍可查看。`;
+          return;
+        }
         const loaded = await load(true);
         notice.textContent = loaded
           ? "已重新读取已发布的资讯。为避免重复抓取，后台刷新最多每 15 分钟触发一次。"
@@ -2322,17 +2369,17 @@
         return;
       }
       if (result.status === "busy") {
-        notice.textContent = "后台正在检查更新，请稍后再试。";
+        notice.textContent = outings ? "已有更新正在运行，完成后可再点“重新找一批”；保存的建议会用于下一轮筛选。" : "后台正在检查更新，请稍后再试。";
         return;
       }
       if (result.status !== "running") throw new Error("Refresh unavailable");
       baseline = Math.max(baseline, Date.parse(result.baselineAt || "") || 0);
-      const deadline = Date.now() + 180000;
+      const deadline = Date.now() + (outings ? 1200000 : 180000);
       while (Date.now() < deadline) {
         notice.textContent =
           result.status === "ready"
-            ? "发布已完成，正在读取最新资讯…"
-            : "正在采集和发布，通常需要几分钟；排队时可能更久。";
+            ? "发布已完成，正在读取最新内容…"
+            : outings ? "正在重新查找活动和地点，并按天气与建议筛选。需要几分钟，可以先看其他内容。" : "正在采集和发布，通常需要几分钟；排队时可能更久。";
         await new Promise((resolve) => setTimeout(resolve, 5000));
         result = await requestJSON(
           endpoint + "/status",
@@ -2340,32 +2387,36 @@
           15000,
         );
         if (result.status === "failed") {
-          notice.textContent =
-            "本次抓取或发布未成功，现有资讯仍可阅读，请稍后再试。";
+          notice.textContent = outings ? "本次检索或发布未成功，保留现有推荐；请稍后再试。" : "本次抓取或发布未成功，现有资讯仍可阅读，请稍后再试。";
           return;
         }
         if (result.status === "ready") {
-          const data = await fetchData();
+          const data = await fetchData(false, outings);
           if (Date.parse(data.updatedAt) > baseline) {
             showData(data, true);
             $("#load-notice").hidden = true;
-            notice.textContent = `刷新完成，最近检查 ${formatTime(data.updatedAt)}。`;
+            const trip = data.editorial?.trip;
+            notice.textContent = outings
+              ? trip?.status === "ok" && Date.parse(trip.updatedAt) > tripBaseline
+                ? `已重新检索并筛选，${formatTime(trip.updatedAt)} 更新；合适的现有选择也会保留。`
+                : "网站已更新，但本轮推荐暂未核对完成，继续显示之前的选择。"
+              : `刷新完成，最近检查 ${formatTime(data.updatedAt)}。`;
             return;
           }
         }
       }
-      notice.textContent =
-        "更新请求已提交，暂未读到新版本，请稍后再点刷新查看。";
+      notice.textContent = outings ? "检索请求已提交，发布尚未完成；稍后刷新页面查看结果。" : "更新请求已提交，暂未读到新版本，请稍后再点刷新查看。";
     } catch {
       await load(true);
-      notice.textContent =
-        "暂时无法确认后台刷新状态，已尝试重新读取网站资讯，请稍后再试。";
+      notice.textContent = outings ? "暂时无法确认检索状态，保留已有推荐；稍后刷新页面查看。" : "暂时无法确认后台刷新状态，已尝试重新读取网站资讯，请稍后再试。";
     } finally {
       refreshing = false;
-      button.disabled = false;
-      button.textContent = "刷新资讯";
+      $("#refresh-news").disabled = $("#refresh-outings").disabled = loading;
+      button.textContent = outings ? "重新找一批" : "刷新资讯";
     }
-  });
+  }
+  $("#refresh-news").addEventListener("click", () => refresh());
+  $("#refresh-outings").addEventListener("click", () => refresh("outings"));
   window.addEventListener("online", () => {
     if ($("#refresh-notice").textContent.includes("当前离线"))
       $("#refresh-notice").hidden = true;

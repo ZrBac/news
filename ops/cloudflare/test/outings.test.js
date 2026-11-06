@@ -57,6 +57,27 @@ const put=(id,record)=>({id:"op-"+id.repeat(24),action:"put",record});
 const remove=(id,recordId)=>({id:"op-"+id.repeat(24),action:"remove",recordId});
 const batch=(...operations)=>({schema:1,operations});
 
+test("weekend suggestions merge with shared settings, survive restart and can be cleared", async()=>{
+  const {call,restart}=fixture();
+  await call("profile",{action:"settings",startArea:"五常",people:2,transport:"car"});
+  await call("profile",{action:"record",id:"place:craft",title:"手作",status:"want"});
+  assert.equal((await call("profile",{action:"suggestion",text:"  这周想做陶艺  "})).status,200);
+  restart();
+  let profile=await (await call("profile")).json();
+  assert.equal(profile.settings.weekendNote,"这周想做陶艺");
+  assert(Number.isFinite(Date.parse(profile.settings.weekendNoteUpdatedAt)));
+  assert.equal(profile.records.length,1);
+  await call("profile",{action:"settings",startArea:"五常",people:2,transport:"transit"});
+  profile=await (await call("profile")).json();
+  assert.equal(profile.settings.weekendNote,"这周想做陶艺");
+  for(const text of [null,[],"x".repeat(601)]) assert.equal((await call("profile",{action:"suggestion",text})).status,400);
+  await call("profile",{action:"suggestion",text:""});
+  profile=await (await call("profile")).json();
+  assert.equal(profile.settings.weekendNote,"");
+  assert.equal(profile.settings.transport,"transit");
+  assert.equal(profile.records.length,1);
+});
+
 test("shared wanted places keep their source and reject unsafe links", async()=>{
   const {call,restart}=fixture();
   const record={action:'record',id:'place:example',title:'手作工坊',status:'want',url:'https://example.com/workshop',area:'杭州五常',day:'2026-11-07'};

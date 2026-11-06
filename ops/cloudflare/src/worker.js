@@ -108,6 +108,7 @@ export default {
         key: request.headers.get("CF-Connecting-IP") || "unknown",
       });
       if (!success) return reply({ status: "busy", retryAfter: 60 }, 429);
+      let scope = "news";
       if (action === "trigger") {
         if (request.headers.get("X-News-Refresh") !== "1")
           return reply({ status: "forbidden" }, 403);
@@ -117,14 +118,18 @@ export default {
         } catch {
           return reply({ status: "invalid_request" }, 413);
         }
-        if (body !== "" && body !== "{}")
-          return reply({ status: "invalid_request" }, 400);
+        if (body !== "" && body !== "{}") {
+          try {
+            const input = JSON.parse(body);
+            if (!input || Object.keys(input).length !== 1 || input.scope !== "outings") throw new Error();
+            scope = "outings";
+          } catch { return reply({ status: "invalid_request" }, 400); }
+        }
         if (env.MANUAL_ENABLED !== "true")
           return reply({ status: "unavailable" }, 503);
       }
-      const response = await coordinator(env).fetch(
-        "https://internal/" + action,
-      );
+      const response = await coordinator(env).fetch(new Request("https://internal/" + action,
+        action === "trigger" ? {method:"POST", body:JSON.stringify({scope})} : {}));
       return reply(await response.json(), response.status);
     } catch {
       console.error(JSON.stringify({ event: "refresh_api_failed" }));
@@ -165,8 +170,10 @@ export class NewsCoordinator {
         if (action === "/outing-profile") return await this.outingProfile(request);
         if (action === "/outing-journal") return await this.outingJournal(request);
         if (action === "/status") return json(await this.status());
-        if (action === "/trigger" && this.env.MANUAL_ENABLED === "true")
-          return json(await this.trigger());
+        if (action === "/trigger" && this.env.MANUAL_ENABLED === "true") {
+          const scope = request.method === "POST" ? (await request.json()).scope : "news";
+          return json(await this.trigger(scope === "outings" ? "outings" : "news"));
+        }
         if (action === "/check" && this.env.WATCHDOG_ENABLED === "true")
           return json(await this.check());
         if (action === "/periodic" && this.env.SCHEDULE_ENABLED === "true")
@@ -193,7 +200,10 @@ export class NewsCoordinator {
       if (typeof input.startArea !== "string" || input.startArea.length > 50 ||
           !Number.isInteger(input.people) || input.people < 1 || input.people > 10 ||
           !["car", "transit"].includes(input.transport)) return json({ status: "invalid_request" }, 400);
-      profile.settings = { startArea: input.startArea.trim(), people: input.people, transport: input.transport };
+      profile.settings = { ...profile.settings, startArea: input.startArea.trim(), people: input.people, transport: input.transport };
+    } else if (input.action === "suggestion") {
+      if (typeof input.text !== "string" || input.text.length > 600) return json({status:"invalid_request"},400);
+      profile.settings = {...profile.settings, weekendNote:input.text.trim(), weekendNoteUpdatedAt:stamp};
     } else if (["record", "remove"].includes(input.action)) {
       if (typeof input.id !== "string" || !/^(place|event):[a-z0-9-]{1,100}$/.test(input.id))
         return json({ status: "invalid_request" }, 400);
@@ -366,27 +376,28 @@ export class NewsCoordinator {
     };
   }
 
-  async dispatch(baselineAt, state) {
+  async dispatch(baselineAt, state, scope = "news") {
     const now = Date.now();
     // Persist every budget before issuing a request which may succeed despite a timeout.
-    const values = { request: { requestedAt: now, baselineAt } };
+    const values = { request: { requestedAt: now, baselineAt, scope } };
+    if (scope === "outings") values.lastOutingRequest = now;
     if (state) values.recovery = state;
     await this.ctx.storage.put(values);
     this.runsCache = null;
     await this.github("/dispatches", {
       method: "POST",
-      body: JSON.stringify({ ref: BRANCH }),
+      body: JSON.stringify({ ref: BRANCH, ...(scope === "outings" ? {inputs:{refresh_outings:"true"}} : {}) }),
     });
     return { status: "running", baselineAt };
   }
 
-  async trigger() {
+  async trigger(scope = "news") {
     const now = Date.now();
     const runs = await this.runs();
     const active = runs.find((r) => r.status !== "completed");
-    if (active) return { status: "running", runId: active.id };
+    if (active) return { status: scope === "outings" ? "busy" : "running", runId: active.id };
     const state = await this.ctx.storage.get("request");
-    const recent = Math.max(
+    const recent = scope === "outings" ? await this.ctx.storage.get("lastOutingRequest") || 0 : Math.max(
       state?.requestedAt || 0,
       ...runs.map((r) => r.created),
     );
@@ -396,9 +407,9 @@ export class NewsCoordinator {
         retryAfter: Math.ceil((MANUAL_INTERVAL - now + recent) / 1000),
       };
     const baselineAt = await this.published();
-    if (now - timestamp(baselineAt) < MANUAL_INTERVAL)
+    if (scope !== "outings" && now - timestamp(baselineAt) < MANUAL_INTERVAL)
       return { status: "fresh", updatedAt: baselineAt };
-    return this.dispatch(baselineAt);
+    return this.dispatch(baselineAt, undefined, scope);
   }
 
   async periodic() {

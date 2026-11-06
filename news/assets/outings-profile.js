@@ -3,7 +3,7 @@
   const key = "news-outing-profile-v1";
   const empty = () => ({ schema: 1, settings: {}, records: [], pending: [] });
   const endpoint = () => document.querySelector('meta[name="news-refresh-endpoint"]')?.content || "";
-  let state, syncing = false, checkedAt = 0, message = "";
+  let state, syncJob = null, checkedAt = 0, message = "";
   try { state = JSON.parse(localStorage.getItem(key)); } catch (_) {}
   try { localStorage.removeItem("news-outing-connection-v1"); } catch (_) {}
   if (!state || !Array.isArray(state.records) || !Array.isArray(state.pending)) state = empty();
@@ -19,7 +19,8 @@
     window.dispatchEvent(new Event("outing-feedback-change"));
   }
   function apply(profile, op) {
-    if (op.action === "settings") profile.settings = { startArea: op.startArea, people: op.people, transport: op.transport };
+    if (op.action === "settings") profile.settings = { ...profile.settings, startArea: op.startArea, people: op.people, transport: op.transport };
+    else if (op.action === "suggestion") profile.settings = {...profile.settings, weekendNote:op.text, weekendNoteUpdatedAt:new Date().toISOString()};
     else {
       profile.records = profile.records.filter(r => r.id !== op.id);
       if (op.action === "record") profile.records.unshift({ id: op.id, title: op.title, status: op.status, ...(op.url?{url:op.url}:{}), ...(op.area?{area:op.area}:{}), ...(op.day?{day:op.day}:{}), updatedAt: new Date().toISOString() });
@@ -40,29 +41,33 @@
       return result;
     } finally { clearTimeout(timer); }
   }
-  async function sync(force) {
-    if (!endpoint() || syncing || !navigator.onLine || (!force && Date.now() - checkedAt < 30000)) return;
+  function sync(force) {
+    if (syncJob) return syncJob;
+    if (!endpoint() || !navigator.onLine || (!force && Date.now() - checkedAt < 30000)) return Promise.resolve();
     window.TonightJournal?.sync(force);
-    syncing = true; checkedAt = Date.now();
-    try {
-      let remote = await request();
-      while (state.pending.length) {
-        const op = state.pending[0];
-        remote = await request(op);
-        // A second tap can replace this operation while the request is in flight.
-        // Remove only the operation that actually reached the server.
-        state.pending = state.pending.filter(p => JSON.stringify(p) !== JSON.stringify(op));
-        try { localStorage.setItem(key, JSON.stringify(state)); } catch (_) {}
-      }
-      state = { ...remote, pending: [] };
-      message = "已自动同步，两台设备共用这些偏好和反馈。";
-    } catch (_) {
-      message = "已保存在本机，暂未同步成功，联网后自动重试。";
-    } finally { syncing = false; checkedAt = Date.now(); changed(); }
+    checkedAt = Date.now();
+    syncJob = (async () => {
+      try {
+        let remote = await request();
+        while (state.pending.length) {
+          const op = state.pending[0];
+          remote = await request(op);
+          // A second tap can replace this operation while the request is in flight.
+          // Remove only the operation that actually reached the server.
+          state.pending = state.pending.filter(p => JSON.stringify(p) !== JSON.stringify(op));
+          try { localStorage.setItem(key, JSON.stringify(state)); } catch (_) {}
+        }
+        state = { ...remote, pending: [] };
+        message = "已自动同步，两台设备共用这些偏好和反馈。";
+      } catch (_) {
+        message = "已保存在本机，暂未同步成功，联网后自动重试。";
+      } finally { checkedAt = Date.now(); changed(); }
+    })().finally(() => { syncJob = null; });
+    return syncJob;
   }
   function update(op) {
     apply(state, op);
-    state.pending = state.pending.filter(p => op.action === "settings" ? p.action !== "settings" : p.id !== op.id);
+    state.pending = state.pending.filter(p => ["settings", "suggestion"].includes(op.action) ? p.action !== op.action : p.id !== op.id);
     state.pending.push(op);
     message = navigator.onLine ? "已保存，正在同步。" : "已保存在本机，联网后自动同步。";
     changed(); sync(true);

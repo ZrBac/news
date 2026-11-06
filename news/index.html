@@ -133,17 +133,32 @@
               <h1 id="section-title" tabindex="-1">每日速览</h1>
             </div>
             <span id="result-count" class="result-count"></span>
-            <button id="outing-browse" class="text-button" hidden>地点库 ↓</button>
           </div>
           <nav id="outing-nav" aria-label="安排时间" hidden>
             <a href="#tonight" data-outing-mode="tonight">今晚</a>
             <a href="#local" data-outing-mode="weekend">周末</a>
-            <button id="outing-records-trigger" class="text-button" aria-controls="outing-records">我们的记录</button>
           </nav>
+          <p id="outing-load-status" class="view-note" hidden></p>
           <div id="outing-records" hidden></div>
           <section id="tonight-plans" aria-label="今晚做点什么" hidden></section>
           <div id="news-listing">
+          <details id="outing-adjust" hidden>
+            <summary>调整推荐</summary>
+            <form id="outing-suggestion-form">
+              <label for="outing-suggestion">这周有什么想法？</label>
+              <textarea id="outing-suggestion" maxlength="600" rows="3" placeholder="比如：想试木工，离五常近一点；这周不想逛书店。"></textarea>
+              <div class="trip-links"><button class="text-button" type="submit">保存建议</button><button id="refresh-outings" class="text-button" type="button">重新找一批</button></div>
+              <p id="outing-suggestion-status" class="trip-note" role="status">两人共用这些建议，下次更新会参考。清空后保存即可撤销。</p>
+            </form>
+            <p class="trip-note">每天 9 点、16 点自动检索。也可以重新查找活动和地点，再按天气与建议筛选；需要几分钟，合适的现有选择也会保留。去过或不感兴趣会避开，新增活动除外。</p>
+            <p class="trip-note">天气来自 <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>，预报时间见详情；营业、价格与余位以主办方确认为准。</p>
+          </details>
+          <p id="outing-refresh-notice" class="view-note" role="status" hidden></p>
           <section id="outing-recommendations" aria-label="本周可选" hidden></section>
+          <details id="outing-library" hidden>
+            <summary>自己找地方 <span id="outing-library-count" class="trip-note"></span></summary>
+            <div id="outing-library-content"></div>
+          </details>
           <div id="outing-catalog-heading" class="outing-section-heading" hidden>
             <h2>地点库</h2>
             <span id="outing-catalog-count"></span>

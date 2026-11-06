@@ -101,7 +101,7 @@
             <div class="trip-links">${status==='want'?`<button class="text-button" data-record-visited="${esc(r.id)}">记为去过</button>`:''}<button class="text-button" data-outing-remove="${esc(r.id)}">撤销</button></div></li>`;
         }).join('')}</ul>${selected.length?'':'<p class="trip-note">在推荐或地点卡片上标记后，会出现在这里。</p>'}</details>`;
     }
-    root.innerHTML=`<details class="our-outings"${open.has('our-outings')?' open':''}><summary>我们的记录 <span class="trip-note">${records.filter(r=>r.status==='want').length} 个想去 · ${journal.length} 条进展</span></summary>
+    root.innerHTML=`<details class="our-outings"${open.has('our-outings')?' open':''}><summary id="outing-records-trigger">我们的记录 <span class="trip-note">${records.length + journal.length} 条</span></summary>
       <p class="trip-note" role="status">${esc(window.OutingProfile.status())}</p>
       ${list('want','想去 / 喜欢')}${list('visited','去过')}
       ${window.NewsTonight?.journalMarkup(open.has('tonight-journal'),formatTime)||''}
@@ -117,7 +117,6 @@
     const expanded = new Set(Array.from(panel.querySelectorAll(".trip-details[open]"),
       (details) => details.closest("li").dataset.tripKey));
     const moreOpen = panel.querySelector("[data-trip-more]")?.getAttribute("aria-expanded") === "true";
-    const attributionOpen = panel.querySelector(".trip-attribution")?.open;
     panel.hidden = true;
     panel.innerHTML = "";
     const profileOnly = () => { panel.hidden = false; panel.innerHTML = `<p class="trip-note">本周推荐正在核对；可以先从地点库选玩法。</p>`; window.OutingProfile?.sync(false); };
@@ -168,12 +167,12 @@
         ? `<button class="text-button" data-trip-place="${esc(p.placeId)}">路线与条件</button>` : "";
       const newsLinks = (Array.isArray(p.news) ? p.news : []).filter(n => url(n.url) && validDate(n.publishedAt)).slice(0, 1);
       return `<li data-trip-key="${esc(key)}" data-outing-id="${esc(p.id)}"${index > 3 ? ` data-trip-extra${moreOpen ? "" : " hidden"}` : ""}>
-        <p class="trip-kind">${primary?"限时活动":p.dynamic?"新收录地点":"常设去处"} · ${esc(types[p.type] || "出游")} · ${esc({indoor:"室内",outdoor:"室外",mixed:"含室外区域",unknown:"场地待确认"}[p.setting] || "场地待确认")}</p>
+        <p class="trip-kind">${primary?"限时活动":p.dynamic?"新收录":"常设去处"} · ${esc({indoor:"室内",outdoor:"室外",mixed:"含室外区域",unknown:"场地待确认"}[p.setting] || "场地待确认")}</p>
         <h3>${esc(p.name)}</h3><p class="trip-reason">${esc((p.summary || (primary ? p.reason : (p.details || '').split(/。/)[0]+'。') || p.reason).slice(0,110))}</p>
         <p class="trip-location">${esc(p.day.slice(5).replace('-','/'))} · ${esc(p.area || region.name)}</p>
-        <p class="trip-practical">${esc(cost || '费用待确认')} · ${esc(booking || '预约情况见来源')}</p>
-        <p class="trip-weather">${esc(region.name)} · ${esc(p.day.slice(5))} ${esc(weatherNames[w.code] || "天气预报")} ${esc(Math.round(w.low))}—${esc(Math.round(w.high))}℃ · 降水概率 ${esc(w.rainProbability)}%</p>
-        <details class="trip-details"${expanded.has(key) ? " open" : ""}><summary>查看安排与来源</summary>
+        <div class="trip-actions"><details class="trip-details"${expanded.has(key) ? " open" : ""}><summary>详情</summary>
+          <p class="trip-weather">${esc(region.name)} · ${esc(p.day.slice(5))} ${esc(weatherNames[w.code] || "天气预报")} ${esc(Math.round(w.low))}—${esc(Math.round(w.high))}℃ · 降水概率 ${esc(w.rainProbability)}%</p>
+          <p class="trip-note">预报获取于 ${esc(formatTime(trip.weather.updatedAt))}</p>
           <p><strong>为什么推荐：</strong>${esc(p.reason)}</p>
 
           ${primary && p.settingEvidence ? `<p><strong>场地依据：</strong>${esc(p.settingEvidence)}</p>` : ""}
@@ -183,15 +182,15 @@
           ${newsLinks.map(n => `<p class="trip-news"><a href="${esc(url(n.url))}" target="_blank" rel="noopener noreferrer">${esc(n.title)} ↗</a><span>报道 ${esc(formatTime(n.publishedAt))}</span></p>`).join("")}
           <div class="trip-links">${reference}${p.mapUrl && url(p.mapUrl) ? `<a href="${esc(url(p.mapUrl))}" target="_blank" rel="noopener noreferrer">地图 ↗</a>` : ""}${p.bookingUrl && url(p.bookingUrl) ? `<a href="${esc(url(p.bookingUrl))}" target="_blank" rel="noopener noreferrer">预约入口 ↗</a>` : ""}${links.map(l => `<a href="${esc(url(l.url))}" target="_blank" rel="noopener noreferrer">${esc(l.label || "来源原文")} ↗</a>`).join("")}</div>
           ${p.verifiedAt ? `<p class="trip-note">来源核对 ${esc(formatTime(p.verifiedAt))}；开放、费用与余位以主办方最新公告为准。</p>` : ""}
+          <div class="trip-feedback">${Object.entries(statuses).filter(([value])=>value!=='want').map(([value,label]) => `<button class="text-button" data-outing-feedback="${value}" aria-pressed="${record?.status === value}">${label}</button>`).join("")}</div>
         </details>
-        <div class="trip-feedback">${Object.entries(statuses).map(([value,label]) => `<button class="text-button" data-outing-feedback="${value}" aria-pressed="${record?.status === value}">${label}</button>`).join("")}</div>
+        <button class="text-button trip-want" data-outing-feedback="want" aria-pressed="${record?.status==='want'}">${record?.status==='want'?'已想去':'想去'}</button></div>
       </li>`;
     }).join("");
     panel.innerHTML = `<div class="trip-heading"><h2>本周可选</h2><span>${esc(trip.weekendStart.slice(5).replace('-','/'))}—${esc(trip.weekendEnd.slice(5).replace('-','/'))}</span></div>
       <p class="trip-note">${suggestions.length} 个选择 · ${suggestions.filter(p=>p.discovery).length} 个限时活动 · ${updated} 核对${stale?' · 本轮暂未更新完成':''}</p>
-      ${suggestions.length?`<ul class="trip-list trip-discoveries">${cards(suggestions)}</ul>`:'<p class="trip-empty">暂未核实到符合日期和天气条件的安排，先看看地点库。</p>'}
-      ${suggestions.length>4?`<button class="text-button" data-trip-more aria-expanded="${moreOpen}">${moreOpen?'收起':`再看 ${suggestions.length-4} 个选择`}</button>`:''}
-      <details class="trip-attribution"${attributionOpen?' open':''}><summary>筛选与更新</summary><p class="trip-note">每天9点、16点检索并核对来源，发布需要几分钟。先选不同玩法，再补充常设去处；不会把新收录写成新开放。去过或不感兴趣会避开，新增活动除外。<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">天气</a> ${esc(formatTime(trip.weather.updatedAt))} 获取。营业、价格与余位以主办方确认为准。</p></details>`;
+      ${suggestions.length?`<ul class="trip-list trip-discoveries">${cards(suggestions)}</ul>`:'<p class="trip-empty">暂未核实到符合建议、日期和天气条件的安排，可以调整建议或自己找地方。</p>'}
+      ${suggestions.length>4?`<button class="text-button" data-trip-more aria-expanded="${moreOpen}">${moreOpen?'收起':`再看 ${suggestions.length-4} 个选择`}</button>`:''}`;
     window.OutingProfile?.sync(false);
   }
   document.addEventListener("submit", event => {

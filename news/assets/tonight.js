@@ -151,11 +151,11 @@
       return `<li data-tonight-id="${esc(p.id)}"${i >= 3 ? ` data-tonight-extra${expanded ? "" : " hidden"}` : ""}>
         <p class="trip-kind">${place} · ${esc(p.kind)} · ${esc(p.minutes)} 分钟${p.setting !== "home" ? "，路程另计" : ""}${p.project && p.progress ? ` · 已记 ${p.sessions} 次` : ""}</p>
         <h3>${esc(p.progress ? p.name : p.starter || p.name)}</h3><p class="tonight-summary">${esc(p.summary)}</p>
-        ${p.project ? `<p class="tonight-output"><strong>留下：</strong>${esc(p.project.outcome)}</p>` : ""}
         ${p.project && p.progress ? `<div class="tonight-continuation"><p class="tonight-last-note"><strong>上次：</strong>${esc(p.progress.note)}</p>
           <p class="tonight-next"><strong>今晚接着：</strong>${esc(p.progress.next || p.project.next)}</p></div>` : ""}
         ${p.live ? `<p class="trip-weather">今天 ${esc(p.startTime)}—${esc(p.endTime)} · ${esc(p.area)}</p>` : ""}
-        <details class="tonight-details"${open.has(p.id) ? " open" : ""}><summary>${p.live ? "时段、报名与来源" : p.project ? "怎么开始 / 准备什么" : "怎么玩 / 准备什么"}</summary>
+        <details class="tonight-details"${open.has(p.id) ? " open" : ""}><summary>${p.live ? "活动详情" : "做法与准备"}</summary>
+          ${p.project ? `<p class="tonight-output"><strong>留下：</strong>${esc(p.project.outcome)}</p>` : ""}
           ${p.starter ? `<p class="tonight-starter"><strong>第一次可以试：</strong>${esc(p.starter)}</p>` : ""}
           <p><strong>准备：</strong>${esc(p.materials)}</p><ol>${p.steps.map(s => `<li>${esc(s)}</li>`).join("")}</ol>
           ${p.project && !p.progress ? `<p><strong>下次：</strong>${esc(p.project.next)}</p>` : ""}
@@ -165,9 +165,9 @@
           ${p.live ? (p.sources || []).filter(s => safeUrl(s.url)).slice(0,2).map(s => `<a href="${esc(safeUrl(s.url))}" target="_blank" rel="noopener noreferrer">${esc(s.label || "来源原文")} ↗</a>`).join("") : ""}
           ${p.live && safeUrl(p.bookingUrl) ? `<a href="${esc(safeUrl(p.bookingUrl))}" target="_blank" rel="noopener noreferrer">报名入口 ↗</a>` : ""}</div>
           ${p.live ? `<p class="trip-note">来源核对 ${esc(formatTime(p.verifiedAt))}；不代表实时余位。</p>` : ""}
+          <div class="trip-feedback">${[...(!p.project ? [["visited","玩过"]] : []),["want","喜欢"],["dismiss","不感兴趣"]].map(([key,label]) => `<button class="text-button" data-tonight-feedback="${key}" aria-pressed="${key === "want" && p.liked}">${label}</button>`).join("")}</div>
         </details>
         ${p.project ? recordingMarkup(p, recordingOpen.has(p.id)) : ""}
-        <div class="trip-feedback">${[...(!p.project ? [["visited","玩过"]] : []),["want","喜欢"],["dismiss","不感兴趣"]].map(([key,label]) => `<button class="text-button" data-tonight-feedback="${key}" aria-pressed="${key === "want" && p.liked}">${label}</button>`).join("")}</div>
       </li>`;
     }).join("");
     panel.innerHTML = `<div class="trip-heading"><h2>今晚做点什么</h2><span>${esc(today.slice(5).replace("-","/"))}</span></div>

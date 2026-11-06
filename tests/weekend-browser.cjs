@@ -171,6 +171,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert(await page.locator('#weekend-tools').isHidden());
     assert(await page.locator('#source-filter').isHidden());
     assert.equal(await page.locator('#outing-catalog-heading #result-count').count(), 1);
+    if (await page.locator('#outing-library').getAttribute('open') === null) await page.locator('#outing-library > summary').click();
     await page.locator('#outing-filter-toggle').click();
     assert.equal(await page.locator('[data-filter="local"]').count(), 0);
     assert.equal(
@@ -438,6 +439,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       0,
     );
     await page.locator('[data-view="local"]').click();
+    if (await page.locator('#outing-library').getAttribute('open') === null) await page.locator('#outing-library > summary').click();
     await page.locator('#outing-filter-toggle').click();
     for (const group of [
       "hiking-places",
@@ -491,6 +493,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.waitForFunction(() => !!navigator.serviceWorker.controller);
     await context.setOffline(true);
     await page.reload();
+    if (await page.locator("#outing-library").isVisible() && await page.locator("#outing-library").getAttribute("open") === null) await page.locator("#outing-library > summary").click();
     await page.evaluate(() => window.newsInitialLoad);
     assert.equal(await page.locator(".article").count(), 3);
     assert.deepEqual(

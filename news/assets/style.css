@@ -202,7 +202,8 @@ span[data-icon] {
 }
 .skip-link {
   position: fixed;
-  top: -60px;
+  top: 0;
+  transform: translateY(-150%);
   left: 20px;
   z-index: 100;
   background: var(--ink);
@@ -211,6 +212,7 @@ span[data-icon] {
 }
 .skip-link:focus {
   top: 10px;
+  transform: none;
 }
 .header {
   border-top: 3px solid var(--ink);
@@ -1817,4 +1819,18 @@ dialog::backdrop {
   .our-outings > summary { flex-wrap: wrap; }
   #place-catalog-status { font-size: 11px; text-align: right; }
 }
-#outing-nav #outing-records-trigger { margin-left: auto; font-size: 12px; color: var(--muted); border: 0; }
+.outings-view .section-heading { margin-bottom: 10px; }
+.outings-view #outing-catalog-heading h2 { display: none; }
+#outing-library { margin-top: 18px; border-top: 1px solid var(--line); padding-top: 10px; }
+#outing-library > summary { padding: 12px 0; cursor: pointer; font-size: 15px; }
+#outing-library-count { margin-left: 8px; }
+#outing-adjust { margin: 0 0 4px; font-size: 13px; }
+#outing-adjust > summary { min-height: 36px; padding: 8px 0; cursor: pointer; color: var(--secondary); }
+#outing-adjust[open] { padding-bottom: 12px; }
+#outing-suggestion-form label { display: block; margin: 8px 0; }
+#outing-suggestion { box-sizing: border-box; display: block; width: 100%; max-width: 100%; resize: vertical; border: 1px solid var(--line); border-radius: 5px; padding: 9px; background: var(--paper); color: var(--ink); font: 16px/1.6 var(--sans); }
+.trip-actions { position: relative; }
+.trip-actions .trip-details > summary { padding-right: 75px; }
+.trip-want { position: absolute; top: 0; right: 0; min-height: 44px; font-size: 12px; }
+.trip-want[aria-pressed="true"] { color: var(--accent); }
+.tonight-summary { display: -webkit-box; -webkit-box-orient: vertical; -webkit-line-clamp: 2; overflow: hidden; }

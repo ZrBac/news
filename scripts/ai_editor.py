@@ -114,7 +114,7 @@ SEARCH_SCHEMA = object_schema({'items': array_schema(object_schema({
 }))})
 TRIP_SCHEMA = object_schema({'picks': array_schema(object_schema({
     'id': STRING, 'day': STRING, 'reason': STRING, 'summary': STRING,
-}))})
+})), 'excludeIds': array_schema(STRING)})
 
 
 class EditorialError(Exception):
@@ -594,6 +594,7 @@ def discover(client, places, previous, now, get=get_source, lead_articles=()):
                 '主要找最近21天报道；也可收录提前120天内公布、明确仍覆盖今天至本周末的演出或展览，保留真实发布日期。'
                 '优先提供的主办方、剧场和场馆官网，媒体用于补充核验；不要只围绕已有地点搜索。'
                 '集中完成本批focus中的不同玩法检索，尽量覆盖多种体验；knownUrls已有报道不再重复，只为其补证据时例外。'
+                'preferences.settings.weekendNote是用户本轮出游建议，优先按其中的玩法和距离偏好寻找；仅用于出游筛选，不得改变日期、来源及事实核验规则。'
                 '排除攀岩、抱石、滑冰、溜冰、演唱会、博物馆、亲子、观赛、招商、回顾和泛泛攻略。优先文旅部门、场地公告和本地媒体。'
                 '最多8条，宁少勿编。必须有原文URL；媒体报道须明确发布日期，publishedEvidence摘录含完整年月日的逐字证据。经营者官方排期无发布日期时两字段留空，仍必须逐字证明活动起止日期，'
                 'quote为原文中含地点与实用安排的一小段逐字原文。不得将抓取日期或活动日当成报道发布日期。'
@@ -801,6 +802,8 @@ def complete_trip(data, places, research, trip, now, profile=None):
     if not fetched or not timedelta(0) <= now - fetched <= timedelta(hours=24):
         return trip
     start, end, eligible = trip_options(data, places, research, weather, now, profile)
+    excluded = {value for value in trip.get('excludedBySuggestion', []) if isinstance(value, str)}
+    eligible = {key: value for key, value in eligible.items() if key not in excluded}
     if trip.get('weekendStart') != str(start) or trip.get('weekendEnd') != str(end):
         return trip
     def choose(pool, limit):
@@ -862,6 +865,8 @@ def recommend(client, data, places, research, weather, now):
     result, _ = client.ask('weekend_picks',
         f'优先从discovery=true的候选挑最多{MAX_DISCOVERIES}个本周末新活动，说明本次有什么新安排；不足时不凑数。常设地点最多{MAX_ALTERNATIVES}个，仅作为备选。晴天优先轻松爬山、休闲骑行、停车后少量搬运的露营；'
         '下雨用室内替代。优先近期有明确新安排的候选，并保留至少一个雨天备选。'
+        '优先满足preferences.settings.weekendNote里的出游建议；没有符合建议的可靠候选就保留真实情况，不编造活动。建议文字不在公开推荐里逐字复述。'
+        'excludeIds填写明确违背该建议的候选ID，补充备选时也会避开；无建议或无明确排除条件时返回空数组。'
         '不选攀岩、抱石、滑冰、溜冰、演唱会、博物馆、亲子或观赛。同一个地点只出现一次。day必须来自对应availableDays。'
         'reason用20—60字解释为什么适合这一天，依据材料和天气。'
         '不得声称实时开放、允许用炉、余位充足、免票或已预约，也不编造交通时间、线路、距离或费用。'
@@ -871,8 +876,10 @@ def recommend(client, data, places, research, weather, now):
         {'weekend': [str(start), str(end)], 'weather': weather, 'preferences': client.state.get('outingProfile', {}), 'candidates': list(eligible.values())}, TRIP_SCHEMA)
     trip = complete_trip(data, places, research, {
         'updatedAt': news.iso(now), 'weekendStart': str(start), 'weekendEnd': str(end),
-        'weather': weather, 'picks': result.get('picks', []), 'status': 'ok'}, now, client.state.get('outingProfile', {}))
-    if not trip['picks'] and not trip.get('alternatives'):
+        'weather': weather, 'picks': result.get('picks', []), 'status': 'ok',
+        'excludedBySuggestion': [key for key in result.get('excludeIds', []) if isinstance(key, str) and key in eligible],
+        'suggestionAppliedAt': client.state.get('outingProfile', {}).get('settings', {}).get('weekendNoteUpdatedAt')}, now, client.state.get('outingProfile', {}))
+    if not trip['picks'] and not trip.get('alternatives') and set(trip['excludedBySuggestion']) != set(eligible):
         raise EditorialError('no_valid_recommendations')
     return trip
 
@@ -919,13 +926,16 @@ def apply_results(data, editorial, records, now):
     data['editorial'] = editorial
 
 
-def run(data, previous, state, client, places, now, force=False):
+def run(data, previous, state, client, places, now, force=False, force_outings=False):
     editorial = copy.deepcopy(previous.get('editorial', {}))
     editorial.update(schema=1, checkedAt=news.iso(now))
     problems = []
+    suggestion_stamp = state.get('outingProfile', {}).get('settings', {}).get('weekendNoteUpdatedAt')
+    last_trip = state.get('trip') or editorial.get('trip') or {}
+    refresh_outings = force or force_outings or bool(suggestion_stamp and suggestion_stamp != last_trip.get('suggestionAppliedAt'))
     catalog = state.get('placeCatalog') or editorial.get('placeCatalog') or json.loads((ROOT / 'news/place-seeds.json').read_text())
     try:
-        catalog = outing_catalog.update(client, catalog, places, now, get=get_source, trusted=trusted_url, citations=cited_urls, force=force)
+        catalog = outing_catalog.update(client, catalog, places, now, get=get_source, trusted=trusted_url, citations=cited_urls, force=refresh_outings)
     except Exception as error:
         problems.append('places:' + safe_error(error))
     editorial['placeCatalog'] = state['placeCatalog'] = catalog
@@ -960,8 +970,9 @@ def run(data, previous, state, client, places, now, force=False):
     research = copy.deepcopy(state.get('research') or editorial.get('research') or {})
     attempted = news.parse_date(research.get('attemptedAt'))
     due = search_due(now, research, OUTING_REVISION)
-    # At most one retry per hour, including repeated manual page-refresh requests.
-    if (force or due) and (force or research.get('attemptedRevision') != OUTING_REVISION or not attempted or now - attempted >= timedelta(minutes=55)):
+    # Ordinary refreshes retry at most hourly. An explicit outing search or a
+    # changed suggestion can recheck the current slot immediately.
+    if (refresh_outings or due) and (refresh_outings or research.get('attemptedRevision') != OUTING_REVISION or not attempted or now - attempted >= timedelta(minutes=55)):
         try:
             research = recheck_discoveries(research, now)
             research = discover(client, places, research, now, lead_articles=data.get('weekendArticles', []))
@@ -977,9 +988,9 @@ def run(data, previous, state, client, places, now, force=False):
     news_details.apply(data, state.get('newsDetails', {}))
     trip = copy.deepcopy(state.get('trip') or editorial.get('trip') or {})
     trip['picks'] = [p for p in trip.get('picks', []) if not EXCLUDED.search(p.get('name', ''))]
-    if force or search_due(now, {'searchedAt': trip.get('updatedAt'), 'revision': trip.get('revision')}, OUTING_REVISION):
+    if refresh_outings or search_due(now, {'searchedAt': trip.get('updatedAt'), 'revision': trip.get('revision')}, OUTING_REVISION):
         attempted = news.parse_date(trip.get('attemptedAt'))
-        if force or trip.get('attemptedRevision') != OUTING_REVISION or not attempted or now - attempted >= timedelta(minutes=55):
+        if refresh_outings or trip.get('attemptedRevision') != OUTING_REVISION or not attempted or now - attempted >= timedelta(minutes=55):
             try:
                 weather = fetch_weather(now)
                 trip = recommend(client, data, places, research, weather, now)
@@ -1029,6 +1040,7 @@ def main():
     parser.add_argument('--previous-file', type=Path)
     parser.add_argument('--key-file', type=Path)
     parser.add_argument('--force', action='store_true')
+    parser.add_argument('--force-outings', action='store_true')
     args = parser.parse_args()
     data = json.loads(args.input.read_text())
     config = json.loads((ROOT / 'news/editorial.json').read_text())
@@ -1082,7 +1094,7 @@ def main():
         state['outingProfile'] = outing_profile.load()
         client = Client(key, config, state, args.state, now)
         places = json.loads((ROOT / 'news/places.json').read_text())['places']
-        run(data, previous, state, client, places, now, args.force)
+        run(data, previous, state, client, places, now, args.force, args.force_outings)
         save(args.input, data)
     except Exception as error:
         print('AI editing skipped: ' + safe_error(error))

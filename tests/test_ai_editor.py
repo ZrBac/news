@@ -441,6 +441,42 @@ class EditorialTests(unittest.TestCase):
         self.assertEqual(len(result['alternatives']), 3)
         self.assertTrue(all(p['day'] == '2026-11-08' for p in result['alternatives']))
 
+    def test_suggestion_exclusions_are_not_filled_back_and_all_excluded_is_honest_empty(self):
+        places, trip = self.trip_fixture()
+        client = Mock()
+        client.state = {'outingProfile': {'settings': {'weekendNote': '不想去这些地方', 'weekendNoteUpdatedAt': '2026-11-02T07:59:00Z'}}}
+        client.ask.return_value = ({'picks': [], 'excludeIds': ['place:book']}, {})
+        result = ai.recommend(client, {}, places, {}, trip['weather'], self.now)
+        self.assertNotIn('place:book', {p['id'] for p in result['alternatives']})
+        again = ai.complete_trip({}, places, {}, result, self.now)
+        self.assertNotIn('place:book', {p['id'] for p in again['alternatives']})
+        self.assertEqual(result['suggestionAppliedAt'], '2026-11-02T07:59:00Z')
+        self.assertEqual(client.ask.call_args.args[2]['preferences']['settings']['weekendNote'], '不想去这些地方')
+        client.ask.return_value = ({'picks': [], 'excludeIds': ['place:book', 'place:craft', 'place:theatre']}, {})
+        result = ai.recommend(client, {}, places, {}, trip['weather'], self.now)
+        self.assertEqual(result['picks'] + result['alternatives'], [])
+        self.assertEqual(result['status'], 'ok')
+
+    def test_manual_outing_search_bypasses_slot_without_forcing_evening_topics(self):
+        places, trip = self.trip_fixture()
+        previous = {'editorial': {'trip': trip, 'research': {'items': [], 'revision': ai.OUTING_REVISION,
+            'searchedAt': trip['updatedAt'], 'attemptedAt': trip['attemptedAt'], 'attemptedRevision': ai.OUTING_REVISION}}}
+        with tempfile.TemporaryDirectory() as folder:
+            client = ai.Client('x', self.config, {}, Path(folder) / 'state.json', self.now, Mock(side_effect=AssertionError('Unexpected API call')))
+            with patch.object(ai.outing_catalog, 'update', return_value={'places': []}) as catalog, \
+                 patch.object(ai.tonight_plans, 'update_home', return_value={}) as home, \
+                 patch.object(ai, 'edit_news', return_value={}), patch.object(ai.news_details, 'update', return_value={}), \
+                 patch.object(ai, 'recheck_discoveries', side_effect=lambda research, now: research), \
+                 patch.object(ai, 'discover', return_value={'items': []}) as discover, \
+                 patch.object(ai, 'fetch_weather', return_value=trip['weather']) as weather, \
+                 patch.object(ai, 'recommend', return_value=trip) as recommend:
+                ai.run({}, previous, client.state, client, places, self.now, force_outings=True)
+            self.assertTrue(catalog.call_args.kwargs['force'])
+            self.assertFalse(home.call_args.args[3])
+            discover.assert_called_once()
+            weather.assert_called_once()
+            recommend.assert_called_once()
+
     def test_api_failure_keeps_previous_research_and_does_not_advance_success(self):
         state = {}
         previous = {'editorial': {'research': {'items': [], 'searchedAt': '2026-11-01T08:00:00Z', 'revision': ai.REVISION},

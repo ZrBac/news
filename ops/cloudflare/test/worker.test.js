@@ -34,6 +34,7 @@ function harness(t, initial = {}) {
     runs: [],
     updatedAt: iso(NOW - 3 * HOUR),
     dispatches: 0,
+    expectedDispatch: {ref:"main"},
     queries: 0,
     fail: null,
     stored,
@@ -54,7 +55,7 @@ function harness(t, initial = {}) {
     assert.equal(options.headers.Authorization, "Bearer test-only");
     if (url.endsWith("/dispatches")) {
       h.dispatches++;
-      assert.deepEqual(JSON.parse(options.body), { ref: "main" });
+      assert.deepEqual(JSON.parse(options.body), h.expectedDispatch);
       assert(stored.has("request"), "cooldown must be durable before dispatch");
       if (h.fail === "dispatch") throw new Error("timeout");
       return new Response(null, { status: 204 });
@@ -293,4 +294,37 @@ test("staging flags prevent both manual and scheduled dispatch", async (t) => {
   assert.equal((await h.public()).status, 503);
   await worker.scheduled({}, h.env);
   assert.equal(h.dispatches, 0);
+});
+
+test("outing refresh bypasses a fresh publication and survives restart with its own cooldown", async t => {
+  const h = harness(t, {request:{requestedAt:NOW, baselineAt:iso(NOW-HOUR),scope:"news"}});
+  h.updatedAt = iso(NOW);
+  h.runs = [{id:123,status:"completed",conclusion:"success",created_at:iso(NOW-60_000)}];
+  h.expectedDispatch = {ref:"main",inputs:{refresh_outings:"true"}};
+  const call = async () => (await h.public(undefined,{body:JSON.stringify({scope:"outings"})})).json();
+  assert.equal((await call()).status,"running");
+  assert.equal(h.dispatches,1);
+  h.restart();
+  assert.equal((await call()).status,"cooldown");
+  h.advance(15*60_000+1);
+  assert.equal((await call()).status,"running");
+  assert.equal(h.dispatches,2);
+});
+
+test("outing search does not claim an ordinary active run as its requested re-search", async t => {
+  const h=harness(t);
+  h.runs=[{id:123,status:"in_progress",created_at:iso(NOW-60_000)}];
+  const result=await (await h.public(undefined,{body:'{"scope":"outings"}'})).json();
+  assert.equal(result.status,"busy");
+  assert.equal(h.dispatches,0);
+});
+
+test("parallel outing searches dispatch once and reject unsupported scopes", async t => {
+  const h=harness(t);
+  for(const body of ['null','[]','{"scope":"other"}','{"scope":"outings","ref":"other"}'])
+    assert.equal((await h.public(undefined,{body})).status,400);
+  h.expectedDispatch={ref:"main",inputs:{refresh_outings:"true"}};
+  const requests=await Promise.all([h.public(undefined,{body:'{"scope":"outings"}'}),h.public(undefined,{body:'{"scope":"outings"}'})]);
+  assert.deepEqual(await Promise.all(requests.map(r=>r.json().then(r=>r.status))),["running","cooldown"]);
+  assert.equal(h.dispatches,1);
 });

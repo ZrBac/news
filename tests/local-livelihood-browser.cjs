@@ -143,6 +143,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         )
         .click();
       if (category === "local") {
+        if (await page.locator('#outing-library').getAttribute('open') === null) await page.locator('#outing-library > summary').click();
         await page.locator('#outing-filter-toggle').click();
         await page.locator('[data-outing-range="recent"]').click();
       }
@@ -210,6 +211,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
         )
         .click();
       if (category === "local") {
+        if (await page.locator('#outing-library').getAttribute('open') === null) await page.locator('#outing-library > summary').click();
         await page.locator('#outing-filter-toggle').click();
         await page.locator('[data-outing-range="recent"]').click();
       }
@@ -250,6 +252,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator(".reading-options > summary").click();
     await page.goto(base + "/#local");
     await page.evaluate(() => window.newsInitialLoad);
+    if (await page.locator('#outing-library').getAttribute('open') === null) await page.locator('#outing-library > summary').click();
     await page.locator('#outing-filter-toggle').click();
     await page.locator('[data-outing-range="recent"]').click();
     await page.evaluate(() => navigator.serviceWorker.ready);
@@ -265,6 +268,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await context.setOffline(true);
     await page.reload();
     await page.evaluate(() => window.newsInitialLoad);
+    if (await page.locator('#outing-library').getAttribute('open') === null) await page.locator('#outing-library > summary').click();
     await page.locator('#outing-filter-toggle').click();
     await page.locator('[data-outing-range="recent"]').click();
     await page.waitForFunction(

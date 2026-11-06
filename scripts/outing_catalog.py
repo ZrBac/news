@@ -87,9 +87,11 @@ def update(client, previous, base, now, *, get, trusted, citations, force=False)
                 '不要只围绕known中的地点搜索，不重复known。不要博物馆、亲子、演唱会、攀岩、滑冰、观赛或泛泛逛商场。'
                 'name、area、description、conditions必须分别是原文逐字连续片段；area应包含杭州或所处区县名。'
                 'description用15—120字说明在这个地点能实际玩什么；不摘录优惠、保证营业或宣传口号。'
+                'weekendSuggestion是出游建议，优先寻找符合其中玩法和距离偏好的地方，仍须遵守来源核验要求。'
                 '只收常设地点，不把过期市集、一次性课程、已结束演出变成常设项目。'
                 '雨天地点必须有室内场馆或工作室等证据。地点不等于已预约，不编造车程、价格、允许用炉或余位。',
-                {'today':today,'focus':focus,'known':[p['name'] for p in base+places+added]}, SCHEMA, research=True)
+                {'today':today,'focus':focus,'weekendSuggestion':client.state.get('outingProfile',{}).get('settings',{}).get('weekendNote',''),
+                 'known':[p['name'] for p in base+places+added]}, SCHEMA, research=True)
             items = answer.get('places',[])[:8]
             urls = citations(response)
             def read(item):

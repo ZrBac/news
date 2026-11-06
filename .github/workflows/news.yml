@@ -38,6 +38,7 @@ jobs:
           node --check news/assets/exchange-core.js
           node --check news/assets/editorial.js
           node --check news/assets/tonight.js
+          node --check news/assets/outing-now.js
           node --check news/assets/outings-profile.js
           node --check news/assets/outings-library.js
           node --test tests/exchange-core.cjs

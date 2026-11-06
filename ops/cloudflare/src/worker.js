@@ -1,3 +1,5 @@
+import { generateAdvice, inputValid, readJSON } from "./outing-now.js";
+
 const ORIGINS = new Set(["https://news.zacai.fun", "http://news.zacai.fun"]);
 const API = "/api/news-refresh";
 const WORKFLOW =
@@ -70,6 +72,36 @@ export default {
       return response;
     };
     const { pathname, search, searchParams } = new URL(request.url);
+    if (pathname === "/api/outings/now" && !search) {
+      if (!ORIGINS.has(origin)) return reply({status:"forbidden"}, 403);
+      if (request.method === "OPTIONS") return reply({status:"ok"});
+      if (request.method !== "POST") return reply({status:"method_not_allowed"}, 405);
+      let input;
+      try { input = await readJSON(request, 4096); }
+      catch { return reply({status:"invalid_request"}, 400); }
+      if (!inputValid(input)) return reply({status:"invalid_request"}, 400);
+      if (!env.OPENAI_API_KEY) return reply({status:"unavailable"}, 503);
+      const gate = env.COORDINATOR.get(env.COORDINATOR.idFromName("outing-advice"));
+      let lease;
+      try {
+        const {success} = await env.REQUEST_LIMITER.limit({key:"outing-now:" + (request.headers.get("CF-Connecting-IP") || "unknown")});
+        if (!success) return reply({status:"busy",retryAfter:60}, 429);
+        const permit = await gate.fetch(new Request("https://internal/advice-acquire", {method:"POST"}));
+        const reservation = await permit.json();
+        if (!permit.ok) return reply(reservation, permit.status);
+        lease = reservation.lease;
+        return reply(await generateAdvice(env, input));
+      } catch (error) {
+        const status = error.message === "timeout" ? "timeout" : error.message === "upstream_busy" ? "busy" : "unavailable";
+        console.error(JSON.stringify({event:"outing_now_failed",status}));
+        return reply({status}, status === "timeout" ? 504 : status === "busy" ? 429 : 503);
+      } finally {
+        if (lease) {
+          try { await gate.fetch(new Request("https://internal/advice-release", {method:"POST",body:JSON.stringify({lease})})); }
+          catch { /* Leases also expire, including after a disconnected client. */ }
+        }
+      }
+    }
     const outingRoute = {"/api/outings/profile":"/outing-profile", "/api/outings/journal":"/outing-journal"}[pathname];
     const journalVersion = pathname === "/api/outings/journal" && /^\?version=\d{1,15}$/.test(search);
     // These are shared website records, intentionally without visitor identity.
@@ -167,6 +199,7 @@ export class NewsCoordinator {
         if (Date.now() < this.errorUntil)
           return json({ status: "unavailable" }, 503);
         const action = new URL(request.url).pathname;
+        if (["/advice-acquire", "/advice-release"].includes(action) && request.method === "POST") return await this.advicePermit(action, request);
         if (action === "/outing-profile") return await this.outingProfile(request);
         if (action === "/outing-journal") return await this.outingJournal(request);
         if (action === "/status") return json(await this.status());
@@ -186,6 +219,25 @@ export class NewsCoordinator {
         return json({ status: "unavailable" }, 503);
       }
     });
+  }
+
+  async advicePermit(action, request) {
+    const now = Date.now();
+    const saved = await this.ctx.storage.get("advicePermit") || {leases:[], recent:[]};
+    saved.leases = saved.leases.filter(l => l.expires > now);
+    saved.recent = saved.recent.filter(t => t > now - 60000);
+    if (action === "/advice-release") {
+      const {lease} = await request.json();
+      saved.leases = saved.leases.filter(l => l.id !== lease);
+      await this.ctx.storage.put("advicePermit", saved);
+      return json({status:"ok"});
+    }
+    if (saved.leases.length >= 2 || saved.recent.length >= 6) return json({status:"busy",retryAfter:30}, 429);
+    const lease = crypto.randomUUID();
+    saved.leases.push({id:lease, expires:now + 65000});
+    saved.recent.push(now);
+    await this.ctx.storage.put("advicePermit", saved);
+    return json({status:"ok",lease});
   }
 
   async outingProfile(request) {

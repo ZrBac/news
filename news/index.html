@@ -73,6 +73,7 @@
     <script src="/assets/news/tonight-data.js" defer></script>
     <script src="/assets/news/tonight-journal.js" defer></script>
     <script src="/assets/news/tonight.js" defer></script>
+    <script src="/assets/news/outing-now.js" defer></script>
     <script src="/assets/news/app.js" defer></script>
     <script src="/assets/news/pwa.js" defer></script>
   </head>
@@ -139,6 +140,20 @@
             <a href="#local" data-outing-mode="weekend">周末</a>
           </nav>
           <p id="outing-load-status" class="view-note" hidden></p>
+          <details id="outing-now" hidden>
+            <summary>现在做什么 <span>即时建议</span></summary>
+            <form id="outing-now-form">
+              <div class="outing-now-options">
+                <label>有多少时间<select id="outing-now-minutes"><option value="30">半小时</option><option value="60" selected>1 小时</option><option value="120">2 小时</option><option value="240">半天</option></select></label>
+                <label>想在哪里<select id="outing-now-setting"><option value="auto">帮我选</option><option value="home">在家</option><option value="outside">出门</option></select></label>
+              </div>
+              <label class="outing-now-note" for="outing-now-note">补充一句 <span>选填</span></label>
+              <textarea id="outing-now-note" maxlength="300" rows="2" placeholder="比如：刚到家有点累，想做点能积累的；或想在附近走走。"></textarea>
+              <div class="trip-links"><button type="submit" id="outing-now-submit" class="text-button">给我建议</button><button type="button" id="outing-now-cancel" class="text-button" hidden>取消等待</button></div>
+            </form>
+            <p id="outing-now-status" class="trip-note" role="status" aria-live="polite">按当前时间、五常附近天气和共用偏好，现想几个可做的安排。</p>
+            <section id="outing-now-result" aria-label="即时建议结果" hidden></section>
+          </details>
           <div id="outing-records" hidden></div>
           <section id="tonight-plans" aria-label="今晚做点什么" hidden></section>
           <div id="news-listing">

@@ -1029,6 +1029,7 @@
     $("#outing-news-panel").hidden = !outings;
     renderOutingLayout();
     $("#outing-nav").hidden = !outings;
+    $("#outing-now").hidden = !outings;
     $("#news-listing").hidden = outings && state.outingMode === "tonight";
     $$("[data-outing-mode]").forEach(el => {
       if (el.dataset.outingMode === state.outingMode) el.setAttribute("aria-current", "page");

@@ -12,6 +12,24 @@
     "Microsoft YaHei", sans-serif;
   color-scheme: light;
 }
+#outing-now { margin: 0 0 20px; border-bottom: 1px solid var(--line); }
+#outing-now > summary { cursor: pointer; min-height: 44px; padding: 8px 0 14px; font-size: 15px; font-weight: 600; }
+#outing-now > summary span { margin-left: 8px; color: var(--muted); font-size: 12px; font-weight: 400; }
+#outing-now-form { max-width: 620px; }
+.outing-now-options { display: flex; gap: 12px; margin: 6px 0 12px; }
+.outing-now-options label { flex: 1; min-width: 0; display: grid; gap: 6px; font-size: 13px; color: var(--secondary); }
+#outing-now select, #outing-now textarea { width: 100%; min-width: 0; min-height: 44px; padding: 9px; border: 1px solid var(--line); border-radius: 5px; background: var(--paper); color: var(--ink); font: 16px/1.6 var(--sans); }
+.outing-now-note { display: block; margin: 8px 0 6px; color: var(--secondary); font-size: 13px; }
+.outing-now-note span { color: var(--muted); margin-left: 4px; font-size: 12px; }
+#outing-now textarea { resize: vertical; }
+.outing-now-intro { font-size: 14px; line-height: 1.8; }
+.outing-now-ideas { list-style: none; padding: 0; margin: 12px 0; }
+.outing-now-ideas > li { border-top: 1px solid var(--line); padding: 14px 0 8px; }
+.outing-now-ideas h3 { font-size: calc(16px * var(--reading-scale)); margin: 6px 0; }
+.outing-now-ideas p { font-size: calc(14px * var(--reading-scale)); line-height: 1.8; margin: 6px 0; overflow-wrap: anywhere; }
+.outing-now-first { color: var(--secondary); }
+.outing-now-save { min-height: 44px; }
+.outing-now-weather { padding-bottom: 12px; }
 .housing-home-book { display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 16px 18px; margin-bottom: 24px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface); }
 .housing-home-book strong { font-size: 16px; }
 .housing-home-book small { display: block; margin-top: 4px; color: var(--muted); font-size: 12px; }

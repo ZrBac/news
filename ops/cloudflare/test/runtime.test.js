@@ -12,7 +12,7 @@ test("Workers runtime: SQLite coordinator serializes requests and keeps cooldown
   const options = {
     modulesRoot: new URL("../../../", import.meta.url).pathname,
     modules: await Promise.all(
-      ["../src/worker.js"].map(async (path) => {
+      ["../src/worker.js", "../src/outing-now.js"].map(async (path) => {
         const file = new URL(path, import.meta.url);
         return {
           type: "ESModule",

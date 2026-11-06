@@ -287,7 +287,7 @@ def main():
     pages.update({path: (output / path.lstrip('/') / 'index.html').read_text() for path in static_paths})
     shell_files = ['/', '/games/', '/guide/', '/homes/', '/manifest.webmanifest', '/assets/news/icon-180.png',
                    '/assets/news/icon-192.png', '/assets/news/icon-512.png']
-    for filename in ('compat.js', 'compat.css', 'archive.js', 'personal.js', 'exchange-core.js', 'outings-data.js', 'outings-library.js', 'outings-profile.js', 'editorial.js', 'tonight-data.js', 'tonight-journal.js', 'tonight.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json', 'homes-core.js', 'home-finder.js', 'homes.css'):
+    for filename in ('compat.js', 'compat.css', 'archive.js', 'personal.js', 'exchange-core.js', 'outings-data.js', 'outings-library.js', 'outings-profile.js', 'editorial.js', 'tonight-data.js', 'tonight-journal.js', 'tonight.js', 'outing-now.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json', 'homes-core.js', 'home-finder.js', 'homes.css'):
         asset = output / 'assets/news' / filename
         digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:12]
         versioned = asset.with_name(f'{asset.stem}.{digest}{asset.suffix}')
@@ -366,6 +366,8 @@ def main():
                             data.get('exchangeRates') or json.loads((ROOT / 'news/exchange-rates.json').read_text()))
     (output / 'data/news.json').write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n')
     build_news_pages(data, output)
+    from outing_now import build as build_outing_now
+    build_outing_now(data, ROOT, output)
     # A tiny health file avoids downloading and parsing the entire archive in Workers.
     updated_at = data['updatedAt']
     if datetime.fromisoformat(updated_at.replace('Z', '+00:00')).tzinfo is None:

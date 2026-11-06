@@ -50,6 +50,7 @@ const server = http.createServer(async (request, response) => {
       "editorial-browser.cjs",
       "living-outings-browser.cjs",
       "outing-controls-browser.cjs",
+      "outing-now-browser.cjs",
       "news-details-browser.cjs",
       "tonight-browser.cjs",
       "outings-profile-browser.cjs",

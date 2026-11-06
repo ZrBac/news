@@ -1,6 +1,5 @@
-"""Private outing preferences; never include this document in a public snapshot."""
+"""Shared outing preferences; keep raw records out of news snapshots and AI caches."""
 import json
-import os
 import re
 import urllib.request
 
@@ -12,11 +11,8 @@ class ProfileUnavailable(Exception):
 
 
 def load():
-    token = os.environ.get('OUTING_PROFILE_TOKEN', '')
-    if not token:
-        return {}
     try:
-        request = urllib.request.Request(ENDPOINT, headers={'Authorization': 'Bearer ' + token,
+        request = urllib.request.Request(ENDPOINT, headers={
             'User-Agent': 'ZrBacNews/1.0 (+https://news.zacai.fun/)'})
         with urllib.request.urlopen(request, timeout=10) as response:
             result = json.loads(response.read(100_000))
@@ -24,8 +20,8 @@ def load():
             raise ValueError('invalid_profile')
         return result
     except Exception:
-        # Shared build caches are unsuitable for personal records. Keep the last
-        # public recommendations if the authenticated store cannot be reached.
+        # Keep the last recommendations when shared feedback cannot be reached;
+        # an outage must not be treated as an empty preference list.
         raise ProfileUnavailable('outing_profile_unavailable') from None
 
 

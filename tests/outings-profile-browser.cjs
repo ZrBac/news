@@ -5,12 +5,12 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
 (async () => {
   const browser = await chromium.launch({ args: ["--no-sandbox"] });
   try {
-    const token = "test-private-connection-" + "a".repeat(24);
+    const retiredToken = "test-private-connection-" + "a".repeat(24);
     let journalVersion=0;
     const journalRows=new Map(), receipts=new Set();
     const journalRoute=async route=>{
       const req=route.request();
-      assert.equal(req.headers().authorization,"Bearer "+token);
+      assert.equal(req.headers().authorization,undefined);
       if(req.method()==="POST") {
         const {operations}=req.postDataJSON();
         for(const op of operations) {
@@ -47,15 +47,16 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await context.route("**/profile-fixture", route => route.fulfill({contentType:"text/html",body:
       '<meta name="news-refresh-endpoint" content="https://worker.example/api/news-refresh"><p>Feedback test</p>'}));
     const script = path.resolve(__dirname,"../news/assets/outings-profile.js");
-    await page.goto(base + "/profile-fixture#tonight&outing-key=" + token);
+    await page.goto(base + "/profile-fixture#tonight&outing-key=" + retiredToken);
+    await page.evaluate(value=>localStorage.setItem("news-outing-connection-v1",value),retiredToken);
     await page.addScriptTag({path:script});
     const journalScript=path.resolve(__dirname,"../news/assets/tonight-journal.js");
     await page.addScriptTag({path:journalScript});
-    assert.equal(new URL(page.url()).hash, "#tonight", "private entry is removed from the URL without changing the selected page");
+    assert.equal(new URL(page.url()).hash, "#tonight", "retired entrance is cleaned without changing the selected page");
     await page.evaluate(() => OutingProfile.sync(true));
     assert.equal(await page.evaluate(() => OutingProfile.snapshot().settings.startArea), "测试出发地");
-    assert(requests.every(r => r.authorization === "Bearer " + token));
-    assert.equal(await page.evaluate(() => JSON.stringify(OutingProfile.snapshot()).includes(localStorage.getItem("news-outing-connection-v1"))), false);
+    assert(requests.length > 0 && requests.every(r => r.authorization === undefined));
+    assert.equal(await page.evaluate(() => localStorage.getItem("news-outing-connection-v1")),null);
     holdFirstPost = true;
     await page.evaluate(() => OutingProfile.mark({id:"event:one",name:"周末体验"}, "want"));
     await page.waitForFunction(() => OutingProfile.snapshot().pending.length === 1);
@@ -76,10 +77,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.evaluate(() => OutingProfile.update({action:"remove",id:"event:two"}));
     await page.waitForFunction(() => !OutingProfile.snapshot().pending.length);
     assert.equal(remote.records.some(r=>r.id==="event:two"), false);
-    // A new phone uses the same private link; no records are embedded in HTML.
+    // A fresh browser opens the ordinary website, with no stored credential or special link.
     const secondContext = await browser.newContext({ ...devices["iPhone 13"], serviceWorkers:"block" });
     await secondContext.route("**/api/outings/profile", route => {
-      assert.equal(route.request().headers().authorization,"Bearer " + token);
+      assert.equal(route.request().headers().authorization,undefined);
       return route.fulfill({json:remote});
     });
     const second = await secondContext.newPage();
@@ -87,13 +88,14 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await second.goto(base + "/#tonight");
     await second.locator('.outing-profile').waitFor();
     assert.equal(await second.locator('[data-outing-connect], [data-outing-sync]').count(),0,'no pairing form or manual sync button');
-    await second.evaluate(value=>{location.hash='#tonight&outing-key='+value;},token);
     await second.waitForFunction(()=>OutingProfile.status().includes('已自动同步'));
     assert.equal(new URL(second.url()).hash,'#tonight');
+    assert.equal(await second.evaluate(()=>localStorage.getItem("news-outing-connection-v1")),null);
+    assert.equal(await second.locator('body').innerText().then(text=>/专属入口|连接码|开启自动同步/.test(text)),false);
     assert.equal(await second.evaluate(() => OutingProfile.snapshot().records[0].status),"dismiss");
     await second.reload({waitUntil:'domcontentloaded'});
     await second.waitForFunction(()=>window.OutingProfile?.status().includes('已自动同步'));
-    assert.equal(await second.evaluate(()=>OutingProfile.connected()),true,'normal reopening automatically remembers shared sync');
+    assert.equal(await second.evaluate(()=>OutingProfile.connected()),true,'ordinary reopening automatically resumes shared sync');
     const pick={id:"event:tonight-reading",name:"慢慢读完一本书"};
     await page.evaluate(pick=>TonightJournal.add(pick,"第一台手机的进展","第37页继续"),pick);
     await page.waitForFunction(()=>JSON.parse(localStorage.getItem(TonightJournal.key)).pending.length===0);
@@ -121,6 +123,6 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.deepEqual(errors,[]);
     await secondContext.close();
     await context.close();
-    console.log("Outing sync passed: automatic private entry, no connection controls, remembered access, offline merge, deletes and private AI separation");
+    console.log("Outing sync passed: ordinary entry without credentials, legacy cleanup, offline merge, deletes and AI input separation");
   } finally { await browser.close(); }
 })().catch(error => { console.error(error); process.exitCode=1; });

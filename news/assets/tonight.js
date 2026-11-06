@@ -95,7 +95,7 @@
   function journalMarkup(isOpen, formatTime) {
     const records = window.TonightJournal.snapshot();
     return `<details class="tonight-journal"${isOpen ? " open" : ""}><summary>我的积累 · ${records.length} 条记录</summary>
-      <p class="trip-note">连接后，两台设备自动同步这些文字；离线先保存，联网后补传。积累内容不发送给 AI，照片、录音仍放在自己的相册或文件里。也可导出备份。</p>
+      <p class="trip-note">两台设备自动同步这些文字；离线先保存，联网后补传。积累内容不发送给 AI，照片、录音仍放在自己的相册或文件里。也可导出备份。</p>
       <div class="trip-links"><button class="text-button" data-tonight-export${records.length ? "" : " disabled"}>导出记录</button>
       <button class="text-button" data-tonight-import>导入记录</button><input type="file" data-tonight-file accept=".json,application/json" aria-label="选择今晚记录文件" hidden></div>
       ${window.TonightJournal.status() ? `<p class="trip-note" role="status">${esc(window.TonightJournal.status())}</p>` : ""}
@@ -112,7 +112,7 @@
       <form data-tonight-record="${esc(p.id)}">
         <label>这次留下了什么<textarea name="note" required maxlength="500" rows="3" placeholder="${esc(p.project.prompt)}">${esc(draft.note)}</textarea></label>
         <label>下次接着做<input name="next" maxlength="200" value="${esc(draft.next)}"></label>
-        <p class="trip-note">可离线记录，连接后自动同步；完整记录和备份在下方“我的积累”。</p>
+        <p class="trip-note">可离线记录，联网后自动同步；完整记录和备份在下方“我的积累”。</p>
         <button class="text-button" type="submit">保存这次进展</button>
       </form></details>`;
   }
@@ -126,6 +126,7 @@
     const open = new Set(Array.from(panel.querySelectorAll(".tonight-details[open]"), d => d.closest("li").dataset.tonightId));
     const recordingOpen = new Set(Array.from(panel.querySelectorAll(".tonight-recording[open]"), d => d.closest("li").dataset.tonightId));
     const journalOpen = panel.querySelector(".tonight-journal")?.open;
+    const importInput = panel.querySelector("[data-tonight-file]");
     const attributionOpen = panel.querySelector(".trip-attribution")?.open;
     const profileOpen = panel.querySelector(".outing-profile")?.open;
     const focused = document.activeElement;
@@ -184,6 +185,9 @@
       <details class="trip-attribution"${attributionOpen ? " open" : ""}><summary>安排怎么更新</summary><p class="trip-note">每天为尚未开始的居家项目整理一次起步选题${homeCurrent ? `，今天 ${esc(formatTime(home.updatedAt))} 已整理` : "，当前使用内置安排"}。有进展的项目按上次记录继续，不每天换题；刷新和“换一组”不影响记录。时长为建议预留。</p>
       <p class="trip-note">晚间活动随每天9点、16点的补充检索更新，实际发布可能延迟；只展示日期与晚间起止时刻明确的场次。附近备选是找场建议，营业与费用尚需确认。${data.editorial?.tonight?.researchedAt ? `最近检索 ${esc(formatTime(data.editorial.tonight.researchedAt))}。` : ""}</p>
       <p class="trip-note">有进展的项目优先，仍按到家时间、精力和天气筛选；“喜欢”优先，“不感兴趣”隐藏但保留进展，可在去处记录里撤销。普通活动“玩过”后7天内少重复。休息不需要记录。已缓存的文字可离线阅读，地图、来源和音乐视频需联网或提前下载。${weather ? `<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">天气：Open-Meteo</a> · ${esc(formatTime(weather.updatedAt))} 获取，为全天区域参考。` : ""}</p></details>`;
+    // A background sync can finish while the native file picker is open. Keep
+    // its original input attached so selecting a file still dispatches change.
+    if (importInput) panel.querySelector("[data-tonight-file]")?.replaceWith(importInput);
     if (focusAttribute) panel.querySelector(`[${focusAttribute}="${focusValue}"]`)?.focus({preventScroll:true});
     if (field && ["note","next"].includes(field)) {
       const input = panel.querySelector(`[data-tonight-record="${focusedRecord}"] [name="${field}"]`);
@@ -213,7 +217,7 @@
     try {
       window.TonightJournal.add(pick, form.elements.note.value, form.elements.next.value);
       drafts.delete(pick.id);
-      message = window.OutingProfile?.connected() ? "进展已保存，正在自动同步。下次接着这一步。" : "进展已保存在本机；从专属入口打开后自动同步。";
+      message = navigator.onLine && window.OutingProfile?.connected() ? "进展已保存，正在自动同步。下次接着这一步。" : "进展已保存在本机，联网后自动同步。";
       // Close the editor before re-rendering, so its saved draft is not restored.
       form.closest("details").open = false;
       render(...lastRender);

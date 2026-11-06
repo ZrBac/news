@@ -7,7 +7,13 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const context = await browser.newContext({ ...devices["iPhone 13"] });
     await context.addInitScript(require("./legacy-safari.cjs"));
     await context.addInitScript(() => { Date.now = () => Date.parse("2026-11-02T08:00:00Z"); });
-    const page = await context.newPage(), errors = [], external = [];
+    const page = await context.newPage(), errors = [], external = [], blockedSync = new Set();
+    // Exercise local rendering with an unavailable sync service; the dedicated
+    // two-device check covers successful synchronization without production writes.
+    await context.route("**/api/outings/**", route => {
+      blockedSync.add(route.request().url());
+      return route.abort();
+    });
     page.on("pageerror", (error) => errors.push(error.message));
     page.on("request", (request) => {
       if (!request.url().startsWith(base)) external.push(request.url());
@@ -153,7 +159,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert(await page.locator('#outing-filters').isHidden(), 'returning to outings resets the filter drawer');
     assert.equal(await page.locator('#outing-catalog-heading #result-count').count(), 1);
     assert.deepEqual(errors, []);
-    assert.deepEqual(external, [], "reading recommendations must not call external APIs");
+    assert.deepEqual(external.filter(url=>!blockedSync.has(url)), [], "reading recommendations calls no external service except shared sync");
     await context.close();
     console.log("Editorial browser checks passed: grouping, facts, weather, filters, escaping and mobile layout");
   } finally { await browser.close(); }

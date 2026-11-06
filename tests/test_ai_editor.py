@@ -382,8 +382,8 @@ class EditorialTests(unittest.TestCase):
         self.assertEqual(data['weekendArticles'][0]['outing']['novelty'], article['outing']['novelty'])
         self.assertEqual(len(ai.trip_candidates(data, [], [], self.now)), 1)
 
-    def test_profile_uses_authentication_and_fails_without_saving_personal_records(self):
-        with patch.dict('os.environ', {'OUTING_PROFILE_TOKEN': 'test-connection'}, clear=True):
+    def test_profile_loads_without_credentials_and_reports_an_unavailable_store(self):
+        with patch.dict('os.environ', {}, clear=True):
             response = Mock()
             response.read.return_value = b'{"schema":1,"records":[]}'
             opener = Mock()
@@ -391,7 +391,7 @@ class EditorialTests(unittest.TestCase):
             opener.return_value.__exit__ = Mock(return_value=False)
             with patch.object(ai.outing_profile.urllib.request, 'urlopen', opener):
                 self.assertEqual(ai.outing_profile.load()['records'], [])
-            self.assertEqual(opener.call_args.args[0].get_header('Authorization'), 'Bearer test-connection')
+            self.assertIsNone(opener.call_args.args[0].get_header('Authorization'))
             with patch.object(ai.outing_profile.urllib.request, 'urlopen', side_effect=TimeoutError()):
                 with self.assertRaises(ai.outing_profile.ProfileUnavailable):
                     ai.outing_profile.load()

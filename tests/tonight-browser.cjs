@@ -7,7 +7,12 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8766";
     const context = await browser.newContext({...devices["iPhone 13"]});
     await context.addInitScript(require("./legacy-safari.cjs"));
     await context.addInitScript(() => { Date.now = () => Date.parse("2026-11-05T11:30:00Z"); });
-    const page = await context.newPage(), errors = [], external = [];
+    const page = await context.newPage(), errors = [], external = [], blockedSync = new Set();
+    // Keep synchronization unavailable while testing local notes and backups.
+    await context.route("**/api/outings/**", route => {
+      blockedSync.add(route.request().url());
+      return route.abort();
+    });
     page.on("pageerror", e => errors.push(e.message));
     page.on("request", r => { if (!r.url().startsWith(base) && /^https?:/.test(r.url())) external.push(r.url()); });
     const packet = await (await page.request.get(base + "/data/latest.json")).json();
@@ -69,7 +74,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8766";
     assert.equal(await page.locator("#private-injected").count(), 0, "saved text is escaped");
     assert.equal(await card.locator('.tonight-recording').getAttribute("open"), null);
     assert.equal(await page.locator('.tonight-list > li:visible').first().getAttribute("data-tonight-id"), chosen);
-    assert.equal(await page.evaluate(() => JSON.stringify(OutingProfile.snapshot()).includes("第 36 页")), false, "private notes do not enter shared feedback");
+    assert.equal(await page.evaluate(() => JSON.stringify(OutingProfile.snapshot()).includes("第 36 页")), false, "journal notes do not enter AI feedback");
     // Legacy visited feedback must not hide a continuing project for a week.
     await page.evaluate(id => OutingProfile.mark(NewsTonightCatalog.activities.find(p => p.id === id), "visited"), chosen);
     assert.equal(await card.count(), 1);
@@ -88,7 +93,11 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8766";
     assert.equal(await page.locator(".tonight-history li").count(), 0);
     await page.locator("[data-tonight-undo]").click();
     assert.equal(await page.locator(".tonight-history li").count(), 1);
-    await page.locator("[data-tonight-file]").setInputFiles({name:"今晚.json",mimeType:"application/json",buffer:Buffer.from(JSON.stringify(backup))});
+    const choosingFile = page.waitForEvent("filechooser");
+    await page.locator('[data-tonight-import]').click();
+    const chooser = await choosingFile;
+    await page.evaluate(() => window.dispatchEvent(new Event("outing-feedback-change")));
+    await chooser.setFiles({name:"今晚.json",mimeType:"application/json",buffer:Buffer.from(JSON.stringify(backup))});
     await page.waitForFunction(() => document.querySelector("#tonight-feedback-status").textContent.includes("重复记录未添加"));
     assert.equal(await page.locator(".tonight-history li").count(), 1, "import merges without duplicates");
     await card.locator('.tonight-recording > summary').click();
@@ -166,8 +175,8 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8766";
     assert.equal(await page.evaluate(() => TonightJournal.snapshot().length), 2);
     assert.equal(await page.locator('[data-tonight-id="event:night-fixture"]').count(), 0);
     assert.deepEqual(errors, []);
-    assert.deepEqual(external, [], "reading and shuffling do not call a model or map API");
+    assert.deepEqual(external.filter(url=>!blockedSync.has(url)), [], "reading and shuffling do not call a model or map API");
     await context.close();
-    console.log("Tonight checks passed: ongoing projects, private notes, backup/restore, storage failures, time/energy/weather, mobile and offline continuation");
+    console.log("Tonight checks passed: ongoing projects, shared notes, backup/restore during sync, storage failures, time/energy/weather, mobile and offline continuation");
   } finally { await browser.close(); }
 })().catch(e=>{console.error(e);process.exitCode=1;});

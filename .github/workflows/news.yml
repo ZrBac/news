@@ -103,7 +103,6 @@ jobs:
         timeout-minutes: 12
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
-          OUTING_PROFILE_TOKEN: ${{ secrets.OUTING_PROFILE_TOKEN }}
         run: python scripts/ai_editor.py --previous-file .cache/news-snapshot/previous.json
       - name: Save editorial usage even if a later build fails
         if: always() && steps.ai-editor.outcome != 'skipped'

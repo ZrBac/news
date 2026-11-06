@@ -9,8 +9,9 @@
     // Production: manual refresh and scheduled recovery both run in Cloudflare.
     "MANUAL_ENABLED": "true",
     "WATCHDOG_ENABLED": "true",
+    "SCHEDULE_ENABLED": "true",
   },
-  "triggers": { "crons": ["7,37 * * * *"] },
+  "triggers": { "crons": ["17 * * * *", "0 1,8 * * *", "7,37 * * * *"] },
   "durable_objects": {
     "bindings": [{ "name": "COORDINATOR", "class_name": "NewsCoordinator" }],
   },

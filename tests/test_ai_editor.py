@@ -238,14 +238,25 @@ class EditorialTests(unittest.TestCase):
         places, trip = self.trip_fixture()
         places += [{**places[0], 'id': f'backup-{i}', 'name': f'杭州备选{i}'} for i in range(8)]
         result = ai.complete_trip({'weekendArticles': events + events}, places, {}, trip, self.now)
-        self.assertEqual(len(result['picks']), 8)
-        self.assertEqual(len({p['id'] for p in result['picks']}), 8)
-        self.assertEqual(len(result['alternatives']), 6)
+        self.assertEqual(len(result['picks']), 12)
+        self.assertEqual(len({p['id'] for p in result['picks']}), 12)
+        self.assertEqual(len(result['alternatives']), 11)
         dismissed = result['picks'][0]['id']
         profile = {'records': [{'id': dismissed, 'status': 'dismiss'}]}
         updated = ai.complete_trip({'weekendArticles': events}, places, {}, result, self.now, profile)
-        self.assertEqual(len(updated['picks']), 8)
+        self.assertEqual(len(updated['picks']), 11)
         self.assertNotIn(dismissed, [p['id'] for p in updated['picks']])
+
+    def test_official_schedule_without_publication_date_is_labeled_as_verified(self):
+        item, body = self.discovery_fixture()
+        item.update(url='https://www.ooeli.com/calendar', publishedDate='', publishedEvidence='')
+        result=ai.validate_discovery(item,{item['url']},body,[],self.now)
+        self.assertIsNotNone(result)
+        self.assertEqual(result['sourceTimeBasis'],'verified')
+        media={**item,'url':'https://hznews.hangzhou.com.cn/calendar'}
+        self.assertIsNone(ai.validate_discovery(media,{media['url']},body,[],self.now))
+        undated={**item,'facts':[]}
+        self.assertIsNone(ai.validate_discovery(undated,{item['url']},body,[],self.now))
 
     def test_advance_announcements_keep_real_dates_only_for_current_weekend(self):
         item, body = self.discovery_fixture()
@@ -400,6 +411,7 @@ class EditorialTests(unittest.TestCase):
         places, trip = self.trip_fixture()
         previous = {'editorial': {'trip': trip, 'research': {'items': [], 'revision': ai.OUTING_REVISION,
             'searchedAt': trip['updatedAt'], 'attemptedAt': trip['attemptedAt'], 'attemptedRevision': ai.OUTING_REVISION}}}
+        previous['editorial']['placeCatalog'] = {'day':'2026-11-02','revision':ai.outing_catalog.REVISION,'places':[]}
         previous['editorial']['tonightHome'] = {'day': '2026-11-02', 'revision': ai.tonight_plans.REVISION, 'ideas': []}
         with tempfile.TemporaryDirectory() as folder:
             transport = Mock(side_effect=AssertionError('No API call during cooldown'))

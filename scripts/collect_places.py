@@ -13,14 +13,16 @@ from urllib.parse import urlencode, urlsplit
 from urllib.request import Request, urlopen
 
 import collect_news as news
+import outing_catalog
 from collect_weekend import fetch_page, search_due
 
 ROOT = Path(__file__).resolve().parents[1]
-REVISION = 'outdoor-place-news-v2'
+REVISION = 'place-news-v3-indoor'
 DOMAINS = ('hangzhou.com.cn', 'hangzhou.gov.cn', 'yuhang.gov.cn', 'linan.gov.cn',
            'zjol.com.cn', 'tidenews.com.cn', 'eyh.cn', 'bendibao.com', 'huzhou.gov.cn',
            'hzsc.com.cn', 'hzxh.gov.cn', 'xsnet.cn', 'cst123.cn', 'lanews.com.cn')
 TOPICS = {
+    'rainy': r'室内|手作|手工|工坊|体验|剧场|剧院|书店|图书馆|运动|开放|营业|课程|预约|关闭',
     'hiking': r'登山|徒步|步道|古道|山路|封山|闭园|开放|限流|预约|赏秋|红叶|银杏|登高|路线|杜鹃|维修|施工|暂停|关闭|恢复',
     'camping': r'露营|营地|用火|卡式炉|停车|预约|营业|开放|暂停|关闭|恢复',
     'cycling': r'骑行|骑游|单车|绿道|自行车|禁骑|封闭|绕行|交通管制|维修|施工|暂停|关闭|恢复',
@@ -103,7 +105,7 @@ def select(place, items, now):
 def query_url(places):
     aliases = list(dict.fromkeys(alias for place in places for alias in place['aliases']))
     names = '(' + ' OR '.join('"' + name + '"' for name in aliases) + ')'
-    topic = {'hiking': '(登山 OR 徒步 OR 山路 OR 古道 OR 封山 OR 登高)',
+    topic = {'rainy':'(活动 OR 课程 OR 体验 OR 开放 OR 预约)', 'hiking': '(登山 OR 徒步 OR 山路 OR 古道 OR 封山 OR 登高)',
              'camping': '(露营 OR 营地 OR 用火 OR 预约)',
              'cycling': '(骑行 OR 骑游 OR 绿道 OR 禁骑 OR 交通管制)'}[places[0]['group']]
     # Keep the query short enough for RSS search. Enforce publisher domains on
@@ -208,6 +210,10 @@ def main():
     old = (json.loads(args.previous_file.read_text()) if args.previous_file else
            json.loads(news.fetch(args.previous_url)) if args.previous_url else data)
     places = json.loads((ROOT / 'news/places.json').read_text())['places']
+    places = outing_catalog.merged(places, old.get('editorial',{}).get('placeCatalog',{}))
+    for place in places:
+        if not place['aliases']:
+            place['aliases'] = [place['name'].split(' · ')[0]]
     candidates = data.get('weekendArticles', []) + [a for a in data.get('articles', []) if a.get('category') == 'local']
     data['placeUpdates'] = refresh(places, old.get('placeUpdates', {}), candidates, datetime.now(news.UTC), force=args.force_search)
     path.write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n')

@@ -3,7 +3,7 @@
   "newsModel": "gpt-6-luna",
   "researchModel": "gpt-6.1-sol",
   "monthlyBudgetUsd": 200,
-  "runBudgetUsd": 8,
+  "runBudgetUsd": 20,
   "maxNewsPerRun": 60,
   "maxSearchCalls": 6,
   "newsDetails": {

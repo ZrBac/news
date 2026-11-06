@@ -17,14 +17,14 @@
     try { const u = new URL(value); return u.protocol === "https:" && !u.username && !u.password ? u.href : ""; } catch (_) { return ""; }
   }
   function currentWeather(data, now, today) {
-    const weather = data.editorial?.trip?.weather;
-    const age = now - Date.parse(weather?.updatedAt);
-    if (!Number.isFinite(age) || age < -300000 || age > 24 * 3600000) return null;
-    const days = weather?.regions?.hangzhou?.days;
-    const row = Array.isArray(days) ? days.find(d => d.date === today) : null;
-    if (!row || ![row.rainProbability, row.rainMm, row.windKmh, row.code].every(Number.isFinite)) return null;
-    return {...row, updatedAt: weather.updatedAt,
-      outside: row.rainProbability < 60 && row.rainMm < 3 && row.windKmh < 30 && row.code < 51};
+    const weather=data.eveningWeather, age=now-Date.parse(weather?.updatedAt);
+    if(!Number.isFinite(age)||age< -300000||age>3*3600000)return null;
+    const start=Math.max(19,new Date(now+8*3600000).getUTCHours());
+    const rows=(weather.hours||[]).filter(r=>r.time?.slice(0,10)===today && Number(r.time.slice(11,13))>=start && Number(r.time.slice(11,13))<=22);
+    if(rows.length<Math.max(1,23-start) || !rows.every(r=>['rainProbability','rainMm','windKmh','code'].every(k=>Number.isFinite(r[k]))))return null;
+    const rainProbability=Math.max(...rows.map(r=>r.rainProbability)), rainMm=rows.reduce((n,r)=>n+r.rainMm,0), windKmh=Math.max(...rows.map(r=>r.windKmh));
+    return {rainProbability,rainMm,windKmh,updatedAt:weather.updatedAt,
+      outside:rainProbability<60 && rainMm<3 && windKmh<30 && rows.every(r=>r.code<51)};
   }
   function options(data, now) {
     const today = dayOf(now), weather = currentWeather(data, now, today);
@@ -48,7 +48,7 @@
         const age = now - Date.parse(event.verifiedAt);
         const starts = Date.parse(today + "T" + event.startTime + ":00+08:00");
         const ends = Date.parse(today + "T" + event.endTime + ":00+08:00");
-        if (/演唱会|博物馆|亲子|观赛|攀岩|抱石|滑冰|溜冰|冰场/.test(event.name) ||
+        if (window.OutingLibrary.excluded.test(event.name) ||
             event.day !== today || !Number.isFinite(age) || age < -300000 || age > 48 * 3600000 ||
             !Number.isFinite(starts) || !Number.isFinite(ends) || starts - now < 30 * 60000 || ends <= starts ||
             !/^2[01]:[0-5]\d$/.test(event.startTime) || ends > Date.parse(today + "T22:00:00+08:00") ||
@@ -94,7 +94,7 @@
   }
   function journalMarkup(isOpen, formatTime) {
     const records = window.TonightJournal.snapshot();
-    return `<details class="tonight-journal"${isOpen ? " open" : ""}><summary>我的积累 · ${records.length} 条记录</summary>
+    return `<details class="tonight-journal"${isOpen ? " open" : ""}><summary>在做的 · ${records.length} 条进展</summary>
       <p class="trip-note">两台设备自动同步这些文字；离线先保存，联网后补传。积累内容不发送给 AI，照片、录音仍放在自己的相册或文件里。也可导出备份。</p>
       <div class="trip-links"><button class="text-button" data-tonight-export${records.length ? "" : " disabled"}>导出记录</button>
       <button class="text-button" data-tonight-import>导入记录</button><input type="file" data-tonight-file accept=".json,application/json" aria-label="选择今晚记录文件" hidden></div>
@@ -112,7 +112,7 @@
       <form data-tonight-record="${esc(p.id)}">
         <label>这次留下了什么<textarea name="note" required maxlength="500" rows="3" placeholder="${esc(p.project.prompt)}">${esc(draft.note)}</textarea></label>
         <label>下次接着做<input name="next" maxlength="200" value="${esc(draft.next)}"></label>
-        <p class="trip-note">可离线记录，联网后自动同步；完整记录和备份在下方“我的积累”。</p>
+        <p class="trip-note">可离线记录，联网后自动同步；完整记录和备份在“我们的记录 → 在做的”。</p>
         <button class="text-button" type="submit">保存这次进展</button>
       </form></details>`;
   }
@@ -126,7 +126,7 @@
     const open = new Set(Array.from(panel.querySelectorAll(".tonight-details[open]"), d => d.closest("li").dataset.tonightId));
     const recordingOpen = new Set(Array.from(panel.querySelectorAll(".tonight-recording[open]"), d => d.closest("li").dataset.tonightId));
     const journalOpen = panel.querySelector(".tonight-journal")?.open;
-    const importInput = panel.querySelector("[data-tonight-file]");
+
     const attributionOpen = panel.querySelector(".trip-attribution")?.open;
     const profileOpen = panel.querySelector(".outing-profile")?.open;
     const focused = document.activeElement;
@@ -140,8 +140,8 @@
     visible = new Map(choices.map(p => [p.id, p]));
     const weatherNote = late && preferences.arrival === 19 ? "现在已过21点，先选在家能结束的小安排，累了也可以休息。" :
       preferences.arrival === 21 ? "先吃饭、洗漱，再选一件小事；累了也可以直接休息。" :
-      weather ? (weather.outside ? `杭州市区今日降水概率 ${weather.rainProbability}%，外出前再看实际天气。` :
-        "今日预报有雨或不适合户外，先选室内与居家安排。") : "今日天气暂未核实，先选室内与居家安排。";
+      weather ? (weather.outside ? `杭州市区19—22点降水概率 ${weather.rainProbability}%，外出前再看实际天气。` :
+        "今晚预报有雨或不适合户外，先选室内与居家安排。") : "今晚天气暂未核实，先选室内与居家安排。";
     const home = data.editorial?.tonightHome;
     const homeCurrent = home?.revision === window.NewsTonightCatalog?.revision && home?.day === today && home.ideas?.length;
     const cards = choices.map((p,i) => {
@@ -150,7 +150,7 @@
       const mapLink = map ? "https://uri.amap.com/search?keyword=" + encodeURIComponent(map) + "&city=杭州&callnative=0" : "";
       return `<li data-tonight-id="${esc(p.id)}"${i >= 3 ? ` data-tonight-extra${expanded ? "" : " hidden"}` : ""}>
         <p class="trip-kind">${place} · ${esc(p.kind)} · ${esc(p.minutes)} 分钟${p.setting !== "home" ? "，路程另计" : ""}${p.project && p.progress ? ` · 已记 ${p.sessions} 次` : ""}</p>
-        <h3>${esc(p.name)}</h3><p class="tonight-summary">${esc(p.summary)}</p>
+        <h3>${esc(p.progress ? p.name : p.starter || p.name)}</h3><p class="tonight-summary">${esc(p.summary)}</p>
         ${p.project ? `<p class="tonight-output"><strong>留下：</strong>${esc(p.project.outcome)}</p>` : ""}
         ${p.project && p.progress ? `<div class="tonight-continuation"><p class="tonight-last-note"><strong>上次：</strong>${esc(p.progress.note)}</p>
           <p class="tonight-next"><strong>今晚接着：</strong>${esc(p.progress.next || p.project.next)}</p></div>` : ""}
@@ -180,26 +180,25 @@
       <p id="tonight-feedback-status" class="trip-note" role="status" tabindex="-1"${message ? "" : " hidden"}>${esc(message)}</p>
       ${choices.length ? `<ul class="trip-list tonight-list">${cards}</ul>` : `<p class="trip-empty">这组安排已经看过或暂时不感兴趣。可以切换精力，或在下方记录里撤销反馈；今晚直接休息也可以。</p>`}
       ${choices.length > 3 ? `<button class="text-button" data-tonight-more aria-expanded="${expanded}">${expanded ? "收起" : `再看 ${choices.length - 3} 个安排`}</button>` : ""}
-      ${journalMarkup(journalOpen, formatTime)}
-      ${window.NewsEditorial?.profileMarkup(profileOpen) || ""}
+
       <details class="trip-attribution"${attributionOpen ? " open" : ""}><summary>安排怎么更新</summary><p class="trip-note">每天为尚未开始的居家项目整理一次起步选题${homeCurrent ? `，今天 ${esc(formatTime(home.updatedAt))} 已整理` : "，当前使用内置安排"}。有进展的项目按上次记录继续，不每天换题；刷新和“换一组”不影响记录。时长为建议预留。</p>
       <p class="trip-note">晚间活动随每天9点、16点的补充检索更新，实际发布可能延迟；只展示日期与晚间起止时刻明确的场次。附近备选是找场建议，营业与费用尚需确认。${data.editorial?.tonight?.researchedAt ? `最近检索 ${esc(formatTime(data.editorial.tonight.researchedAt))}。` : ""}</p>
-      <p class="trip-note">有进展的项目优先，仍按到家时间、精力和天气筛选；“喜欢”优先，“不感兴趣”隐藏但保留进展，可在去处记录里撤销。普通活动“玩过”后7天内少重复。休息不需要记录。已缓存的文字可离线阅读，地图、来源和音乐视频需联网或提前下载。${weather ? `<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">天气：Open-Meteo</a> · ${esc(formatTime(weather.updatedAt))} 获取，为全天区域参考。` : ""}</p></details>`;
+      <p class="trip-note">有进展的项目优先，仍按到家时间、精力和天气筛选；“喜欢”优先，“不感兴趣”隐藏但保留进展，可在去处记录里撤销。普通活动“玩过”后7天内少重复。休息不需要记录。已缓存的文字可离线阅读，地图、来源和音乐视频需联网或提前下载。${weather ? `<a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">天气：Open-Meteo</a> · ${esc(formatTime(weather.updatedAt))} 获取，为19—22点区域预报。` : ""}</p></details>`;
     // A background sync can finish while the native file picker is open. Keep
     // its original input attached so selecting a file still dispatches change.
-    if (importInput) panel.querySelector("[data-tonight-file]")?.replaceWith(importInput);
+
     if (focusAttribute) panel.querySelector(`[${focusAttribute}="${focusValue}"]`)?.focus({preventScroll:true});
     if (field && ["note","next"].includes(field)) {
       const input = panel.querySelector(`[data-tonight-record="${focusedRecord}"] [name="${field}"]`);
       input?.focus({preventScroll:true});
       if (input && selection) input.setSelectionRange(...selection);
     }
+    window.NewsEditorial?.renderRecords(data,state,formatTime);
     window.OutingProfile?.sync(false);
   }
   function report(text) {
     message = text;
-    const status = document.querySelector("#tonight-feedback-status");
-    if (status) { status.textContent = text; status.hidden = false; }
+    for(const status of document.querySelectorAll("#record-operation-status, #tonight-feedback-status")) { status.textContent=text; status.hidden=false; }
   }
   document.addEventListener("input", event => {
     const form = event.target.closest("[data-tonight-record]");
@@ -245,11 +244,13 @@
       const added = window.TonightJournal.restore(value);
       message = `已导入 ${added} 条记录，重复记录未添加。`;
       render(...lastRender);
+      window.NewsEditorial?.renderRecords(...lastRender);
+      report(message);
     } catch (error) { report(error.message); }
     finally { input.value = ""; }
   });
   document.addEventListener("click", event => {
-    const panel = event.target.closest("#tonight-plans");
+    const panel = event.target.closest("#tonight-plans, #outing-records");
     if (!panel || !lastRender) return;
     if (event.target.closest("[data-tonight-export]")) {
       try {
@@ -268,16 +269,17 @@
       try {
         if (remove) {
           removedRecord = window.TonightJournal.remove(remove.dataset.tonightRemove);
-          message = "已删除这条记录，可在“我的积累”里撤销。";
+          message = "已删除这条记录，可在“我们的记录 → 在做的”里撤销。";
         } else if (removedRecord) {
           window.TonightJournal.restore({app:"zacai-tonight-journal", schema:1, records:[removedRecord]});
           removedRecord = null; message = "已恢复记录。";
         }
         render(...lastRender);
+        window.NewsEditorial?.renderRecords(...lastRender);
       } catch (error) { report(error.message); }
       return;
     }
-    if (event.target.closest("[data-tonight-history-more]")) { historyLimit += 20; render(...lastRender); return; }
+    if (event.target.closest("[data-tonight-history-more]")) { historyLimit += 20; render(...lastRender); window.NewsEditorial?.renderRecords(...lastRender); return; }
     const arrival = event.target.closest("[data-tonight-arrival]"), energy = event.target.closest("[data-tonight-energy]");
     if (arrival || energy) {
       if (arrival) preferences.arrival = Number(arrival.dataset.tonightArrival);
@@ -310,5 +312,6 @@
     const {choices, today} = options(lastRender[0], Date.now());
     if (signature !== today + choices.map(p => p.id).join(",")) render(...lastRender);
   }, 60000);
-  window.NewsTonight = {render};
+  function reveal(id) {expanded=true;if(lastRender)render(...lastRender);const card=[...document.querySelectorAll('[data-tonight-id]')].find(c=>c.dataset.tonightId===id);card?.scrollIntoView({behavior:'smooth',block:'center'});}
+  window.NewsTonight = {render,journalMarkup,reveal};
 })();

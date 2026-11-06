@@ -271,6 +271,18 @@ def enrich(articles, previous, now, get=fetch_page, refresh=False):
 
 
 def event_key(article):
+    # Merge coverage of one event without merging unrelated shows at a venue.
+    title = article['title']
+    name = article.get('outing', {}).get('eventName', '')
+    for pattern, key in ((r'文博会|文化创意产业?博览会', '杭州文博会'),
+                         (r'2026\s*ADM', '2026ADM'),
+                         (r'菊花(?:精品展|艺术展|展)', '杭州菊花展'),
+                         (r'(?:老任|70后大叔|裁缝铺).{0,40}缝纫自习室|缝纫自习室.{0,30}老任', '老任缝纫自习室'),
+                         (r'大杭州三处阿勒泰', '杭州三处露营')):
+        if re.search(pattern, title + name, re.I):
+            return key + '-' + article['publishedAt'][:4]
+    if name:
+        return re.sub(r'\W+', '', name) + article.get('outing', {}).get('start', '')
     title = re.sub(r'\d{4}年?|第?\d+届|\W', '', article['title'].rsplit(' - ', 1)[0])
     name = re.search(r'(.{2,4})(市集|集市|生活节|美食节|咖啡节|啤酒节|戏剧节|音乐节|艺术节)', title)
     if not name or article['outing']['type'] not in ('market', 'culture'):
@@ -288,7 +300,7 @@ def select_articles(articles, now):
             expired[key] = max(expired.get(key, ''), deadline)
     selected = []
     for article in articles:
-        if news.LOCAL_EXCLUDED.search(article['title']):
+        if news.LOCAL_EXCLUDED.search(article['title']) or news.LOCAL_NOISE.search(article['title']):
             continue
         info = article['outing']
         if camping_candidate(article) and outing_type(article['title']) != 'camping' and not (info['type'] == 'camping' and info.get('checkedAt')):
@@ -302,16 +314,30 @@ def select_articles(articles, now):
         if 'end' not in info and 'until' not in info and age > (21 if info['type'] in ('outdoor', 'camping') else 10):
             continue
         selected.append(article)
-    result, urls, events = [], set(), set()
+    result, urls, events = [], set(), {}
     # Event dates determine eligibility, not which old report stays at the top.
     for article in sorted(selected, key=lambda a: news.parse_date(a['publishedAt']), reverse=True):
         url = article.get('originalUrl', article['url'])
         key = event_key(article)
-        if url in urls or key and key in events:
+        if url in urls:
             continue
         urls.add(url)
+        if key and key in events:
+            primary = events[key]
+            reports = primary.setdefault('reports', [])
+            known = {primary.get('originalUrl') or primary['url']} | {r.get('originalUrl') or r['url'] for r in reports}
+            for report in [article] + article.get('reports', []):
+                report_url = report.get('originalUrl') or report['url']
+                if report_url not in known and len(reports) < 8:
+                    reports.append({k:report[k] for k in ('id','title','url','originalUrl','sourceId','sourceName','publishedAt') if k in report})
+                    known.add(report_url)
+            continue
+        article = dict(article)
+        if 'reports' in article:
+            article['reports'] = list(article['reports'])
         if key:
-            events.add(key)
+            events[key] = article
+            article['outingGroup'] = 'outing-' + hashlib.sha256(key.encode()).hexdigest()[:24]
         result.append(article)
     # Reserve room for a lower-volume topic without pinning old reports first.
     camping = [a for a in result if a['outing']['type'] == 'camping'][:12]
@@ -361,6 +387,8 @@ def main():
     news.resolve_original_links(sorted(candidates, key=lambda a: not camping_candidate(a)), previous, limit=24, budget=14)
     enrich(candidates, previous, now, refresh=did_search)
     data['weekendArticles'] = select_articles(candidates, now)
+    import tonight_plans
+    data['eveningWeather'] = tonight_plans.update_weather(old.get('eveningWeather', {}), now)
     start, end = weekend_days(now)
     data['weekendGuide'] = {'checkedAt': news.iso(now), 'weekendStart': start.isoformat(), 'weekendEnd': end.isoformat(), 'search': search}
     camping_sources = [s for s in data.get('sources', []) if s['id'].startswith('gnews-hangzhou-camping')]

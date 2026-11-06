@@ -207,11 +207,11 @@ class FeedTests(unittest.TestCase):
                 old = dict(base, title=title, category='general')
                 merged = collector.merge_articles([old], [], self.now, {'example': general})
                 self.assertEqual(merged[0]['category'], category)
-        for title in ('杭州周末农夫市集开市', '临平亲子手作活动预告', '安吉秋日徒步路线发布',
-                      '杭州书店读书会本周末开放报名', '杭州飞盘运动体验日', '浙江省博物馆特展上新',
+        for title in ('杭州周末农夫市集开市', '安吉秋日徒步路线发布',
+                      '杭州书店读书会本周末开放报名', '杭州飞盘运动体验日',
                       '铜鉴湖花海露营地开放', '径山露营基地周末预约'):
             self.assertEqual(collector.article_category(title, local), 'local')
-        for title in ('北京公交开通', '杭州企业财报公布', '散文随笔：杭州秋日生活与公园', '杭州地铁新线通车',
+        for title in ('临平亲子手作活动预告','浙江省博物馆特展上新','3.73亿起拍！萧山宝龙广场被摆上货架', '北京公交开通', '杭州企业财报公布', '散文随笔：杭州秋日生活与公园', '杭州地铁新线通车',
                       '杭州露营产业市场规模增长', '杭州音乐节圆满落幕', '去年杭州展览回顾',
                       '杭州演唱会开票', '杭州11月演唱会日历', '杭州歌友会演出预告',
                       '杭州假期活动' + '漫游心情' * 40):

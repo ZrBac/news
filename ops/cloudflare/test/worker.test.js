@@ -68,6 +68,7 @@ function harness(t, initial = {}) {
     GITHUB_TOKEN: "test-only",
     MANUAL_ENABLED: "true",
     WATCHDOG_ENABLED: "true",
+    SCHEDULE_ENABLED: "true",
     REQUEST_LIMITER: {
       async limit() {
         return { success: true };
@@ -114,6 +115,27 @@ test("parallel manual and scheduled requests dispatch once; cooldown survives re
   h.restart();
   assert.equal((await h.result("trigger")).status, "cooldown");
   assert.equal(h.dispatches, 1);
+});
+
+test("hourly scheduler shares manual concurrency and skips a recent publication", async t => {
+  const h=harness(t);
+  const results=await Promise.all([h.result('periodic'),h.result('trigger'),h.result('periodic')]);
+  assert.equal(h.dispatches,1);
+  assert.equal(results[1].status,'cooldown');
+  h.updatedAt=iso(Date.now());
+  h.advance(30*60_000);
+  assert.equal((await h.result('periodic')).status,'fresh');
+  h.advance(20*60_000);
+  await h.result('periodic');
+  assert.equal(h.dispatches,2);
+});
+
+test("the 09:00 discovery slot can refresh a half-hour-old publication", async t => {
+  const h=harness(t);
+  h.advance(Date.parse('2026-09-25T01:00:00Z')-NOW);
+  h.updatedAt=iso(Date.now()-30*60_000);
+  await h.result('periodic');
+  assert.equal(h.dispatches,1);
 });
 
 test("timed-out dispatch consumes manual and recovery budgets across restarts", async (t) => {

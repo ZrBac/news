@@ -4,9 +4,6 @@ on:
   push:
     branches: [main]
     paths: ["news/**", "scripts/**", "tests/**", ".github/workflows/news.yml"]
-  schedule:
-    - cron: "17 * * * *"
-    - cron: "0 1,8 * * *"
   workflow_dispatch:
 
 concurrency:
@@ -19,7 +16,7 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v6
       - uses: actions/setup-python@v6
@@ -37,6 +34,7 @@ jobs:
           node --check news/assets/editorial.js
           node --check news/assets/tonight.js
           node --check news/assets/outings-profile.js
+          node --check news/assets/outings-library.js
           node --test tests/exchange-core.cjs
           node --test tests/tonight-journal.cjs
           node --check news/assets/pwa.js
@@ -67,7 +65,7 @@ jobs:
         run: python scripts/collect_news.py --previous-file .cache/news-snapshot/previous.json
       - name: Prepare Hangzhou outings and twice-daily searches
         run: python scripts/collect_weekend.py --previous-file .cache/news-snapshot/previous.json
-      - name: Refresh hiking, camping and cycling place news
+      - name: Refresh hiking, camping, cycling and indoor place news
         run: python scripts/collect_places.py --previous-file .cache/news-snapshot/previous.json
       - name: Update Hangzhou transaction price reports
         run: python scripts/collect_housing_prices.py --previous-file .cache/news-snapshot/previous.json
@@ -100,7 +98,7 @@ jobs:
       - name: Prepare news summaries, evening plans and weekend picks
         id: ai-editor
         continue-on-error: true
-        timeout-minutes: 12
+        timeout-minutes: 23
         env:
           OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
         run: python scripts/ai_editor.py --previous-file .cache/news-snapshot/previous.json
@@ -142,7 +140,7 @@ jobs:
           tests/browser/node_modules/.bin/playwright install --with-deps chromium
       - name: Check mobile reading and offline recovery before publishing
         if: github.event_name == 'push'
-        timeout-minutes: 8
+        timeout-minutes: 12
         env:
           PLAYWRIGHT_MODULE: ${{ github.workspace }}/tests/browser/node_modules/playwright
         run: node tests/check-mobile.cjs

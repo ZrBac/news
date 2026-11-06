@@ -86,7 +86,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const second = await secondContext.newPage();
     await secondContext.route("**/api/outings/journal*",journalRoute);
     await second.goto(base + "/#tonight");
-    await second.locator('.outing-profile').waitFor();
+    await second.locator('#outing-records').waitFor();
     assert.equal(await second.locator('[data-outing-connect], [data-outing-sync]').count(),0,'no pairing form or manual sync button');
     await second.waitForFunction(()=>OutingProfile.status().includes('已自动同步'));
     assert.equal(new URL(second.url()).hash,'#tonight');

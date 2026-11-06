@@ -1,0 +1,330 @@
+{
+  "attemptedAt": "2026-11-06T07:20:39Z",
+  "revision": "living-places-v2-source-details",
+  "places": [
+    {
+      "id": "auto-f39d7f77e554fc55",
+      "name": "玄猫Maoer·缝纫·DIY",
+      "group": "rainy",
+      "area": "杭州拱墅区",
+      "types": "culture",
+      "aliases": [
+        "玄猫Maoer·缝纫·DIY"
+      ],
+      "keywords": "玄猫Maoer·缝纫·DIY 杭州拱墅区 教室内，工作人员带着新来的学员正在挑选布料，从裁剪到车缝，学员们将从零基础起步，学着亲手为自家“毛孩子”做件新衣服。",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "教室内，工作人员带着新来的学员正在挑选布料，从裁剪到车缝，学员们将从零基础起步，学着亲手为自家“毛孩子”做件新衣服。"
+        },
+        {
+          "label": "来源说明：",
+          "text": "店内目前主要推出两类课程，面向爱好者的单次体验课，以及针对想系统学习者的进阶套餐课。"
+        }
+      ],
+      "links": [
+        {
+          "label": "来源原文",
+          "url": "https://zjnews.zjol.com.cn/yc/qmt/202602/t20260223_31518455.shtml"
+        },
+        {
+          "label": "地图",
+          "url": "https://uri.amap.com/search?keyword=%E7%8E%84%E7%8C%ABMaoer%C2%B7%E7%BC%9D%E7%BA%AB%C2%B7DIY&city=%E6%9D%AD%E5%B7%9E&callnative=0"
+        }
+      ],
+      "reviewedOn": "2026-11-06",
+      "addedAt": "2026-11-06T07:20:39Z",
+      "verifiedAt": "2026-11-06T07:20:39Z",
+      "sourceStatus": "verified",
+      "sourceUrl": "https://zjnews.zjol.com.cn/yc/qmt/202602/t20260223_31518455.shtml",
+      "proof": [
+        "玄猫Maoer·缝纫·DIY",
+        "杭州拱墅区",
+        "教室内，工作人员带着新来的学员正在挑选布料，从裁剪到车缝，学员们将从零基础起步，学着亲手为自家“毛孩子”做件新衣服。",
+        "店内目前主要推出两类课程，面向爱好者的单次体验课，以及针对想系统学习者的进阶套餐课。"
+      ],
+      "dynamic": true
+    },
+    {
+      "id": "auto-f19f4633482a8d1e",
+      "name": "杭宣古道（杭州段）",
+      "group": "hiking",
+      "area": "余杭区百丈镇半山村",
+      "types": "outdoor",
+      "aliases": [
+        "杭宣古道（杭州段）"
+      ],
+      "keywords": "杭宣古道（杭州段） 余杭区百丈镇半山村 杭宣古道（杭州段）处于茫茫竹海之中，浓密的竹荫隔绝暑气，古道上清风穿林而过，凉意顿生。",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "杭宣古道（杭州段）处于茫茫竹海之中，浓密的竹荫隔绝暑气，古道上清风穿林而过，凉意顿生。"
+        }
+      ],
+      "links": [
+        {
+          "label": "来源原文",
+          "url": "https://hwyst.hangzhou.com.cn/xwfb/content/2025-07/11/content_9036542.htm"
+        },
+        {
+          "label": "地图",
+          "url": "https://uri.amap.com/search?keyword=%E6%9D%AD%E5%AE%A3%E5%8F%A4%E9%81%93%EF%BC%88%E6%9D%AD%E5%B7%9E%E6%AE%B5%EF%BC%89&city=%E6%9D%AD%E5%B7%9E&callnative=0"
+        }
+      ],
+      "reviewedOn": "2026-11-06",
+      "addedAt": "2026-11-06T07:20:39Z",
+      "verifiedAt": "2026-11-06T07:20:39Z",
+      "sourceStatus": "verified",
+      "sourceUrl": "https://hwyst.hangzhou.com.cn/xwfb/content/2025-07/11/content_9036542.htm",
+      "proof": [
+        "杭宣古道（杭州段）",
+        "余杭区百丈镇半山村",
+        "杭宣古道（杭州段）处于茫茫竹海之中，浓密的竹荫隔绝暑气，古道上清风穿林而过，凉意顿生。"
+      ],
+      "dynamic": true
+    },
+    {
+      "id": "auto-bd4026abdb4c2abc",
+      "name": "银湖东坞山古道",
+      "group": "hiking",
+      "area": "富阳区银湖街道东坞山村",
+      "types": "outdoor",
+      "aliases": [
+        "银湖东坞山古道"
+      ],
+      "keywords": "银湖东坞山古道 富阳区银湖街道东坞山村 银湖东坞山古道两侧古树参天，沿线绿穹如盖，穿过午潮山竹林，浓密的树荫隔绝烈日。",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "银湖东坞山古道两侧古树参天，沿线绿穹如盖，穿过午潮山竹林，浓密的树荫隔绝烈日。"
+        }
+      ],
+      "links": [
+        {
+          "label": "来源原文",
+          "url": "https://hwyst.hangzhou.com.cn/xwfb/content/2025-07/11/content_9036542.htm"
+        },
+        {
+          "label": "地图",
+          "url": "https://uri.amap.com/search?keyword=%E9%93%B6%E6%B9%96%E4%B8%9C%E5%9D%9E%E5%B1%B1%E5%8F%A4%E9%81%93&city=%E6%9D%AD%E5%B7%9E&callnative=0"
+        }
+      ],
+      "reviewedOn": "2026-11-06",
+      "addedAt": "2026-11-06T07:20:39Z",
+      "verifiedAt": "2026-11-06T07:20:39Z",
+      "sourceStatus": "verified",
+      "sourceUrl": "https://hwyst.hangzhou.com.cn/xwfb/content/2025-07/11/content_9036542.htm",
+      "proof": [
+        "银湖东坞山古道",
+        "富阳区银湖街道东坞山村",
+        "银湖东坞山古道两侧古树参天，沿线绿穹如盖，穿过午潮山竹林，浓密的树荫隔绝烈日。"
+      ],
+      "dynamic": true
+    },
+    {
+      "id": "auto-9545b980dde5060c",
+      "name": "莪山山哈古道",
+      "group": "hiking",
+      "area": "桐庐县莪山畲族乡潘龙村",
+      "types": "outdoor",
+      "aliases": [
+        "莪山山哈古道"
+      ],
+      "keywords": "莪山山哈古道 桐庐县莪山畲族乡潘龙村 莪山山哈古道一路多奇峰异景，森林覆盖率高达97%以上，沿清澈的戴家山溪而行，水声潺潺自带清凉属性。",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "莪山山哈古道一路多奇峰异景，森林覆盖率高达97%以上，沿清澈的戴家山溪而行，水声潺潺自带清凉属性。"
+        }
+      ],
+      "links": [
+        {
+          "label": "来源原文",
+          "url": "https://hwyst.hangzhou.com.cn/xwfb/content/2025-07/11/content_9036542.htm"
+        },
+        {
+          "label": "地图",
+          "url": "https://uri.amap.com/search?keyword=%E8%8E%AA%E5%B1%B1%E5%B1%B1%E5%93%88%E5%8F%A4%E9%81%93&city=%E6%9D%AD%E5%B7%9E&callnative=0"
+        }
+      ],
+      "reviewedOn": "2026-11-06",
+      "addedAt": "2026-11-06T07:20:39Z",
+      "verifiedAt": "2026-11-06T07:20:39Z",
+      "sourceStatus": "verified",
+      "sourceUrl": "https://hwyst.hangzhou.com.cn/xwfb/content/2025-07/11/content_9036542.htm",
+      "proof": [
+        "莪山山哈古道",
+        "桐庐县莪山畲族乡潘龙村",
+        "莪山山哈古道一路多奇峰异景，森林覆盖率高达97%以上，沿清澈的戴家山溪而行，水声潺潺自带清凉属性。"
+      ],
+      "dynamic": true
+    },
+    {
+      "id": "auto-d2cce4b66c9d858e",
+      "name": "安顶山古道",
+      "group": "hiking",
+      "area": "富阳区灵桥镇山基村",
+      "types": "outdoor",
+      "aliases": [
+        "安顶山古道"
+      ],
+      "keywords": "安顶山古道 富阳区灵桥镇山基村 安顶山最高海拔790米，多日出、 云海等美景。古道沿途奇峰交错，飞瀑潺潺，溪流跌宕，翠竹茵茵，是避暑纳凉的好去处。",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "安顶山最高海拔790米，多日出、 云海等美景。古道沿途奇峰交错，飞瀑潺潺，溪流跌宕，翠竹茵茵，是避暑纳凉的好去处。"
+        }
+      ],
+      "links": [
+        {
+          "label": "来源原文",
+          "url": "https://hwyst.hangzhou.com.cn/xwfb/content/2025-07/11/content_9036542.htm"
+        },
+        {
+          "label": "地图",
+          "url": "https://uri.amap.com/search?keyword=%E5%AE%89%E9%A1%B6%E5%B1%B1%E5%8F%A4%E9%81%93&city=%E6%9D%AD%E5%B7%9E&callnative=0"
+        }
+      ],
+      "reviewedOn": "2026-11-06",
+      "addedAt": "2026-11-06T07:20:39Z",
+      "verifiedAt": "2026-11-06T07:20:39Z",
+      "sourceStatus": "verified",
+      "sourceUrl": "https://hwyst.hangzhou.com.cn/xwfb/content/2025-07/11/content_9036542.htm",
+      "proof": [
+        "安顶山古道",
+        "富阳区灵桥镇山基村",
+        "安顶山最高海拔790米，多日出、 云海等美景。古道沿途奇峰交错，飞瀑潺潺，溪流跌宕，翠竹茵茵，是避暑纳凉的好去处。"
+      ],
+      "dynamic": true
+    },
+    {
+      "id": "auto-123f2be81adcbc5e",
+      "name": "老任缝纫自习室",
+      "group": "rainy",
+      "area": "杭州市上城区中国针织城",
+      "types": "culture",
+      "aliases": [
+        "老任缝纫自习室"
+      ],
+      "keywords": "老任缝纫自习室 杭州市上城区中国针织城 学员可亲手制作发圈、帆布袋、纸巾盒等实用小物。",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "学员可亲手制作发圈、帆布袋、纸巾盒等实用小物。"
+        },
+        {
+          "label": "来源说明：",
+          "text": "走进“老任缝纫自习室”，4台老式缝纫机整齐排列"
+        },
+        {
+          "label": "来源说明：",
+          "text": "零基础可上手、工具辅料全包、老师傅手把手教学。"
+        }
+      ],
+      "links": [
+        {
+          "label": "来源原文",
+          "url": "https://jrsh.hangzhou.com.cn/content/2026-05/29/content_9231013.html"
+        },
+        {
+          "label": "地图",
+          "url": "https://uri.amap.com/search?keyword=%E8%80%81%E4%BB%BB%E7%BC%9D%E7%BA%AB%E8%87%AA%E4%B9%A0%E5%AE%A4&city=%E6%9D%AD%E5%B7%9E&callnative=0"
+        }
+      ],
+      "reviewedOn": "2026-11-06",
+      "addedAt": "2026-11-06T07:16:22Z",
+      "verifiedAt": "2026-11-06T07:16:22Z",
+      "sourceStatus": "verified",
+      "sourceUrl": "https://jrsh.hangzhou.com.cn/content/2026-05/29/content_9231013.html",
+      "proof": [
+        "老任缝纫自习室",
+        "杭州市上城区中国针织城",
+        "学员可亲手制作发圈、帆布袋、纸巾盒等实用小物。",
+        "走进“老任缝纫自习室”，4台老式缝纫机整齐排列",
+        "零基础可上手、工具辅料全包、老师傅手把手教学。"
+      ],
+      "dynamic": true
+    },
+    {
+      "id": "auto-3cfc78518a7d3133",
+      "name": "康门水库",
+      "group": "hiking",
+      "area": "杭州市余杭区良渚安溪村康门水库",
+      "types": "outdoor",
+      "aliases": [
+        "康门水库"
+      ],
+      "keywords": "康门水库 杭州市余杭区良渚安溪村康门水库 “小八达岭”登山线，全程约2公里，耗时1—2小时：良渚天梯入口→山顶观景台→竹林步道下山",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "“小八达岭”登山线，全程约2公里，耗时1—2小时：良渚天梯入口→山顶观景台→竹林步道下山"
+        }
+      ],
+      "links": [
+        {
+          "label": "来源原文",
+          "url": "https://tidenews.com.cn/news.html?id=3554004"
+        },
+        {
+          "label": "地图",
+          "url": "https://uri.amap.com/search?keyword=%E5%BA%B7%E9%97%A8%E6%B0%B4%E5%BA%93&city=%E6%9D%AD%E5%B7%9E&callnative=0"
+        }
+      ],
+      "reviewedOn": "2026-11-06",
+      "addedAt": "2026-11-06T07:16:22Z",
+      "verifiedAt": "2026-11-06T07:16:22Z",
+      "sourceStatus": "verified",
+      "sourceUrl": "https://tidenews.com.cn/news.html?id=3554004",
+      "proof": [
+        "康门水库",
+        "杭州市余杭区良渚安溪村康门水库",
+        "“小八达岭”登山线，全程约2公里，耗时1—2小时：良渚天梯入口→山顶观景台→竹林步道下山"
+      ],
+      "dynamic": true
+    },
+    {
+      "id": "auto-b1eb25ba86b0e932",
+      "name": "建德绿荷塘古楠木森林公园",
+      "group": "hiking",
+      "area": "建德市绿荷塘古楠木森林公园",
+      "types": "outdoor",
+      "aliases": [
+        "建德绿荷塘古楠木森林公园"
+      ],
+      "keywords": "建德绿荷塘古楠木森林公园 建德市绿荷塘古楠木森林公园 小环线 1-2公里：入口→楠木王→森林古道",
+      "paragraphs": [
+        {
+          "label": "",
+          "text": "小环线 1-2公里：入口→楠木王→森林古道"
+        }
+      ],
+      "links": [
+        {
+          "label": "来源原文",
+          "url": "https://tidenews.com.cn/news.html?id=3554004"
+        },
+        {
+          "label": "地图",
+          "url": "https://uri.amap.com/search?keyword=%E5%BB%BA%E5%BE%B7%E7%BB%BF%E8%8D%B7%E5%A1%98%E5%8F%A4%E6%A5%A0%E6%9C%A8%E6%A3%AE%E6%9E%97%E5%85%AC%E5%9B%AD&city=%E6%9D%AD%E5%B7%9E&callnative=0"
+        }
+      ],
+      "reviewedOn": "2026-11-06",
+      "addedAt": "2026-11-06T07:16:22Z",
+      "verifiedAt": "2026-11-06T07:16:22Z",
+      "sourceStatus": "verified",
+      "sourceUrl": "https://tidenews.com.cn/news.html?id=3554004",
+      "proof": [
+        "建德绿荷塘古楠木森林公园",
+        "建德市绿荷塘古楠木森林公园",
+        "小环线 1-2公里：入口→楠木王→森林古道"
+      ],
+      "dynamic": true
+    }
+  ],
+  "checkedAt": "2026-11-06T07:20:39Z",
+  "status": "ok",
+  "found": 9,
+  "day": "2026-11-06",
+  "updatedAt": "2026-11-06T07:20:39Z"
+}

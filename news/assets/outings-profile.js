@@ -22,7 +22,7 @@
     if (op.action === "settings") profile.settings = { startArea: op.startArea, people: op.people, transport: op.transport };
     else {
       profile.records = profile.records.filter(r => r.id !== op.id);
-      if (op.action === "record") profile.records.unshift({ id: op.id, title: op.title, status: op.status, updatedAt: new Date().toISOString() });
+      if (op.action === "record") profile.records.unshift({ id: op.id, title: op.title, status: op.status, ...(op.url?{url:op.url}:{}), ...(op.area?{area:op.area}:{}), ...(op.day?{day:op.day}:{}), updatedAt: new Date().toISOString() });
       profile.records = profile.records.slice(0, 300);
     }
   }
@@ -73,7 +73,11 @@
     connected: () => !!endpoint(), update, sync,
     journalRequest: (op, version) => request(op, "/api/outings/journal", version),
     excludes: p => state.records.some(r => ["visited", "dismiss"].includes(r.status) && r.id === p.id),
-    mark: (p, status) => update({ action: "record", id: p.id, title: p.name, status }),
+    mark: (p, status) => {
+      const url = window.OutingLibrary?.safe(p.url || p.bookingUrl || p.sources?.[0]?.url);
+      update({action:"record", id:p.id, title:p.name.slice(0,150), status,
+        ...(url ? {url} : {}), ...(p.area ? {area:p.area.slice(0,120)} : {}), ...(p.day ? {day:p.day.slice(0,120)} : {})});
+    },
   };
   window.addEventListener("online", () => sync(true));
   window.addEventListener("hashchange", clearLegacyEntry);

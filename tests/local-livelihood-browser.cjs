@@ -9,6 +9,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
   try {
     const context = await browser.newContext({ ...devices["iPhone 13"] });
     await context.addInitScript(require("./legacy-safari.cjs"));
+    await context.route("**/api/outings/**",r=>r.abort());
     const page = await context.newPage(),
       errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
@@ -179,7 +180,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       await page.fill("#search", target.title);
       await page.waitForFunction(
         (id) =>
-          !!document.querySelector(`[data-save="${id}"]`) &&
+          !!document.querySelector(`[data-save="${id}"], [data-outing-story="${id}"]`) &&
           document.querySelector("#archive-notice").hidden,
         target.id,
       );
@@ -192,13 +193,14 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
           target.title,
         ),
       );
-      await page.locator(`[data-save="${target.id}"]`).click();
-      await page.locator(".saved-link").click();
-      assert(
-        (await page.locator(".article h3").allTextContents()).includes(
-          target.title,
-        ),
-      );
+      if(category==='local') {
+        await page.locator(`[data-outing-story="${target.id}"]`).click();
+        assert(await page.evaluate(title=>OutingProfile.snapshot().records.some(r=>r.title===title&&r.status==='want'),target.outing?.eventName||target.title));
+      } else {
+        await page.locator(`[data-save="${target.id}"]`).click();
+        await page.locator('.saved-link').click();
+        assert((await page.locator('.article h3').allTextContents()).includes(target.title));
+      }
       // Category buttons intentionally filter saved articles while in Favorites.
       // Return to news before opening a news section or the separate outings.
       await page.locator(".brand").click();
@@ -227,7 +229,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     );
     assert.deepEqual(
       new Set(backup.newsSaved.map((article) => article.category)),
-      new Set(["finance", "local", "livelihood"]),
+      new Set(["finance", "livelihood"]),
     );
     await page.evaluate(() => localStorage.removeItem("zrbac-news-saved-v1"));
     await page.reload();
@@ -241,10 +243,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.waitForFunction(
       () =>
         JSON.parse(localStorage.getItem("zrbac-news-saved-v1") || "[]")
-          .length === 3,
+          .length === 2,
     );
     await page.locator(".saved-link").click();
-    assert.equal(await page.locator(".article").count(), 3);
+    assert.equal(await page.locator(".article").count(), 2);
     await page.locator(".reading-options > summary").click();
     await page.goto(base + "/#local");
     await page.evaluate(() => window.newsInitialLoad);

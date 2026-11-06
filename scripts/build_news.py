@@ -34,9 +34,9 @@ def build_places(template):
                             + (f' aria-label="在高德地图查询{esc(place["name"], quote=True)}"' if 'uri.amap.com/' in link['url'] else '')
                             + f'>{esc(link["label"])} ↗</a>' for link in place['links'])
             update = (f'<p class="place-reviewed">基础资料查阅 {esc(place["reviewedOn"])}</p>'
-                      '<div class="place-updates" data-place-updates>近期消息等待首次检索。</div>') if place['aliases'] else ''
+                      '<div class="place-updates" data-place-updates>近期消息等待首次检索。</div>') if place['aliases'] or group == 'rainy' else ''
             detail_label = ('停车、用炉与近期消息' if camping else
-                            '路线、条件与近期消息' if place['aliases'] else '地点详情与来源')
+                            '地点条件与近期消息' if group == 'rainy' else '路线、条件与近期消息' if place['aliases'] else '地点详情与来源')
             cards.append(f'<li class="{"camping-place " if camping else ""}place-card"'
                          f' data-place-id="{esc(place["id"], quote=True)}" data-place-types="{esc(place["types"], quote=True)}"'
                          f' data-search="{esc(place["keywords"], quote=True)}">'
@@ -264,6 +264,9 @@ def main():
     catalog = json.loads((ROOT / 'news/tonight.json').read_text())
     (output / 'assets/news/tonight-data.js').write_text(
         'window.NewsTonightCatalog=' + json.dumps(catalog, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c') + ';\n')
+    place_data = json.loads((ROOT / 'news/places.json').read_text())
+    place_data['rules'] = json.loads((ROOT / 'news/outing-rules.json').read_text())
+    (output / 'assets/news/outings-data.js').write_text('window.NewsPlaces=' + json.dumps(place_data, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c') + ';\n')
     chapters, static_paths = build_guide_reader(output)
     # Keep the previous edition available to older installed readers until they update.
     old_book = (ROOT / 'news/guide/book.json').read_bytes()
@@ -284,7 +287,7 @@ def main():
     pages.update({path: (output / path.lstrip('/') / 'index.html').read_text() for path in static_paths})
     shell_files = ['/', '/games/', '/guide/', '/homes/', '/manifest.webmanifest', '/assets/news/icon-180.png',
                    '/assets/news/icon-192.png', '/assets/news/icon-512.png']
-    for filename in ('compat.js', 'compat.css', 'archive.js', 'personal.js', 'exchange-core.js', 'outings-profile.js', 'editorial.js', 'tonight-data.js', 'tonight-journal.js', 'tonight.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json', 'homes-core.js', 'home-finder.js', 'homes.css'):
+    for filename in ('compat.js', 'compat.css', 'archive.js', 'personal.js', 'exchange-core.js', 'outings-data.js', 'outings-library.js', 'outings-profile.js', 'editorial.js', 'tonight-data.js', 'tonight-journal.js', 'tonight.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json', 'homes-core.js', 'home-finder.js', 'homes.css'):
         asset = output / 'assets/news' / filename
         digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:12]
         versioned = asset.with_name(f'{asset.stem}.{digest}{asset.suffix}')

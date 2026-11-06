@@ -57,6 +57,19 @@ const put=(id,record)=>({id:"op-"+id.repeat(24),action:"put",record});
 const remove=(id,recordId)=>({id:"op-"+id.repeat(24),action:"remove",recordId});
 const batch=(...operations)=>({schema:1,operations});
 
+test("shared wanted places keep their source and reject unsafe links", async()=>{
+  const {call,restart}=fixture();
+  const record={action:'record',id:'place:example',title:'手作工坊',status:'want',url:'https://example.com/workshop',area:'杭州五常',day:'2026-11-07'};
+  assert.equal((await call('profile',record)).status,200);
+  restart();
+  const saved=(await (await call('profile')).json()).records[0];
+  assert.equal(saved.url,record.url);
+  assert.equal(saved.day,record.day);
+  for(const url of ['javascript:alert(1)','https://user:pass@example.com/','http://example.com/'])
+    assert.equal((await call('profile',{...record,url})).status,400);
+  assert.equal((await (await call('profile')).json()).records[0].url,record.url);
+});
+
 test("shared sync retains request limits and origin checks without requiring pairing", async()=>{
   const {call,env}=fixture();
   assert.equal((await call("connect",{code:"246810"})).status,404);

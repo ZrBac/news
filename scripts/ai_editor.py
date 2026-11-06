@@ -22,22 +22,25 @@ from pathlib import Path
 import collect_news as news
 import news_details
 import outing_profile
+import outing_catalog
 import tonight_plans
 from collect_places import DOMAINS
-from collect_weekend import Text, outing_info, search_due, select_articles, weekend_days
+from collect_weekend import Text, outing_info, search_due, select_articles, weekend_days, event_key as story_event_key
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION = 'editorial-v1'
-OUTING_REVISION = 'outings-discoveries-v5-evenings'
-MAX_DISCOVERIES = 8
-MAX_ALTERNATIVES = 6
+OUTING_REVISION = 'outings-v6-living-catalog'
+MAX_DISCOVERIES = 12
+MAX_ALTERNATIVES = 12
 RESEARCH_TOPICS = (
     '下班后的晚间活动：优先杭州西湖区、余杭区、五常与未来科技城，找今天及未来三天20点后开始、22点前结束的成人工作坊、放映、小剧场、夜间体验。facts.date逐字摘录同一天的年月日和开始/结束时刻，不把日间活动当晚场；无明确时段则不收录为晚间安排。',
     '雨天室内体验：分别找成人手作课程、工作坊、互动喜剧/话剧、独立放映、具体新展。优先本周末可参与的体验，避免全部都是展会或阅读。',
-    '市集与户外：分别找生活方式市集、美食体验、季节限定活动、轻松爬山/骑行与临时管制、停车后少量搬运且可询问卡式炉条件的露营。',
+    '市集与季节体验：分别找生活方式市集、咖啡美食节、秋季限定体验、成人可参与的活动；核对具体地点和活动日期。',
+    '户外新安排：分别找杭州及周边轻松爬山、休闲骑行、营地近期活动、临时管制；露营核对停车、搬运和卡式炉条件。',
+    '场馆排期：逐一查主办方与剧场官网，找本周末仍可参与的话剧、喜剧、独立放映、手作工作坊；允许最近120天发布的有效排期，别只看最近新闻。',
 )
 RATES = {'gpt-6-luna': (0.10, 0.50), 'gpt-6.1-sol': (2.00, 10.00)}
-EXCLUDED = re.compile(r'演唱会|巡回演唱|歌友会|博物馆|亲子|研学|观赛|攀岩|抱石|滑冰|溜冰|冰场|赛事回顾|活动回顾|圆满落幕|圆满结束')
+EXCLUDED = re.compile(news.LOCAL_EXCLUDED.pattern + '|' + news.LOCAL_NOISE.pattern)
 REGION = re.compile(r'杭州|西湖|余杭|临平|临安|萧山|富阳|桐庐|建德|千岛湖|淳安|安吉|德清|莫干山|海宁|良渚|湘湖|钱塘|滨江')
 CLOSED = re.compile(r'封山|封闭|闭园|暂停开放|暂停营业|禁止骑行|禁止露营|临时关闭|取消|延期')
 OUTING_SOURCES = json.loads((ROOT / 'news/outing-sources.json').read_text())['sources']
@@ -110,7 +113,7 @@ SEARCH_SCHEMA = object_schema({'items': array_schema(object_schema({
     })),
 }))})
 TRIP_SCHEMA = object_schema({'picks': array_schema(object_schema({
-    'id': STRING, 'day': STRING, 'reason': STRING,
+    'id': STRING, 'day': STRING, 'reason': STRING, 'summary': STRING,
 }))})
 
 
@@ -158,7 +161,7 @@ class Client:
             raise EditorialError(f'api_http_{error.code}:{code}:{param}') from None
 
     def ask(self, task, instructions, material, schema, research=False):
-        model = self.config['researchModel' if research or task in ('outing_source_details', 'news_details') else 'newsModel']
+        model = self.config['researchModel' if research or task in ('outing_source_details', 'news_details', 'place_source_details') else 'newsModel']
         if model not in RATES:
             raise EditorialError('model_has_no_configured_price')
         input_rate, output_rate = RATES[model]
@@ -407,8 +410,11 @@ def validate_discovery(item, urls, body, places, now):
     url = item.get('url', '')
     if not trusted_url(url) or url.split('#')[0] not in urls:
         return None
+    host = (urllib.parse.urlsplit(url).hostname or '').lower()
+    official = any(host == source['domain'] or host.endswith('.' + source['domain']) for source in OUTING_SOURCES)
+    undated = official and not item.get('publishedDate') and not item.get('publishedEvidence')
     try:
-        published = date.fromisoformat(item['publishedDate'])
+        published = now.astimezone(news.BEIJING).date() if undated else date.fromisoformat(item['publishedDate'])
     except (ValueError, KeyError, TypeError):
         return None
     today = now.astimezone(news.BEIJING).date()
@@ -417,8 +423,8 @@ def validate_discovery(item, urls, body, places, now):
     title = clean(item.get('title'), 110)
     text = title + quote
     if (not today - timedelta(days=120) <= published <= today
-            or not pub_quote or normalized(pub_quote) not in normalized(body)
-            or not has_date(pub_quote, published) or len(quote) < 12
+            or (not undated and (not pub_quote or normalized(pub_quote) not in normalized(body)
+            or not has_date(pub_quote, published))) or len(quote) < 12
             or normalized(quote) not in normalized(body) or EXCLUDED.search(text)
             or not REGION.search(text) or item.get('type') not in ('market', 'culture', 'outdoor', 'camping')):
         return None
@@ -452,7 +458,7 @@ def validate_discovery(item, urls, body, places, now):
     if len(venue) >= 3 and normalized(venue) in normalized(body):
         info['venue'] = venue
     setting, evidence = event.get('setting'), clean(event.get('settingEvidence'), 160)
-    indoor = bool(re.search(r'室内|展厅|展馆|主题馆|主展馆|[A-Z0-9一二三四五六七八九十]+号馆|会展中心|博览中心|剧院|剧场|书店', evidence))
+    indoor = bool(re.search(r'室内|店内|教室|美术馆|展厅|展馆|主题馆|主展馆|[A-Z0-9一二三四五六七八九十]+号馆|会展中心|博览中心|剧院|剧场|书店', evidence))
     outdoor = bool(re.search(r'室外|户外|露天|草坪|广场|山野|营地', evidence))
     if evidence and normalized(evidence) in normalized(body):
         if setting == 'indoor' and indoor and not outdoor or setting == 'outdoor' and outdoor and not indoor or setting == 'mixed' and indoor and outdoor:
@@ -464,6 +470,10 @@ def validate_discovery(item, urls, body, places, now):
     # Cancellation/closure notices remain useful in the place updates, but are
     # excluded from playable activities and recommendations.
     info['cancelled'] = bool(CLOSED.search(title + ' '.join(f['text'] for f in facts if f['kind'] == 'closure')))
+    if undated:
+        if not info.get('start') or not info.get('end') or info['end'] < today.isoformat():
+            return None
+        record['sourceTimeBasis'] = 'verified'
     record['outing'] = info
     return record if discovery_current(record, now) else None
 
@@ -504,7 +514,7 @@ def extract_source_details(client, pages, places, now):
     """Extract from retrieved articles, not only the search engine's snippets."""
     hashes = client.state.setdefault('outingDetailHashes', {})
     pending = [(url, body) for url, body in pages.items()
-               if hashes.get(url) != fingerprint(['source-details-v4-evening-times', body])][:18]
+               if hashes.get(url) != fingerprint(['source-details-v5-complete-dates', body])][:30]
     accepted, failures = [], []
     for offset in range(0, len(pending), 6):
         selected = dict(pending[offset:offset + 6])
@@ -530,7 +540,7 @@ def extract_detail_batch(client, selected, places, now):
         'novelty只能摘录一句20—90字的原文说明本次新安排，优先普通游客可参与的体验、课程、市集或新展品，跳过招商及行业宣传。禁止改写、拼接或加省略号。日期按活动日期摘录，发布日期要有完整年月日证据，不得互换；'
         '费用说明保留票种和适用日期，预约只用实际原文链接。未知内容留空，setting填unknown。'
         '优先提取今天晚间、未来三天或本周末仍在举办的活动；facts.date保留对应日期与起止时刻的完整原文，不能把不同日期的时段合并。提前公布的演出排期也可提取，绝不把旧公告发布日期改成今天。'
-        '泛泛攻略和无法确认发表日期的文章可不返回。排除演唱会、博物馆、亲子、观赛、攀岩和滑冰。',
+        '经营者官方排期若没有公告发布日期，publishedDate与publishedEvidence都留空；必须有原文明确活动起止日期，网站会标为核对时间，不编造发布日期。媒体报道仍须明确发布日期。泛泛攻略不返回。排除演唱会、博物馆、亲子、观赛、攀岩和滑冰。',
         {'today': now.astimezone(news.BEIJING).date().isoformat(),
          'weekend': [str(day) for day in weekend_days(now)],
          'pages': [{'url': url, 'body': body[:14000] + '\n' + body[-5000:]} for url, body in selected.items()],
@@ -543,7 +553,7 @@ def extract_detail_batch(client, selected, places, now):
             if article:
                 accepted.append(article)
     for article in accepted:
-        hashes[article['url']] = fingerprint(['source-details-v4-evening-times', selected[article['url']]])
+        hashes[article['url']] = fingerprint(['source-details-v5-complete-dates', selected[article['url']]])
     client.state['outingDetailHashes'] = dict(list(hashes.items())[-80:])
     print(compact({'detailPages': len(selected), 'verifiedDetails': len(accepted)}))
     return accepted
@@ -556,6 +566,8 @@ def merge_discovery(previous, current, body):
             or old.get('eventName') != new.get('eventName')):
         return current
     record = copy.deepcopy(current)
+    if current.get('sourceTimeBasis') == previous.get('sourceTimeBasis') == 'verified':
+        record['publishedAt'] = previous['publishedAt']
     info = record['outing']
     for field in ('novelty', 'venue', 'bookingUrl', 'settingEvidence'):
         proof = old.get(field)
@@ -583,7 +595,7 @@ def discover(client, places, previous, now, get=get_source, lead_articles=()):
                 '优先提供的主办方、剧场和场馆官网，媒体用于补充核验；不要只围绕已有地点搜索。'
                 '集中完成本批focus中的不同玩法检索，尽量覆盖多种体验；knownUrls已有报道不再重复，只为其补证据时例外。'
                 '排除攀岩、抱石、滑冰、溜冰、演唱会、博物馆、亲子、观赛、招商、回顾和泛泛攻略。优先文旅部门、场地公告和本地媒体。'
-                '最多8条，宁少勿编。必须有原文URL及明确发布日期，publishedEvidence摘录含完整年月日的逐字证据，'
+                '最多8条，宁少勿编。必须有原文URL；媒体报道须明确发布日期，publishedEvidence摘录含完整年月日的逐字证据。经营者官方排期无发布日期时两字段留空，仍必须逐字证明活动起止日期，'
                 'quote为原文中含地点与实用安排的一小段逐字原文。不得将抓取日期或活动日当成报道发布日期。'
                 'facts只摘录原文明确的活动日期/费用/停车/用炉/预约/关闭条件；晚间活动的date须逐字摘录日期和开始、结束时刻在一起的证据，不存在就给空数组。'
                 'placeIds只关联提供的地点ID，找不到就为空。没有实际新消息就返回空数组，不重复上轮条目。',
@@ -617,8 +629,9 @@ def discover(client, places, previous, now, get=get_source, lead_articles=()):
     leads = [a.get('originalUrl') or a['url'] for a in list(lead_articles) + previous.get('items', [])
              if trusted_url(a.get('originalUrl') or a.get('url')) and discovery_current(a, now)
              and (not a.get('outing', {}).get('novelty') or a['outing'].get('setting') == 'unknown')
-             and a.get('outing', {}).get('type') in ('culture', 'market') and not EXCLUDED.search(a.get('title', ''))][:6]
-    requested = list(dict.fromkeys([a['url'] for a in candidates] + leads))[:18]
+             and a.get('outing', {}).get('type') in ('culture', 'market') and not EXCLUDED.search(a.get('title', ''))][:16]
+    official = [s['url'] for s in OUTING_SOURCES if trusted_url(s['url'])]
+    requested = list(dict.fromkeys([a['url'] for a in candidates] + official + leads))[:30]
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         pages = {url: body for url, body in pool.map(read, requested) if body}
     incoming = [record for item in candidates
@@ -712,6 +725,8 @@ def trip_candidates(data, places, discoveries, now, profile=None):
     result = []
     updates = data.get('placeUpdates', {}).get('places', {})
     for place in places:
+        if place.get('dynamic') and (place.get('sourceStatus') != 'verified' or not news.parse_date(place.get('verifiedAt')) or now-news.parse_date(place['verifiedAt']) > timedelta(days=7)):
+            continue
         references = [link for link in place['links'] if 'uri.amap.com/' not in link['url']]
         recent = list(updates.get(place['id'], {}).get('items', []))
         recent += [a for a in discoveries if place['id'] in a.get('placeIds', [])]
@@ -721,7 +736,7 @@ def trip_candidates(data, places, discoveries, now, profile=None):
         closed = any(CLOSED.search(a['title'] + ' '.join(f['text'] for f in a.get('facts', []) if f['kind'] == 'closure')) for a in recent)
         result.append({'id': 'place:' + place['id'], 'placeId': place['id'], 'name': place['name'],
             'area': place['area'], 'type': place['group'], 'details': text[:650],
-            'reviewedOn': place['reviewedOn'], 'region': place_region(place['area'] + place['name']),
+            'reviewedOn': place['reviewedOn'], 'addedAt': place.get('addedAt'), 'verifiedAt': place.get('verifiedAt'), 'dynamic': place.get('dynamic', False), 'region': place_region(place['area'] + place['name']),
             'sources': references[:2], 'news': [{'title': a['title'], 'url': a.get('originalUrl') or a['url'], 'publishedAt': a['publishedAt']} for a in recent[:2]],
             'setting': 'indoor' if place['group'] == 'rainy' else 'outdoor', 'discovery': False,
             'mapUrl': next((link['url'] for link in place['links'] if 'uri.amap.com/' in link['url']), ''), 'closed': closed})
@@ -789,15 +804,16 @@ def complete_trip(data, places, research, trip, now, profile=None):
     if trip.get('weekendStart') != str(start) or trip.get('weekendEnd') != str(end):
         return trip
     def choose(pool, limit):
+        is_discovery = any(c.get('discovery') for c in pool.values())
         picks, seen, events = [], set(), set()
         def event_identity(candidate):
             return outing_profile.event_key(candidate['name'], candidate.get('start', ''),
                 candidate.get('end', ''), '') if candidate.get('discovery') else candidate['id']
-        def append(candidate, day, reason, selection):
+        def append(candidate, day, reason, selection, summary=''):
             seen.add(candidate['id'])
             events.add(event_identity(candidate))
             picks.append({k: v for k, v in {**candidate, 'day': day, 'reason': reason, 'selection': selection,
-                          'novelty': activity_text_for_day(candidate, day)}.items()
+                          'summary': summary or clean(candidate.get('details'), 100), 'novelty': activity_text_for_day(candidate, day)}.items()
                           if k not in ('availableDays', 'closed')})
         for pick in trip.get('picks', []) + trip.get('alternatives', []):
             candidate = pool.get(pick.get('id'))
@@ -806,8 +822,8 @@ def complete_trip(data, places, research, trip, now, profile=None):
                 continue
             if re.search(r'允许.{0,8}(?:炉|明火)|可以.{0,8}(?:炉|明火)|免费|免票|正常开放|保证|余位充足', reason):
                 continue
-            append(candidate, pick['day'], reason, pick.get('selection', 'ai'))
-            if len(picks) == limit:
+            append(candidate, pick['day'], reason, pick.get('selection', 'ai'), clean(pick.get('summary'), 100))
+            if len(picks) == (limit if is_discovery else min(4, limit)):
                 break
         def kind(candidate):
             if candidate['type'] == 'rainy':
@@ -821,7 +837,9 @@ def complete_trip(data, places, research, trip, now, profile=None):
                 break
             kinds = {kind(p) for p in picks}
             candidate = min(remaining, key=lambda c: (kind(c) in kinds,
-                not bool(c.get('news') or c.get('publishedAt')), c['id']))
+                not any(r.get('id') == c['id'] and r.get('status') == 'want' for r in (profile or {}).get('records', [])),
+                not bool(c.get('dynamic')), not bool(c.get('news') or c.get('publishedAt')),
+                fingerprint([str(start), c['id']])))
             day = min(candidate['availableDays'], key=lambda d: (
                 sum(p['day'] == d for p in picks), forecast_for(weather, candidate['region'], d)['rainProbability'], d))
             forecast = forecast_for(weather, candidate['region'], day)
@@ -848,6 +866,7 @@ def recommend(client, data, places, research, weather, now):
         'reason用20—60字解释为什么适合这一天，依据材料和天气。'
         '不得声称实时开放、允许用炉、余位充足、免票或已预约，也不编造交通时间、线路、距离或费用。'
         '近期无新消息的地点只能作为常设地点参考，不能写成当周新活动。'
+        'summary用25—60字独立说明能做什么，不出现指代不明的他或这里，不复述天气，不照抄广告语。'
         '生成的推荐会公开展示；reason不要透露私人记录、出发地或用户个人信息。',
         {'weekend': [str(start), str(end)], 'weather': weather, 'preferences': client.state.get('outingProfile', {}), 'candidates': list(eligible.values())}, TRIP_SCHEMA)
     trip = complete_trip(data, places, research, {
@@ -876,7 +895,7 @@ def apply_results(data, editorial, records, now):
         else:
             existing[article['url']]['facts'] = article.get('facts', [])
             existing[article['url']].setdefault('outing', {}).update(article.get('outing', {}))
-            for key in ('verifiedAt', 'sourceStatus', 'sourceCheckedAt'):
+            for key in ('verifiedAt', 'sourceStatus', 'sourceCheckedAt', 'sourceTimeBasis'):
                 if key in article:
                     existing[article['url']][key] = article[key]
     data['weekendArticles'] = select_articles(list(existing.values()), now)
@@ -904,6 +923,13 @@ def run(data, previous, state, client, places, now, force=False):
     editorial = copy.deepcopy(previous.get('editorial', {}))
     editorial.update(schema=1, checkedAt=news.iso(now))
     problems = []
+    catalog = state.get('placeCatalog') or editorial.get('placeCatalog') or json.loads((ROOT / 'news/place-seeds.json').read_text())
+    try:
+        catalog = outing_catalog.update(client, catalog, places, now, get=get_source, trusted=trusted_url, citations=cited_urls, force=force)
+    except Exception as error:
+        problems.append('places:' + safe_error(error))
+    editorial['placeCatalog'] = state['placeCatalog'] = catalog
+    places = outing_catalog.merged(places, catalog)
     home = copy.deepcopy(state.get('tonightHome') or editorial.get('tonightHome') or {})
     try:
         home = tonight_plans.update_home(client, home, now, force)
@@ -965,6 +991,18 @@ def run(data, previous, state, client, places, now, force=False):
             trip['attemptedRevision'] = OUTING_REVISION
     trip = complete_trip(data, places, research, trip, now, state.get('outingProfile', {}))
     editorial['trip'] = state['trip'] = trip
+    for article in data.get('weekendArticles', []):
+        info = article.get('outing', {})
+        if info.get('eventName') and info.get('start') and info.get('end'):
+            article['outingId'] = outing_profile.event_key(info['eventName'],info['start'],info['end'],info.get('venue',''))
+        key = story_event_key(article)
+        if key:
+            for pick in trip.get('picks', []):
+                sample = {'title':pick['name'], 'publishedAt':article['publishedAt'],
+                    'outing':{'eventName':pick['name'],'type':pick['type'],'start':pick.get('start','')}}
+                if story_event_key(sample) == key:
+                    article['outingId'] = pick['id']
+                    break
     editorial['tonight'] = {'day': str(now.astimezone(news.BEIJING).date()), 'checkedAt': news.iso(now),
         'researchedAt': research.get('searchedAt'), 'researchStatus': research.get('status'),
         'events': tonight_plans.evening_events(

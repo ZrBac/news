@@ -66,6 +66,8 @@
     <script src="/assets/news/personal.js" defer></script>
     <script src="/assets/news/archive.js" defer></script>
     <script src="/assets/news/exchange-core.js" defer></script>
+    <script src="/assets/news/outings-data.js" defer></script>
+    <script src="/assets/news/outings-library.js" defer></script>
     <script src="/assets/news/outings-profile.js" defer></script>
     <script src="/assets/news/editorial.js" defer></script>
     <script src="/assets/news/tonight-data.js" defer></script>
@@ -131,17 +133,19 @@
               <h1 id="section-title" tabindex="-1">每日速览</h1>
             </div>
             <span id="result-count" class="result-count"></span>
-            <button id="outing-browse" class="text-button" hidden>全部活动与地点 ↓</button>
+            <button id="outing-browse" class="text-button" hidden>地点库 ↓</button>
           </div>
           <nav id="outing-nav" aria-label="安排时间" hidden>
             <a href="#tonight" data-outing-mode="tonight">今晚</a>
             <a href="#local" data-outing-mode="weekend">周末</a>
+            <button id="outing-records-trigger" class="text-button" aria-controls="outing-records">我们的记录</button>
           </nav>
+          <div id="outing-records" hidden></div>
           <section id="tonight-plans" aria-label="今晚做点什么" hidden></section>
           <div id="news-listing">
-          <section id="outing-recommendations" aria-label="本周新发现与去处记录" hidden></section>
+          <section id="outing-recommendations" aria-label="本周可选" hidden></section>
           <div id="outing-catalog-heading" class="outing-section-heading" hidden>
-            <h2>全部活动与地点</h2>
+            <h2>地点库</h2>
             <span id="outing-catalog-count"></span>
           </div>
           <div class="filter-tabs" aria-label="资讯栏目">
@@ -265,10 +269,11 @@
             aria-label="周末玩法筛选"
             hidden
           ></section>
+          <div id="outing-library-updates" hidden></div>
           <section id="outing-places" aria-labelledby="outing-places-title" hidden>
             <div class="outing-section-heading">
               <h2 id="outing-places-title">按玩法找地方</h2>
-              <span>选一类，慢慢挑</span>
+              <span id="place-catalog-status">按玩法查找</span>
             </div>
             <div class="place-groups">
               <details
@@ -321,6 +326,7 @@
                 <summary><h2>
                   下雨去哪 <span data-place-count>__RAINY_COUNT__ 个地点参考</span>
                 </h2></summary>
+                <p class="place-note" data-place-updates-summary="rainy"></p>
                 <p class="place-intro">
                   手作、运动体验、书店和话剧，按兴趣挑一两项。时长为本站粗略预留，不含交通；需要课程或场次的先预约，停车与地铁接驳仍可能淋雨。
                 </p>
@@ -360,10 +366,11 @@
             hidden
           ></section>
           <section id="housing-prices" aria-label="杭州房价" hidden></section>
-          <div id="outing-news-heading" class="outing-section-heading" hidden>
-            <h2>近期动态</h2>
-            <span id="outing-news-count"></span>
-          </div>
+          <details id="outing-news-panel" hidden>
+            <summary id="outing-news-heading"><span>更多活动线索</span><span id="outing-news-count"></span></summary>
+            <p class="trip-note">尚未全部核实到日期、费用和预约条件；同一活动的报道合并显示。</p>
+            <div id="outing-news-content"></div>
+          </details>
           <div
             id="articles"
             class="article-list"

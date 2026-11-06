@@ -132,6 +132,12 @@ export default {
     }
   },
   async scheduled(_event, env) {
+    if (env.SCHEDULE_ENABLED === "true" && ["17 * * * *", "0 1,8 * * *"].includes(_event.cron)) {
+      const response = await coordinator(env).fetch("https://internal/periodic");
+      if (!response.ok) throw new Error("scheduled_refresh_failed");
+      console.log(JSON.stringify({event:"scheduled_refresh", ...await response.json()}));
+      return;
+    }
     if (env.WATCHDOG_ENABLED !== "true") return;
     const response = await coordinator(env).fetch("https://internal/check");
     const result = await response.json();
@@ -163,6 +169,8 @@ export class NewsCoordinator {
           return json(await this.trigger());
         if (action === "/check" && this.env.WATCHDOG_ENABLED === "true")
           return json(await this.check());
+        if (action === "/periodic" && this.env.SCHEDULE_ENABLED === "true")
+          return json(await this.periodic());
         return json({ status: "not_found" }, 404);
       } catch {
         // Avoid retry storms on expired credentials or an upstream outage. No secrets in logs.
@@ -193,6 +201,18 @@ export class NewsCoordinator {
         if (!["visited", "want", "dismiss"].includes(input.status) || typeof input.title !== "string" ||
             !input.title.trim() || input.title.length > 150) return json({ status: "invalid_request" }, 400);
         const record = { id: input.id, title: input.title.trim(), status: input.status, updatedAt: stamp };
+        if (input.url !== undefined) {
+          try {
+            const url = new URL(input.url);
+            if (url.protocol !== "https:" || url.username || url.password || input.url.length > 1500) throw new Error();
+            record.url = url.href;
+          } catch { return json({status:"invalid_request"},400); }
+        }
+        for (const key of ["area", "day"]) {
+          if (input[key] !== undefined && (typeof input[key] !== "string" || input[key].length > 120))
+            return json({status:"invalid_request"},400);
+          if (input[key]) record[key] = input[key];
+        }
         profile.records = [record, ...profile.records.filter(r => r.id !== input.id)].slice(0, 300);
       } else profile.records = profile.records.filter(r => r.id !== input.id);
     } else return json({ status: "invalid_request" }, 400);
@@ -378,6 +398,19 @@ export class NewsCoordinator {
     const baselineAt = await this.published();
     if (now - timestamp(baselineAt) < MANUAL_INTERVAL)
       return { status: "fresh", updatedAt: baselineAt };
+    return this.dispatch(baselineAt);
+  }
+
+  async periodic() {
+    const now = Date.now(), runs = await this.runs();
+    if (runs.some(r => r.status !== "completed")) return {status:"run_active"};
+    const baselineAt = await this.published();
+    const request = await this.ctx.storage.get("request");
+    const recent = Math.max(request?.requestedAt || 0, ...runs.map(r=>r.created));
+    const china = new Date(now + 8 * 3_600_000);
+    const slot = [9,16].includes(china.getUTCHours()) && china.getUTCMinutes() < 10;
+    if (now-recent < MANUAL_INTERVAL) return {status:"cooldown"};
+    if (!slot && now-Math.max(timestamp(baselineAt),recent) < 45 * 60_000) return {status:"fresh"};
     return this.dispatch(baselineAt);
   }
 

@@ -2,6 +2,8 @@
 import hashlib
 import json
 import re
+import math
+from urllib.parse import urlencode
 from datetime import timedelta
 from pathlib import Path
 
@@ -9,6 +11,38 @@ import collect_news as news
 
 ROOT = Path(__file__).resolve().parents[1]
 REVISION = 'tonight-v2'
+
+
+def update_weather(previous, now, get=news.fetch):
+    """Evening decisions use hourly forecasts, independently of optional AI work."""
+    checked = news.parse_date(previous.get('updatedAt'))
+    if checked and timedelta(0) <= now-checked < timedelta(minutes=55):
+        return previous
+    result = dict(previous)
+    try:
+        query = urlencode({'latitude':30.2741, 'longitude':120.1551, 'timezone':'Asia/Shanghai',
+            'forecast_days':2, 'wind_speed_unit':'kmh',
+            'hourly':'precipitation_probability,precipitation,wind_speed_10m,weather_code'})
+        data = json.loads(get('https://api.open-meteo.com/v1/forecast?' + query))
+        units, hours = data.get('hourly_units',{}), data.get('hourly',{})
+        if data.get('timezone') != 'Asia/Shanghai' or units.get('wind_speed_10m') != 'km/h' or units.get('precipitation') != 'mm':
+            raise ValueError('weather_units')
+        rows = []
+        for i, stamp in enumerate(hours.get('time',[])):
+            if stamp[11:13] not in ('19','20','21','22'):
+                continue
+            row = {'time':stamp, **{key:hours[field][i] for key,field in (
+                ('rainProbability','precipitation_probability'), ('rainMm','precipitation'),
+                ('windKmh','wind_speed_10m'), ('code','weather_code'))}}
+            if not all(isinstance(row[k],(int,float)) and math.isfinite(row[k]) for k in ('rainProbability','rainMm','windKmh','code')):
+                continue
+            rows.append(row)
+        if not rows:
+            raise ValueError('weather_empty')
+        result = {'updatedAt':news.iso(now),'status':'ok','hours':rows,'source':'Open-Meteo'}
+    except Exception:
+        result.update(status='unavailable',attemptedAt=news.iso(now))
+    return result
 
 
 def catalog():

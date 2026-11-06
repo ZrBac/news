@@ -9,6 +9,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
   try {
     const context = await browser.newContext({ ...devices["iPhone 13"] });
     await context.addInitScript(require("./legacy-safari.cjs"));
+    await context.route("**/api/outings/**",r=>r.abort());
     await context.addInitScript(() => {
       Date.now = () => Date.parse("2026-10-23T10:00:00Z");
     });
@@ -23,6 +24,9 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const latest = await (
       await page.request.get(base + "/data/latest.json")
     ).json();
+    // This suite exercises the fixed reference catalog. Source-backed additions
+    // have their own fixture in living-outings-browser.cjs.
+    latest.editorial = { ...latest.editorial, placeCatalog: { places: [] } };
     const source = latest.sources.find((s) => s.category === "local");
     const make = (id, title, type, extra = {}) => ({
       id,
@@ -42,12 +46,12 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     });
     latest.weekendArticles = [
       market,
-      make("weekend-culture", "浙江省博物馆秋日特展", "culture", {
+      make("weekend-culture", "杭州秋日艺术特展", "culture", {
         start: "2026-10-01",
         end: "2026-11-10",
       }),
       make("weekend-outdoor", "安吉森林徒步路线", "outdoor"),
-      make("weekend-family", "杭州亲子非遗手作工作坊", "family", {
+      make("weekend-family", "杭州成人非遗手作工作坊", "family", {
         start: "2026-10-24",
         end: "2026-10-24",
       }),
@@ -180,6 +184,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert(await page.locator(".filter-tabs").isHidden());
     assert(await page.locator(".sidebar").isHidden());
     assert.equal(await page.locator(".article").count(), 3);
+    await page.locator("#outing-news-panel > summary").click();
     assert.equal(await page.locator("#load-more-label").innerText(), "查看更多动态");
     await page.locator("#load-more").click();
     assert.equal(await page.locator(".article").count(), 6);
@@ -292,7 +297,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator(".outing-update-info > summary").click();
     assert.match(
       await page.locator("#weekend-tools").innerText(),
-      /来源每小时检查.*每天9点、16点.*最近专题检索/s,
+      /按小时检查来源.*每天9点、16点.*最近专题检索/s,
     );
     assert.match(
       await page.locator('[data-article-id="weekend-market"]').innerText(),
@@ -347,7 +352,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       assert.deepEqual(await page.locator('[data-place-group]:visible').evaluateAll(nodes => nodes.map(node => node.id)), [`${kind}-places`]);
       assert.equal(await page.locator('.article').count(), {hiking:1,cycling:0,camping:1}[kind]);
     }
-    assert.match(await page.locator('#camping-updates').innerText(), /每小时自动检查.*最近检查.*最新消息/s);
+    assert.match(await page.locator('#camping-updates').innerText(), /按小时自动检查.*最近检查.*最新消息/s);
     await page.locator('[data-outing-type="all"]').click();
     await page.locator('[data-outing-range="recent"]').click();
     assert.equal(await page.locator(".article").count(), 3);
@@ -372,13 +377,17 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       0,
     );
     await page.fill("#search", "露营地周末预约");
-    await page.locator('[data-save="weekend-camping"]').click();
+    await page.locator('[data-outing-story="weekend-camping"]').click();
     await page.fill("#search", "良渚暖村");
     await page.waitForFunction(
       () => document.querySelectorAll(".article").length === 1,
     );
-    await page.locator('[data-save="weekend-market"]').click();
-    await page.locator(".saved-link").click();
+    await page.locator('[data-outing-story="weekend-market"]').click();
+    assert.equal(await page.evaluate(()=>OutingProfile.snapshot().records.filter(r=>r.status==='want').length),2);
+    await page.evaluate(items=>localStorage.setItem('zrbac-news-saved-v1',JSON.stringify(items)),latest.weekendArticles.filter(a=>['weekend-market','weekend-camping'].includes(a.id)));
+    await page.goto(base+'/#saved');
+    await page.reload();
+    await page.evaluate(()=>window.newsInitialLoad);
     assert.match(
       await page
         .locator('[data-article-id="weekend-market"] .outing-summary')

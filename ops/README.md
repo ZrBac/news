@@ -6,7 +6,7 @@
 | --- | --- |
 | GitHub Pages | 提供页面、静态资源和公开数据 |
 | GitHub Actions | 定时采集、内容整理、检查和发布 |
-| [Cloudflare Workers](cloudflare/README.md) | 手动刷新、停更补跑和去处记录同步 |
+| [Cloudflare Workers](cloudflare/README.md) | 定时采集触发、手动刷新、停更补跑和去处记录同步 |
 
 修改默认分支时，需要同时检查工作流的触发分支、云函数的目标分支，以及 Pages 环境的部署规则。
 

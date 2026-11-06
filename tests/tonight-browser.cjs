@@ -19,6 +19,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8766";
     const event = {id:"event:night-fixture", name:"五常晚间手作", discovery:true, setting:"indoor", region:"hangzhou", area:"余杭区五常",
       day:"2026-11-05", startTime:"20:30", endTime:"21:30", minutes:60, verifiedAt:"2026-11-05T08:00:00Z",
       timeEvidence:"11月5日20:30—21:30，手作体验。", novelty:"今天晚间的双人手作体验。", sources:[{label:"活动原文",url:"https://hznews.hangzhou.com.cn/example"}]};
+    packet.eveningWeather={updatedAt:"2026-11-05T11:00:00Z",hours:[19,20,21,22].map(h=>({time:`2026-11-05T${h}:00`,rainProbability:10,rainMm:0,windKmh:10,code:1}))};
     packet.editorial = {...packet.editorial, tonightHome:{revision:"tonight-v2",day:"2026-11-05",updatedAt:"2026-11-05T08:00:00Z",ideas:[{
       id:"event:tonight-drawing",name:'新选题 <img id="injected" src=x>',summary:"今晚画一只带影子的杯子，存进自己的小画册。",
       steps:["从桌上的杯子开始画轮廓。","看着杯子补上影子和把手。","写下日期存好，下次接着画另一件小物。"]}, {
@@ -34,7 +35,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8766";
     await page.goto(base + "/#tonight");
     await page.evaluate(() => window.newsInitialLoad);
     assert.equal(await page.locator('[data-outing-mode="tonight"]').getAttribute("aria-current"), "page");
-    assert.match(await page.locator('.outing-profile > summary').innerText(), /偏好与反馈/);
+    assert.match(await page.locator('.outing-profile > summary').textContent(), /偏好设置/);
     assert(await page.locator("#news-listing").isHidden());
     assert(await page.locator("#outing-browse").isHidden());
     assert.equal(await page.locator(".tonight-list > li:visible").count(), 3);
@@ -78,8 +79,10 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8766";
     // Legacy visited feedback must not hide a continuing project for a week.
     await page.evaluate(id => OutingProfile.mark(NewsTonightCatalog.activities.find(p => p.id === id), "visited"), chosen);
     assert.equal(await card.count(), 1);
+    await page.locator("#outing-records-trigger").click();
     await page.locator(".outing-profile > summary").click();
-    assert.match(await page.locator(".outing-records").innerText(), /玩过/);
+    await page.locator(".record-visited > summary").click();
+    assert.match(await page.locator(".record-visited .outing-records").innerText(), /把一本书慢慢读完/);
     await page.locator(`[data-outing-remove="${chosen}"]`).click();
     assert.equal(await card.count(), 1);
     await page.locator(".tonight-journal > summary").click();
@@ -118,7 +121,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8766";
     await page.locator('[data-tonight-arrival="19"]').click();
     await page.locator('[data-tonight-energy="active"]').click();
     await page.evaluate(packet => {
-      packet.editorial.trip.weather.regions.hangzhou.days[0].rainProbability = 90;
+      packet.eveningWeather.hours.forEach(r=>r.rainProbability=90);
       NewsTonight.render(packet, {view:"local", outingMode:"tonight"}, s=>s);
     }, packet);
     assert.equal(await page.locator('[data-tonight-id="event:tonight-nearby-walk"],[data-tonight-id="event:tonight-nearby-cycle"]').count(), 0, "rain excludes outdoor options");

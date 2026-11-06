@@ -128,8 +128,7 @@
     const kind = { "hiking-places": "hiking", "cycling-places": "cycling", "camping-places": "camping" }[group];
     return kind ? { type: "outdoor", kind } : outingActivity("culture", place.dataset.search + " " + place.querySelector("h3").textContent);
   }
-  const outingExcluded =
-    /演唱[会會]|巡回演唱|歌友[会會]|幼儿园|(?:小学|中学|学校).{0,20}(?:秋游|研学|毅行)|家族办公室|周年庆|客户答谢|团建回顾|长期主义|落地实验|活动回顾|赛事回顾|精彩回顾|圆满落幕|圆满收官|成功举办|活动纪实|活动侧记|闭幕|曲终|谢幕|落下帷幕|圆满结束|拍于|摄于|戏剧人|(?:亮相|赴|登陆|走进)(?:上海|北京|广州|深圳)国际|露营经济|露营产业|营地投资|营地招商|露营装备/;
+  const outingExcluded = window.OutingLibrary.excluded;
   function outingInfo(article) {
     const info = { ...article.outing };
     if (/露营|营地|野营/.test(article.title)) info.type = "camping";
@@ -242,7 +241,7 @@
         (failed ? "部分检索暂未成功，已有消息继续保留。" : "") +
         (summary.dataset.placeUpdatesSummary === "camping"
           ? "检索时间不代表现场开放或用炉许可已核实。"
-          : "检索结果不代表路线当天全线开放。");
+          : "消息不代表当天营业或路线全线开放。");
       cards.forEach((card) => {
         const panel = card.querySelector("[data-place-updates]");
         if (!panel) return;
@@ -284,7 +283,7 @@
   function renderWeekendTools() {
     const panel = $("#weekend-tools");
     panel.hidden = state.view !== "local";
-    if (!panel.hidden) renderPlaceUpdates();
+    if (!panel.hidden) { window.OutingLibrary.render(state.data, formatTime); renderPlaceUpdates(); }
     const words = state.query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
     const searchExpansion = (details, searching) => {
       if (searching) {
@@ -359,7 +358,7 @@
     const failed = campSources.filter((s) => s.status !== "ok").length;
     const campingNote =
       state.outingType === "outdoor" && state.outingKind === "camping"
-        ? `<p class="outing-checked" id="camping-updates">露营消息每小时自动检查${checked ? `，最近检查 ${escape(formatTime(checked))}` : "，等待首次检查"}；${camping?.latestAt ? `最新消息 ${escape(formatTime(camping.latestAt))}。` : "暂无新消息时保留近期报道。"}${failed ? "部分来源暂不可用，保留已收录消息。" : ""} 下方营地为地点参考，停车和用炉条件请向营地确认。</p>`
+        ? `<p class="outing-checked" id="camping-updates">露营消息按小时自动检查${checked ? `，最近检查 ${escape(formatTime(checked))}` : "，等待首次检查"}；${camping?.latestAt ? `最新消息 ${escape(formatTime(camping.latestAt))}。` : "暂无新消息时保留近期报道。"}${failed ? "部分来源暂不可用，保留已收录消息。" : ""} 下方营地为地点参考，停车和用炉条件请向营地确认。</p>`
         : "";
     const updatesOpen = panel.querySelector(".outing-update-info")?.open;
     panel.innerHTML = `<div class="outing-ranges" role="group" aria-label="活动日期范围">
@@ -375,7 +374,7 @@
         .join("")}</div>
       ${state.outingType === "outdoor" ? `<div class="outing-subtypes" role="group" aria-label="户外玩法">${Object.entries({ all: "全部户外", ...outingKinds }).map(([key, label]) => `<button data-outing-kind="${key}" aria-pressed="${state.outingKind === key}">${escape(label)}</button>`).join("")}</div>` : ""}
       <details class="outing-update-info"${updatesOpen ? " open" : ""}><summary>更新说明</summary>
-      <p class="outing-checked">来源每小时检查；每天9点、16点补充检索（北京时间，可能延迟）。${escape(researched || last)}活动时间与报名以原文为准。</p></details>${campingNote}`;
+      <p class="outing-checked">按小时检查来源；每天9点、16点补充检索（北京时间，采集发布需要几分钟）。${escape(researched || last)}活动时间与报名以原文为准。</p></details>${campingNote}`;
     return referenceCount;
   }
   // Reuse the same controls and event listeners in news and outings. DOM order
@@ -388,6 +387,7 @@
         [".source-select", "#outing-source-controls"], ["#date-trigger", "#outing-source-controls"],
         ["#date-panel", "#outing-filters"], [".reading-options", "#outing-filters"],
         ["#weekend-tools", "#outing-topic-controls"], ["#result-count", "#outing-catalog-count"],
+        ["#articles", "#outing-news-content"], ["#load-more", "#outing-news-content"], ["#list-end", "#outing-news-content"],
       ].map(([selector, target]) => {
         const node = $(selector), home = document.createComment("control position");
         node.before(home);
@@ -500,6 +500,8 @@
   }
   function articleCard(article, index) {
     const saved = state.saved.has(article.id);
+    const outingRecord = article.category === "local" ? window.OutingLibrary.articleRecord(article) : null;
+    const wanted = outingRecord && window.OutingProfile.snapshot().records.some(r=>r.id===outingRecord.id && r.status==="want");
     const source = sourceFor(article);
     const read = window.NewsPersonal?.isRead(article.id);
     const aggregated = /^https?:\/\/news\.google\.com\//.test(article.url);
@@ -528,8 +530,8 @@
       textKey(article.title).startsWith(excerptKey);
     const detail = window.NewsEditorial?.detail(article);
     const summary = detail?.summary || (state.view === "brief" && window.NewsEditorial?.metadata(article)?.summary);
-    const publishedLabel = article.dateOnly ? dayOf(article.publishedAt) : relativeTime(article.publishedAt);
-    const publishedTitle = article.dateOnly ? dayOf(article.publishedAt) + "（来源仅提供日期）" : "北京时间 " + formatTime(article.publishedAt);
+    const publishedLabel = article.sourceTimeBasis === "verified" ? "来源核对 " + formatTime(article.verifiedAt || article.publishedAt) : article.dateOnly ? dayOf(article.publishedAt) : relativeTime(article.publishedAt);
+    const publishedTitle = article.sourceTimeBasis === "verified" ? "原公告未标注发布日期，此处为来源核对时间" : article.dateOnly ? dayOf(article.publishedAt) + "（来源仅提供日期）" : "北京时间 " + formatTime(article.publishedAt);
     return `<article class="article${read ? " read" : ""}" data-article-id="${escape(article.id)}"><div class="article-body">
       ${state.view === "brief" ? `<span class="article-number">${String(index + 1).padStart(2, "0")}</span>` : ""}
       <h3><a href="${escape(articleUrl(article))}" aria-label="${escape(article.title)}" target="_blank" rel="noopener noreferrer">${headline}</a></h3>
@@ -537,7 +539,7 @@
       ${summary ? `<p class="editorial-summary"${detail ? ' data-summary-source="article"' : ""}>${escape(summary)}</p>` : article.excerpt ? `<p${repeatsTitle ? ' class="repeated-excerpt"' : ""}>${escape(article.excerpt)}</p>` : ""}
       <div class="article-meta"><span>${escape(source.name)}</span><time datetime="${escape(article.publishedAt)}" title="${escape(publishedTitle)}">${escape(publishedLabel)}</time><span class="category-label ${escape(article.category)}">${categoryNames[article.category]}</span>${read ? '<span class="read-label">已读</span>' : ""}</div>
       ${article.reports?.length ? `<details class="article-reports"><summary>其他 ${article.reports.length} 篇报道</summary>${article.reports.map((a) => `<a href="${escape(articleUrl(a))}" target="_blank" rel="noopener noreferrer">${escape(sourceFor(a).name)} · ${escape(a.title)}</a>`).join("")}</details>` : ""}
-      </div><button class="save-button${saved ? " saved" : ""}" data-save="${escape(article.id)}" aria-label="${saved ? "取消收藏" : "收藏"}：${escape(article.title)}" aria-pressed="${saved}" title="${saved ? "取消收藏" : "收藏文章"}">${icon("bookmark")}</button></article>`;
+      </div>${outingRecord ? `<button class="text-button outing-save" data-outing-story="${escape(article.id)}" aria-pressed="${!!wanted}">${wanted?"已想去":"想去"}</button>` : `<button class="save-button${saved ? " saved" : ""}" data-save="${escape(article.id)}" aria-label="${saved ? "取消收藏" : "收藏"}：${escape(article.title)}" aria-pressed="${saved}" title="${saved ? "取消收藏" : "收藏文章"}">${icon("bookmark")}</button>`}</article>`;
   }
   function selectBrief(articles) {
     const rank = (article) => {
@@ -1015,7 +1017,7 @@
     $(".filter-tabs").hidden = outings;
     $(".sidebar").hidden = outings;
     $(".main-layout").classList.toggle("outings-view", outings);
-    $("#outing-news-heading").hidden = !outings;
+    $("#outing-news-panel").hidden = !outings;
     renderOutingLayout();
     $("#outing-nav").hidden = !outings;
     $("#news-listing").hidden = outings && state.outingMode === "tonight";
@@ -1093,6 +1095,8 @@
     renderExchangeRates();
     const referenceCount = renderWeekendTools();
     window.NewsEditorial?.render(state.data, state, formatTime);
+    window.NewsEditorial?.renderRecords(state.data, state, formatTime);
+    if (outings && (state.query || state.source !== "all" || state.date || state.outingType !== "all")) $("#outing-news-panel").open = true;
     const articles = matchingArticles();
     $("#outing-news-count").textContent = `${articles.length} 条消息 · 按发布时间`;
     const partial =
@@ -1257,7 +1261,7 @@
   function renderSourceFilter() {
     const catalog = state.data.archive?.categories;
     const ids =
-      state.view === "saved"
+      state.view === "local" ? new Set((state.data.weekendArticles || []).filter(a=>!outingExcluded.test(a.title)).map(a=>a.sourceId)) : state.view === "saved"
         ? new Set(
             [...state.saved.values()]
               .filter(
@@ -1682,6 +1686,15 @@
     );
   });
   document.addEventListener("click", (e) => {
+    if(e.target.closest('#outing-records-trigger')) {const root=$('#outing-records');root.querySelector('details').open=true;root.scrollIntoView({behavior:'smooth',block:'start'});return;}
+    const tonightOpen=e.target.closest('[data-tonight-open]');
+    if(tonightOpen) {history.replaceState(null,'','#tonight');route(false);window.NewsTonight.reveal(tonightOpen.dataset.tonightOpen);return;}
+    const saveOuting = e.target.closest("[data-outing-story]");
+    if (saveOuting) {
+      const a = (state.data?.weekendArticles || []).concat([...state.saved.values()]).find(a=>a.id===saveOuting.dataset.outingStory);
+      if (a) window.OutingProfile.mark(window.OutingLibrary.articleRecord(a), "want");
+      return;
+    }
     const readLink = e.target.closest(".article h3 a, .article-reports a");
     if (readLink) {
       const card = readLink.closest(".article");
@@ -1723,6 +1736,7 @@
     }
     const tripPlace = e.target.closest("[data-trip-place]");
     if (tripPlace) {
+      if(state.outingMode === "tonight") {history.replaceState(null,"","#local");route(false);}
       const card = $$("[data-place-id]").find(
         (place) => place.dataset.placeId === tripPlace.dataset.tripPlace,
       );
@@ -1829,6 +1843,7 @@
     if (e.target.closest("[data-retry]")) load(true, false, true);
   });
   window.addEventListener("hashchange", () => route(true));
+  window.addEventListener("outing-feedback-change", () => { if(state.data && state.view === "local") render(); });
   window.addEventListener("storage", (e) => {
     if (e.key === "zrbac-news-saved-v1") {
       loadSaved();

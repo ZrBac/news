@@ -2247,7 +2247,7 @@
   ) {
     if (loading) return;
     loading = true;
-    $("#refresh-news").disabled = true;
+    $("#refresh-news").disabled = $("#refresh-outings").disabled = true;
     $("#load-notice").hidden = true;
     if (!state.data) {
       try {
@@ -2309,7 +2309,7 @@
       return false;
     } finally {
       loading = false;
-      $("#refresh-news").disabled = refreshing;
+      $("#refresh-news").disabled = $("#refresh-outings").disabled = refreshing;
       $("#articles").setAttribute("aria-busy", "false");
       ensureArticles();
     }

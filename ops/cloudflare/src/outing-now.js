@@ -23,11 +23,13 @@ export async function readJSON(response, max = 200000) {
   return JSON.parse(new TextDecoder().decode(bytes));
 }
 
-async function getJSON(url, timeout, init = {}) {
+async function getJSON(url, timeout, init = {}, source = "source") {
   const controller = new AbortController(), timer = setTimeout(() => controller.abort(), timeout);
   try {
-    const response = await fetch(url, {...init, signal: controller.signal, redirect: "error"});
-    if (!response.ok) throw new Error(response.status === 429 ? "upstream_busy" : "upstream_failed");
+    // Workers supports manual/follow, but rejects the browser's "error" mode.
+    // Manual also prevents forwarding authorization to a redirected host.
+    const response = await fetch(url, {...init, signal: controller.signal, redirect: "manual"});
+    if (!response.ok) throw new Error(response.status === 429 ? "upstream_busy" : source + "_http_" + response.status);
     return await readJSON(response);
   } catch (error) {
     if (controller.signal.aborted) throw new Error("timeout");
@@ -101,7 +103,7 @@ intro用一句话解释眼下判断。每项title不超过24字、reason不超�
 export async function generateAdvice(env, input, now = Date.now()) {
   const object = env.COORDINATOR.get(env.COORDINATOR.idFromName("outings"));
   const [packet, weatherData, response] = await Promise.all([
-    getJSON(CONTEXT, 6000, {cache: "no-store"}),
+    getJSON(CONTEXT, 6000, {cache: "no-store"}, "context"),
     getJSON(WEATHER, 5000).catch(() => null),
     object.fetch(new Request("https://internal/outing-profile")),
   ]);
@@ -125,7 +127,7 @@ export async function generateAdvice(env, input, now = Date.now()) {
   };
   const result = await getJSON("https://api.openai.com/v1/responses", 45000, {
     method: "POST", headers: {Authorization: "Bearer " + env.OPENAI_API_KEY, "Content-Type": "application/json"}, body: JSON.stringify(payload),
-  });
+  }, "model");
   if (result.status !== "completed") throw new Error("invalid_response");
   const text = (result.output || []).filter(x => x.type === "message").flatMap(x => x.content || [])
     .filter(x => x.type === "output_text").map(x => x.text).join("");

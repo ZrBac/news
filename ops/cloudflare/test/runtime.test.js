@@ -24,6 +24,7 @@ test("Workers runtime: SQLite coordinator serializes requests and keeps cooldown
     compatibilityDate: "2026-09-01",
     bindings: {
       GITHUB_TOKEN: "test-only",
+      OPENAI_API_KEY: "test-only-model",
       MANUAL_ENABLED: "true",
       WATCHDOG_ENABLED: "true",
     },
@@ -40,6 +41,17 @@ test("Workers runtime: SQLite coordinator serializes requests and keeps cooldown
     },
     outboundService: async (request) => {
       const url = new URL(request.url);
+      const ideas = ["reading", "drawing", "photos"].map(id => ({id:"event:tonight-" + id,
+        name:id, title:id, reason:"下班后做一个小练习。", minutes:20, setting:"home", group:"home", sources:[],
+        steps:["拿出手边的材料。", "留下一个小成果。"],outcome:"一条记录"}));
+      if (url.pathname === "/data/outing-now.json") return Response.json({schema:1,updatedAt:new Date().toISOString(),candidates:ideas});
+      if (url.hostname === "api.open-meteo.com") return new Response("unavailable", {status:503});
+      if (url.hostname === "api.openai.com") {
+        assert.equal(request.headers.get("Authorization"),"Bearer test-only-model");
+        const input=await request.json();
+        assert.equal(input.store,false);
+        return Response.json({status:"completed",output:[{type:"message",content:[{type:"output_text",text:JSON.stringify({intro:"现在适合在家做一点小事。",ideas})}]}]});
+      }
       if (
         url.origin === "https://news.zacai.fun" &&
         url.pathname === "/data/status.json"
@@ -77,6 +89,11 @@ test("Workers runtime: SQLite coordinator serializes requests and keeps cooldown
     const results = await Promise.all(Array.from({ length: 8 }, request));
     assert.equal(results.filter((r) => r.status === "running").length, 1);
     assert.equal(results.filter((r) => r.status === "cooldown").length, 7);
+    const advice = await mf.dispatchFetch("https://api.example.com/api/outings/now", {method:"POST",
+      headers:{Origin:"https://news.zacai.fun","Content-Type":"application/json"},
+      body:JSON.stringify({minutes:30,setting:"home",note:"想做一点有积累的事",previous:[]})});
+    assert.equal(advice.status,200);
+    assert.equal((await advice.json()).ideas.length,3,"real Workers fetch, shared profile and model response work together");
     const profileUrl = "https://api.example.com/api/outings/profile";
     const profileHeaders = {Origin:"https://news.zacai.fun"};
     const saved = await mf.dispatchFetch(profileUrl, {method:"POST", headers:profileHeaders,

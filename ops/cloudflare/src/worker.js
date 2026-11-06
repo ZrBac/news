@@ -93,7 +93,8 @@ export default {
         return reply(await generateAdvice(env, input));
       } catch (error) {
         const status = error.message === "timeout" ? "timeout" : error.message === "upstream_busy" ? "busy" : "unavailable";
-        console.error(JSON.stringify({event:"outing_now_failed",status}));
+        const cause = /^(?:(?:context|model)_http_[1-5]\d\d|context_unavailable|invalid_response|upstream_busy|timeout|response_too_large)$/.test(error.message) ? error.message : "internal";
+        console.error(JSON.stringify({event:"outing_now_failed",status,cause}));
         return reply({status}, status === "timeout" ? 504 : status === "busy" ? 429 : 503);
       } finally {
         if (lease) {

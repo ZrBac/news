@@ -44,7 +44,7 @@ function fixture() {
     put:async (key,value)=>{for (const [k,v] of typeof key === "string" ? [[key,value]] : Object.entries(key)) data.set(k,structuredClone(v));},
     list:async ({prefix,startAfter,limit})=>new Map([...data].filter(([k])=>k.startsWith(prefix) && (!startAfter || k>startAfter)).sort(([a],[b])=>a.localeCompare(b)).slice(0,limit)),
   }};
-  const env={OUTING_PROFILE_TOKEN:"test-private-connection-abcdefghijklmnopqrstuvwxyz",OUTING_PAIRING_PIN:"246810",
+  const env={OUTING_PROFILE_TOKEN:"test-private-connection-abcdefghijklmnopqrstuvwxyz",
     REQUEST_LIMITER:{limit:async()=>({success:true})}};
   let object=new NewsCoordinator(ctx,env);
   env.COORDINATOR={idFromName:n=>n,get:()=>({fetch:r=>object.fetch(r)})};
@@ -59,18 +59,13 @@ const put=(id,record)=>({id:"op-"+id.repeat(24),action:"put",record});
 const remove=(id,recordId)=>({id:"op-"+id.repeat(24),action:"remove",recordId});
 const batch=(...operations)=>({schema:1,operations});
 
-test("six digit pairing exchanges a private credential, validates origin and limits guessing across restarts", async()=>{
-  const {call,restart}=fixture();
-  assert.equal((await call("connect",{code:"246810"},false,"https://evil.example")).status,403);
-  assert.equal((await call("connect",{code:"short"},false)).status,400);
-  const connected=await call("connect",{code:"246810"},false);
-  assert.equal(connected.status,200);
-  assert.match((await connected.json()).token,/^test-private-connection-/);
-  assert.equal(connected.headers.get("Cache-Control"),"no-store");
-  for(let i=0;i<4;i++) assert.equal((await call("connect",{code:"000000"},false)).status,401);
-  restart();
-  assert.equal((await call("connect",{code:"246810"},false)).status,429);
+test("automatic sync keeps shared data private and the removed pairing endpoint stays closed", async()=>{
+  const {call}=fixture();
+  assert.equal((await call("connect",{code:"246810"},false)).status,404);
+  assert.equal((await call("profile",null,false)).status,401);
   assert.equal((await call("journal",null,false)).status,401);
+  assert.equal((await call("journal",null,true,"https://evil.example")).status,403);
+  assert.equal((await call("journal")).headers.get("Cache-Control"),"no-store");
 });
 
 test("journal merges two devices, keeps data separate, and retry cannot resurrect another device's deletion", async()=>{

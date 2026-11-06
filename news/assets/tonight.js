@@ -213,7 +213,7 @@
     try {
       window.TonightJournal.add(pick, form.elements.note.value, form.elements.next.value);
       drafts.delete(pick.id);
-      message = window.OutingProfile?.connected() ? "进展已保存，正在自动同步。下次接着这一步。" : "进展已保存在本机；在“偏好与反馈”连接后自动同步。";
+      message = window.OutingProfile?.connected() ? "进展已保存，正在自动同步。下次接着这一步。" : "进展已保存在本机；从专属入口打开后自动同步。";
       // Close the editor before re-rendering, so its saved draft is not restored.
       form.closest("details").open = false;
       render(...lastRender);

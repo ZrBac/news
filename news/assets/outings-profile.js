@@ -2,15 +2,20 @@
   "use strict";
   const key = "news-outing-profile-v1", tokenKey = "news-outing-connection-v1";
   const empty = () => ({ schema: 1, settings: {}, records: [], pending: [] });
-  let state, token = "", syncing = false, checkedAt = 0, message = "", connecting = false, unauthorized = false;
+  let state, token = "", syncing = false, checkedAt = 0, message = "", unauthorized = false, remembered = true;
   try { state = JSON.parse(localStorage.getItem(key)); token = localStorage.getItem(tokenKey) || ""; } catch (_) {}
   if (!state || !Array.isArray(state.records) || !Array.isArray(state.pending)) state = empty();
-  const incoming = location.hash.match(/(?:&|\?)outing-key=([A-Za-z0-9_-]{32,100})/);
-  if (incoming) {
+  function readEntry() {
+    const incoming = location.hash.match(/(?:&|\?)outing-key=([A-Za-z0-9_-]{32,100})(?:$|&)/);
+    if (!incoming) return false;
     token = incoming[1];
-    try { localStorage.setItem(tokenKey, token); } catch (_) {}
-    history.replaceState(null, "", location.pathname + location.search + "#local");
+    unauthorized = false; checkedAt = 0;
+    try { localStorage.setItem(tokenKey, token); remembered = true; } catch (_) { remembered = false; }
+    const view = /^#tonight(?:[&?]|$)/.test(location.hash) ? "#tonight" : "#local";
+    history.replaceState(null, "", location.pathname + location.search + view);
+    return true;
   }
+  readEntry();
   function changed() {
     try { localStorage.setItem(key, JSON.stringify(state)); }
     catch (_) { message = "浏览器未允许保存，请保持页面打开。"; }
@@ -32,7 +37,7 @@
     const timer = setTimeout(() => controller.abort(), 15000);
     try {
       const response = await fetch(url.href, { method: op ? "POST" : "GET", cache: "no-store", signal: controller.signal,
-        headers: { ...(path.endsWith("/connect") ? {} : {Authorization:"Bearer " + token}), ...(op ? { "Content-Type": "application/json" } : {}) },
+        headers: { Authorization:"Bearer " + token, ...(op ? { "Content-Type": "application/json" } : {}) },
         ...(op ? { body: JSON.stringify(op) } : {}) });
       if (!response.ok) throw new Error(({401:"unauthorized",429:"busy",409:"journal_full"})[response.status] || "unavailable");
       const result = await response.json();
@@ -55,45 +60,29 @@
         try { localStorage.setItem(key, JSON.stringify(state)); } catch (_) {}
       }
       state = { ...remote, pending: [] };
-      message = "已自动同步，两台设备共用这些偏好和反馈。";
+      message = remembered ? "已自动同步，两台设备共用这些偏好和反馈。" : "已自动同步；当前浏览器无法记住入口，下次请仍从专属入口打开。";
     } catch (error) {
       if (error.message === "unauthorized") unauthorized = true;
-      message = unauthorized ? "连接已失效，请重新输入六位连接码。" : "已保存在本机，联网后自动补传。";
+      message = unauthorized ? "连接已失效，请从专属入口重新打开。" : "已保存在本机，联网后自动补传。";
     } finally { syncing = false; checkedAt = Date.now(); changed(); }
   }
   function update(op) {
     apply(state, op);
     state.pending = state.pending.filter(p => op.action === "settings" ? p.action !== "settings" : p.id !== op.id);
     state.pending.push(op);
-    message = token ? "已保存，正在同步。" : "已保存在本机；连接共同记录后可用于下一轮推荐。";
+    message = token ? "已保存，正在同步。" : "已保存在本机；从专属入口打开后自动同步。";
     changed(); sync(true);
-  }
-  async function connect(value) {
-    if (connecting) return;
-    if (!/^\d{6}$/.test(value) && !/^[A-Za-z0-9_-]{32,100}$/.test(value)) { message = "请输入六位连接码。"; changed(); return; }
-    connecting = true; message = "正在连接…"; changed();
-    try {
-      const credential = /^\d{6}$/.test(value) ? (await request({code:value}, "/api/outings/connect")).token : value;
-      if (typeof credential !== "string" || !/^[A-Za-z0-9_-]{32,100}$/.test(credential)) throw new Error("unavailable");
-      // Never persist the short pairing code. Old private links remain valid.
-      localStorage.setItem(tokenKey, credential);
-      token = credential; unauthorized = false; checkedAt = 0;
-      await sync(true);
-    } catch (error) {
-      message = error.message === "unauthorized" ? "连接码不正确，请重新输入。" : error.message === "busy" ?
-        "尝试次数较多，请15分钟后再连接。" : "暂时未能连接，请检查网络及浏览器存储后重试。";
-      changed();
-    } finally { connecting = false; }
   }
   window.OutingProfile = {
     snapshot: () => state,
-    status: () => message || (token ? "自动同步已开启" : "首次输入六位码，之后自动同步"),
-    connected: () => !!token && !unauthorized, update, connect, sync,
+    status: () => message || (token ? "自动同步已开启" : "记录保存在本机；从专属入口打开后自动同步"),
+    connected: () => !!token && !unauthorized, update, sync,
     journalRequest: (op, version) => request(op, "/api/outings/journal", version),
     excludes: p => state.records.some(r => ["visited", "dismiss"].includes(r.status) && r.id === p.id),
     mark: (p, status) => update({ action: "record", id: p.id, title: p.name, status }),
   };
   window.addEventListener("online", () => sync(true));
+  window.addEventListener("hashchange", () => { if (readEntry()) { changed(); sync(true); } });
   const visible = () => !document.hidden && !document.activeElement?.closest("form") && /^#(?:local|tonight)(?:$|[&?])/.test(location.hash);
   document.addEventListener("visibilitychange", () => { if (visible()) sync(true); });
   setInterval(() => { if (visible()) sync(false); }, 30000);

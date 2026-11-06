@@ -84,7 +84,7 @@
     return {app:"zacai-tonight-journal", schema:1, exportedAt:new Date(Date.now()).toISOString(), records:read().records};
   }
   function schedule() {
-    message = window.OutingProfile?.connected() ? "已保存，正在自动同步。" : "已保存在本机；在“偏好与反馈”连接后自动同步。";
+    message = window.OutingProfile?.connected() ? "已保存，正在自动同步。" : "已保存在本机；从专属入口打开后自动同步。";
     if (window.OutingProfile?.connected()) setTimeout(() => sync(true), 0);
   }
   function overlay(records, pending) {
@@ -122,7 +122,7 @@
       write(state);
       message = state.pending.length ? "部分记录已同步，其余会自动补传。" : "积累已自动同步，两台设备都能接着看。";
     } catch (error) {
-      message = error.message === "unauthorized" ? "连接已失效，请在“偏好与反馈”重新连接。" :
+      message = error.message === "unauthorized" ? "连接已失效，请从专属入口重新打开。" :
         error.message === "journal_full" ? "共同记录已满，本机内容已保留。请先备份、整理旧记录。" :
         "本机记录已保留，暂未同步成功，联网后自动重试。";
     } finally {

@@ -23,6 +23,14 @@ class OutingNowTests(unittest.TestCase):
         self.assertEqual(result['candidates'][2]['end'], '2026-11-08')
         self.assertNotIn('private', str(result))
 
+    def test_current_verified_events_replace_stale_weekend_selection_and_closures(self):
+        place = {'id': 'closed', 'name': '临时闭园地点', 'group': 'rainy', 'links': [{'url': 'https://example.com'}]}
+        old = {'id': 'event:cancelled', 'name': '已取消', 'start': '2026-11-06', 'end': '2026-11-08', 'sources': place['links']}
+        current = {**old, 'id': 'event:weekday', 'name': '今晚课程', 'end': '2026-11-06'}
+        data = {'editorial': {'trip': {'picks': [old]}}}
+        result = public_context(data, {'places': [place]}, {}, [current, {'id': 'place:closed', 'closed': True}])
+        self.assertEqual([p['id'] for p in result['candidates']], ['event:weekday'])
+
 
 if __name__ == '__main__':
     unittest.main()

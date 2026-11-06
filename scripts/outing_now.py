@@ -1,9 +1,10 @@
 """Small, public source packet for on-demand outing advice. No user records."""
 import json
+from datetime import datetime, timezone
 from urllib.parse import urlsplit
 
 
-def public_context(data, places, tonight):
+def public_context(data, places, tonight, verified=None):
     def clean(value, size=700):
         return str(value or '').strip()[:size]
 
@@ -31,8 +32,9 @@ def public_context(data, places, tonight):
         }
     editorial = data.get('editorial', {})
     updates = data.get('placeUpdates', {}).get('places', {})
+    closed = {p['id'] for p in verified or [] if p.get('closed')}
     for item in places.get('places', []) + editorial.get('placeCatalog', {}).get('places', []):
-        if item.get('sourceStatus', 'verified') != 'verified':
+        if item.get('sourceStatus', 'verified') != 'verified' or 'place:' + item['id'] in closed:
             continue
         group = item.get('group')
         sources = links(item.get('links', []))
@@ -44,12 +46,16 @@ def public_context(data, places, tonight):
             'area': clean(item.get('area'), 140),
             'summary': clean(' '.join(p.get('text', '') for p in item.get('paragraphs', []))),
             'checkedAt': item.get('verifiedAt') or item.get('reviewedOn'),
+            'dynamic': bool(item.get('dynamic')),
             'recent': [{'title': clean(p.get('title'), 120), 'date': p.get('publishedAt')}
                        for p in updates.get(item['id'], {}).get('items', [])[:2]],
             'sources': sources,
         }
     trip = editorial.get('trip', {})
-    for item in trip.get('picks', []) + trip.get('alternatives', []):
+    # All verified dated activities are eligible, including weekday sessions.
+    # A retained weekend selection must not revive a cancelled/changed event.
+    events = verified if verified is not None else trip.get('picks', []) + trip.get('alternatives', [])
+    for item in events:
         if not item.get('id', '').startswith('event:') or not item.get('start') or not item.get('end'):
             continue
         sources = links(item.get('sources', []))
@@ -67,6 +73,10 @@ def public_context(data, places, tonight):
 
 
 def build(data, root, output):
-    packet = public_context(data, json.loads((root / 'news/places.json').read_text()),
-                            json.loads((root / 'news/tonight.json').read_text()))
+    from ai_editor import trip_candidates
+    places = json.loads((root / 'news/places.json').read_text())
+    editorial = data.get('editorial', {})
+    verified = trip_candidates(data, places['places'] + editorial.get('placeCatalog', {}).get('places', []),
+                               editorial.get('research', {}).get('items', []), datetime.now(timezone.utc))
+    packet = public_context(data, places, json.loads((root / 'news/tonight.json').read_text()), verified)
     (output / 'data/outing-now.json').write_text(json.dumps(packet, ensure_ascii=False, separators=(',', ':')) + '\n')

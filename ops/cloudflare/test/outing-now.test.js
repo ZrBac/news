@@ -35,6 +35,8 @@ function fixture() {
 test("advice filters expired events, stale sources, feedback, night outings and unsuitable weather",()=>{
   const candidates=[...home,place("visited"),place("wanted"),place("hike",{setting:"outdoor",group:"hiking"}),
     place("stale",{checkedAt:"2026-01-01"}),place("concert",{name:"演唱会"}),
+    place("closed",{closed:true}),place("dynamic-old",{dynamic:true,checkedAt:"2026-10-28"}),
+    place("stale-event",{id:"event:stale",group:"event",checkedAt:"2026-11-03",start:"2026-11-01",end:"2026-11-08"}),
     place("past",{id:"event:past",group:"event",start:"2026-11-01",end:"2026-11-05"}),
     place("future",{id:"event:future",group:"event",start:"2026-11-07",end:"2026-11-08"})];
   const p={...profile,records:[{id:"place:visited",title:"visited",status:"visited"},{id:"place:wanted",title:"wanted",status:"want"}]};

@@ -69,8 +69,9 @@ export function selectCandidates(packet, profile, input, weather, now) {
     if (!/^(place|event):[a-z0-9-]{1,100}$/.test(p.id) || !p.name || EXCLUDED.test(p.name) || excluded.has(p.id) || names.some(n => p.name.includes(n) || n.includes(p.name))) return false;
     if (p.setting === "home") return true;
     if (homeOnly || input.minutes < 60 || hour >= 23 || hour < 6) return false;
-    const checked = Date.parse(p.checkedAt), age = now - checked;
-    if (!Number.isFinite(age) || age < -86400000 || age > 45 * 86400000) return false;
+    const checked = Date.parse(/^\d{4}-\d{2}-\d{2}$/.test(p.checkedAt) ? p.checkedAt + "T00:00:00+08:00" : p.checkedAt), age = now - checked;
+    const maximumAge = p.group === "event" ? 2 : p.dynamic ? 7 : 45;
+    if (!Number.isFinite(age) || age < -300000 || age > maximumAge * 86400000 || p.closed) return false;
     if (p.group === "event" && !(p.start <= today && p.end >= today)) return false;
     if (p.setting !== "indoor" && (!weather?.outside || !weather.isDay || hour >= 17)) return false;
     return Array.isArray(p.sources) && p.sources.length > 0;

@@ -44,6 +44,9 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.evaluate(()=>{location.hash="#tonight";});
     await page.locator("#outing-now > summary").waitFor();
     assert.match(await page.locator("#outing-now > summary").innerText(),/正在生成/);
+    // Closing a browser can drop the queued details toggle event. Saving the
+    // open state must not depend on that later event reaching its handler.
+    await page.locator("#outing-now").evaluate(panel=>panel.addEventListener("toggle",event=>event.stopImmediatePropagation(),{capture:true,once:true}));
     await page.locator("#outing-now > summary").click();
     assert(await page.locator("#outing-now-submit").isDisabled());
     assert.equal(calls,1);

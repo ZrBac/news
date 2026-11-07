@@ -100,7 +100,10 @@
   showState();
   window.addEventListener("offline", showState);
   window.addEventListener("online", showState);
-  panel.addEventListener("toggle", () => { persist(); if (panel.open && !active) draw(); showState(); });
+  // The details "toggle" event is queued and may not run before a tab closes.
+  // Save the actual attribute change in the current task's microtask checkpoint.
+  new MutationObserver(persist).observe(panel, {attributes:true, attributeFilter:["open"]});
+  panel.addEventListener("toggle", () => { if (panel.open && !active) draw(); showState(); });
   // A second tab can recover an answer completed by the original tab without
   // another model call. Never replace a different request or an edited draft.
   window.addEventListener("storage", event => {

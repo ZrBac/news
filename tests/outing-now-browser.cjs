@@ -61,11 +61,12 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.equal(requests.length,3);
     await context.setOffline(false);
     await page.reload();
-    await page.locator("#outing-now > summary").click();
+    await page.waitForFunction(()=>document.querySelector("#outing-now").open);
     assert.equal(await page.locator("#outing-now-note").inputValue(),"今天有点累，想练画画","refresh keeps the last request's draft");
     assert.equal(await page.locator("#outing-now-minutes").inputValue(),"30");
     assert.equal(await page.locator("#outing-now-setting").inputValue(),"home");
-    assert.equal(await page.locator(".outing-now-ideas > li").count(),3,"refresh retains this session's previous advice");
+    assert.equal(await page.locator(".outing-now-ideas > li").count(),3,"refresh retains the previous advice");
+    assert.match(await page.locator("#outing-now-status").innerText(),/已取消/);
     assert.equal(requests.length,3);
     // Source links and all generated strings are rendered as untrusted content.
     mode="ok";answer.ideas[0]={...answer.ideas[0],title:'<img src=x onerror="window.bad=true">',setting:"indoor",sources:[

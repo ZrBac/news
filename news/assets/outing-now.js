@@ -6,8 +6,9 @@
   if (!panel) return;
   const form = $("#outing-now-form"), status = $("#outing-now-status"), results = $("#outing-now-result");
   const submit = $("#outing-now-submit"), cancel = $("#outing-now-cancel");
-  const key = "news-outing-now-v1";
-  let saved = null, active = null, wasCancelled = false;
+  const key = "news-outing-now-v1", draftKey = "news-outing-now-draft-v1";
+  const waitLimit = 60000;
+  let saved = null, active = null;
   const esc = v => String(v == null ? "" : v).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"})[c]);
   const safe = value => { try { const u = new URL(value); return u.protocol === "https:" && !u.username && !u.password ? u.href : ""; } catch (_) { return ""; } };
   const time = value => { const d = new Date(Date.parse(value) + 8 * 3600000); return Number.isFinite(d.getTime()) ? d.toISOString().slice(5,16).replace("T", " ") : ""; };
@@ -44,6 +45,21 @@
     if (valid(previous) && Date.now() - Date.parse(previous.generatedAt) < 24 * 3600000) saved = previous;
   } catch (_) {}
   if (new Date(Date.now() + 8 * 3600000).getUTCHours() >= 21) $("#outing-now-minutes").value = "30";
+  try {
+    const draft = JSON.parse(sessionStorage.getItem(draftKey));
+    if (["30","60","120","240"].includes(draft?.minutes) && ["auto","home","outside"].includes(draft.setting) &&
+        typeof draft.note === "string" && draft.note.length <= 300) {
+      $("#outing-now-minutes").value = draft.minutes;
+      $("#outing-now-setting").value = draft.setting;
+      $("#outing-now-note").value = draft.note;
+    }
+  } catch (_) {}
+  function saveDraft() {
+    try { sessionStorage.setItem(draftKey, JSON.stringify({minutes:$("#outing-now-minutes").value,
+      setting:$("#outing-now-setting").value, note:$("#outing-now-note").value})); } catch (_) {}
+  }
+  form.addEventListener("input", saveDraft);
+  form.addEventListener("change", saveDraft);
   draw();
   const online = () => {
     if (!active && !navigator.onLine) status.textContent = "即时建议需要联网。" + (saved ? "下方保留上次结果。" : "可以先看下面已保存的今晚、周末安排。");
@@ -52,32 +68,52 @@
   window.addEventListener("offline", online);
   window.addEventListener("online", () => { if (!active) status.textContent = "已联网，可以点击获取当前建议。"; });
   panel.addEventListener("toggle", () => { if (panel.open && !active) { draw(); online(); } });
-  cancel.addEventListener("click", () => { if (active) { wasCancelled = true; active.abort(); } });
+  cancel.addEventListener("click", () => active?.stop("cancelled"));
+  const resume = () => {
+    // Mobile browsers suspend timers in the background. Enforce elapsed wall
+    // time as soon as this page becomes visible again, including bfcache restores.
+    if (active && Date.now() >= active.deadline) active.stop("timeout");
+  };
+  window.addEventListener("pageshow", resume);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) resume(); });
   form.addEventListener("submit", async event => {
     event.preventDefault();
     if (active) return;
     if (!navigator.onLine) { online(); return; }
     if (!endpoint()) { status.textContent = "暂时无法连接，请稍后再试。"; return; }
-    const controller = new AbortController(); active = controller; wasCancelled = false;
+    const controller = new AbortController(), run = {controller, deadline:Date.now() + waitLimit};
+    // Abort is best-effort. Independently settle the UI even if a connection or
+    // response body ignores the abort signal, and ignore its eventual late reply.
+    const stopped = new Promise((_, reject) => { run.stop = reason => {
+      reject(new Error(reason)); controller.abort();
+    }; });
+    active = run;
     const input = {minutes:Number($("#outing-now-minutes").value), setting:$("#outing-now-setting").value,
       note:$("#outing-now-note").value.trim(), previous:saved?.ideas.map(p => p.title.slice(0,120)) || []};
-    submit.disabled = true; cancel.hidden = false; results.setAttribute("aria-busy", "true");
+    saveDraft();
+    submit.disabled = true; submit.textContent = "正在生成…"; cancel.hidden = false; results.setAttribute("aria-busy", "true");
     status.textContent = "正在结合当前时间、天气和偏好想几个安排…";
-    const slow = setTimeout(() => { status.textContent = "还在整理，结果会直接显示在这里。"; }, 12000);
-    const timer = setTimeout(() => controller.abort(), 65000);
+    const slow = setTimeout(() => { status.textContent = "还在生成，本次最多等待 1 分钟。可以取消，输入会保留。"; }, 10000);
+    const timer = setTimeout(() => run.stop("timeout"), waitLimit);
     try {
-      const response = await fetch(endpoint(), {method:"POST", cache:"no-store", headers:{"Content-Type":"application/json"},
-        body:JSON.stringify(input), signal:controller.signal});
-      if (!response.ok) throw new Error(response.status === 429 ? "busy" : response.status === 504 ? "timeout" : "unavailable");
-      const data = await response.json();
-      if (!valid(data)) throw new Error("unavailable");
+      const data = await Promise.race([stopped, (async () => {
+        const response = await fetch(endpoint(), {method:"POST", cache:"no-store", headers:{"Content-Type":"application/json"},
+          body:JSON.stringify(input), signal:controller.signal});
+        if (!response.ok) throw new Error(response.status === 429 ? "busy" : response.status === 504 ? "timeout" : "unavailable");
+        const result = await response.json();
+        if (!valid(result)) throw new Error("unavailable");
+        return result;
+      })()]);
+      if (Date.now() >= run.deadline) throw new Error("timeout");
       saved = data;
       try { sessionStorage.setItem(key, JSON.stringify(saved)); } catch (_) {}
       draw(); status.textContent = "按这次条件整理好了。想换方向，可以补充一句再试。";
     } catch (error) {
-      status.textContent = (wasCancelled ? "已取消等待。" : error.name === "AbortError" || error.message === "timeout" ? "这次响应超时，请稍后再试。" : error.message === "busy" ? "正在处理其他请求，稍等半分钟再试。" : "这次没能取得建议，请稍后重试。") + (saved ? "下方仍是上次结果。" : "");
+      status.textContent = (error.message === "cancelled" ? "已取消等待，输入已保留。" : error.name === "AbortError" || error.message === "timeout" ? "这次等待超时，输入已保留，可以点击重试。" : error.message === "busy" ? "正在处理其他请求，稍等半分钟再试。" : "这次没能取得建议，输入已保留，请重试。") + (saved ? "下方仍是上次结果。" : "");
+      controller.abort();
     } finally {
       clearTimeout(timer); clearTimeout(slow); active = null; submit.disabled = false; cancel.hidden = true;
+      submit.textContent = saved ? "换几个建议" : "给我建议";
       results.removeAttribute("aria-busy");
     }
   });

@@ -62,6 +62,9 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await context.setOffline(false);
     await page.reload();
     await page.locator("#outing-now > summary").click();
+    assert.equal(await page.locator("#outing-now-note").inputValue(),"今天有点累，想练画画","refresh keeps the last request's draft");
+    assert.equal(await page.locator("#outing-now-minutes").inputValue(),"30");
+    assert.equal(await page.locator("#outing-now-setting").inputValue(),"home");
     assert.equal(await page.locator(".outing-now-ideas > li").count(),3,"refresh retains this session's previous advice");
     assert.equal(requests.length,3);
     // Source links and all generated strings are rendered as untrusted content.
@@ -80,7 +83,50 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.evaluate(()=>{location.hash="#tonight";});
     await page.waitForFunction(()=>!document.querySelector("#outing-now").hidden);
     assert.equal(requests.length,4);
+    // Some stalled connections/bodies never reject on AbortController.abort().
+    // The UI must still end the wait and must ignore a late old response.
+    await page.evaluate(()=>{
+      window.originalNowFetch=window.fetch;window.originalNowTimeout=window.setTimeout;
+      window.nowStallMode="connection";window.nowWait=150;
+      window.setTimeout=(fn,ms,...args)=>originalNowTimeout(fn,ms===60000?window.nowWait:ms,...args);
+      window.fetch=(url,options)=>{
+        if(!String(url).endsWith("/api/outings/now"))return originalNowFetch(url,options);
+        if(window.nowStallMode==="body") return Promise.resolve({ok:true,status:200,json:()=>new Promise(resolve=>{window.releaseNow=resolve;})});
+        return new Promise(resolve=>{window.releaseNow=data=>resolve({ok:true,status:200,json:async()=>data});});
+      };
+    });
+    const previousIntro=await page.locator(".outing-now-intro").innerText();
+    const late={...answer,intro:"迟到的旧请求不应该覆盖页面"};
+    for(const stall of ["connection","body"]) {
+      await page.evaluate(stall=>{window.nowStallMode=stall;},stall);
+      await page.locator("#outing-now-submit").click();
+      await page.waitForFunction(()=>document.querySelector("#outing-now-status").textContent.includes("等待超时"));
+      assert.equal(await page.locator("#outing-now-submit").isDisabled(),false);
+      assert.equal(await page.locator("#outing-now-cancel").isHidden(),true);
+      await page.evaluate(data=>window.releaseNow(data),late);
+      await page.waitForTimeout(50);
+      assert.equal(await page.locator(".outing-now-intro").innerText(),previousIntro);
+    }
+    await page.evaluate(()=>{window.nowWait=60000;window.nowStallMode="connection";});
+    await page.locator("#outing-now-submit").click();
+    await page.locator("#outing-now-cancel").click();
+    await page.waitForFunction(()=>document.querySelector("#outing-now-status").textContent.includes("已取消"));
+    assert.equal(await page.locator("#outing-now-submit").isDisabled(),false,"cancel works even when fetch ignores abort");
+    await page.evaluate(data=>window.releaseNow(data),late);
+    await page.locator("#outing-now-submit").click();
+    await page.evaluate(()=>{
+      window.originalNowClock=Date.now;Date.now=()=>originalNowClock()+65000;
+      document.dispatchEvent(new Event("visibilitychange"));
+    });
+    await page.waitForFunction(()=>document.querySelector("#outing-now-status").textContent.includes("等待超时"));
+    await page.evaluate(data=>{
+      Date.now=originalNowClock;window.releaseNow(data);
+      window.fetch=originalNowFetch;window.setTimeout=originalNowTimeout;
+    },late);
+    assert.equal(await page.locator("#outing-now-submit").isDisabled(),false,"returning from a suspended tab ends an expired wait");
+    assert.equal(await page.locator("#outing-now-note").inputValue(),"今天有点累，想练画画");
+    assert.equal(requests.length,4,"recovery never starts a paid retry on its own");
     assert.deepEqual(errors,[]);
-    console.log("Immediate outing advice: explicit calls, context, retries, cancellation, offline/session recovery, safe output and mobile layout passed.");
+    console.log("Immediate outing advice: explicit calls, hard deadline, stalled body, cancellation, tab resume, late replies, drafts and mobile layout passed.");
   } finally { await browser.close(); }
 })().catch(error=>{console.error(error);process.exitCode=1;});

@@ -18,6 +18,19 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const original = await (
       await page.request.get(base + "/data/latest.json")
     ).json();
+    await context.addInitScript(stamp => {
+      Date.now = () => Date.parse(stamp) + 60000;
+    }, original.updatedAt);
+    // The cached-paint checks below switch between these categories. Their
+    // articles must be in this fixture's small snapshot, regardless of today's
+    // source mix or whether older stories live only in an archive chunk.
+    const fixtures = ["sports","tech","finance"].map(category => ({
+      id:"loading-"+category, category, sourceId:original.sources.find(s=>s.category===category).id,
+      title:"未来"+category+"加载测试", url:"https://example.com/loading-"+category,
+      publishedAt:original.updatedAt, excerpt:"用于检查缓存内容在网络响应前显示。",
+    }));
+    original.articles = fixtures.concat(original.articles);
+    original.briefArticles = fixtures.concat(original.briefArticles || []);
     let resolveNews;
     const newsGate = new Promise((resolve) => {
       resolveNews = resolve;

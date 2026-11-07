@@ -33,6 +33,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     packet.briefArticles = packet.articles;
     packet.briefDays = ["2026-11-02", "2026-11-01"];
     packet.modelReleases = packet.gamingArticles = packet.housingArticles = [];
+    packet.placeUpdates = {places:{baoshi:{items:[{title:"宝石山近期消息",url:"https://example.com/baoshi-news",publishedAt:"2026-11-02T07:00:00Z"}]}}};
     delete packet.archive;
     packet.weekendArticles = [{
       id: "camp-facts", title: "杭州周末营地预约信息", category: "local", sourceId: "web-discovery",
@@ -74,10 +75,12 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.match(await page.locator(".trip-list").textContent(), /降水概率 90%/);
     assert.doesNotMatch(await page.locator(".trip-list").innerText(), /降水概率 90%/, "weather is kept in details");
     assert.equal(await page.locator(".trip-details[open]").count(), 0);
-    assert(await page.locator('[data-trip-place="baoshi"]').isHidden());
+    const reference = id => page.locator(`#outing-recommendations [data-trip-place="${id}"]`);
+    assert.equal(await page.locator('#outing-library-updates [data-trip-place="baoshi"]').count(),1,"the catalog can legitimately link to the same place");
+    assert(await reference("baoshi").isHidden());
     await page.locator(".trip-details > summary").first().click();
     assert(await page.locator('.trip-details').first().locator('a[href="https://example.com/route"]').isVisible());
-    await page.locator('[data-trip-place="baoshi"]').click();
+    await reference("baoshi").click();
     assert(await page.locator("#hiking-places").getAttribute("open") !== null);
     assert(await page.locator('[data-place-id="baoshi"] .place-details').getAttribute("open") !== null);
 
@@ -85,12 +88,12 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.locator('[data-trip-more]').click();
     assert.equal(await page.locator(".trip-list > li:visible").count(), 8);
     await page.locator('[data-outing-id="place:beigao"] .trip-details > summary').click();
-    await page.locator('[data-trip-place="beigao"]').click();
+    await reference("beigao").click();
     assert(await page.locator('[data-place-id="beigao"] .place-links').isVisible(), "recommendations reveal references beyond the first page");
     await page.locator('#outing-news-panel > summary').click();
     await page.locator('[data-outing-story="camp-facts"]').click();
     assert.equal(await page.locator(".trip-list > li:visible").count(), 8, "saving a story keeps expanded recommendations");
-    assert(await page.locator('[data-trip-place="beigao"]').isVisible());
+    assert(await reference("beigao").isVisible());
     await page.locator('[data-trip-more]').click();
     assert.equal(await page.locator(".trip-list > li:visible").count(), 4);
     await page.locator(".outing-facts summary").click();

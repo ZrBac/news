@@ -1,0 +1,276 @@
+.home-page {
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 40px 24px 30px;
+}
+.home-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  margin-bottom: 28px;
+}
+.home-heading h1 {
+  font-size: 32px;
+  letter-spacing: -0.04em;
+  margin: 0 0 8px;
+}
+.home-heading p {
+  margin: 0;
+}
+.home-eyebrow {
+  font-size: 12px;
+  letter-spacing: 0.12em;
+  color: var(--accent);
+  padding-bottom: 8px;
+}
+.home-muted {
+  color: var(--muted);
+  font-size: 13px;
+}
+.home-page button {
+  min-height: 42px;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+.home-page button:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+.home-filters {
+  display: flex;
+  gap: 10px;
+  margin-top: 24px;
+}
+.home-page input,
+.home-page select {
+  width: 100%;
+  min-height: 44px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--paper);
+  color: var(--ink);
+  padding: 10px 11px;
+  font: inherit;
+  font-size: 16px;
+  box-sizing: border-box;
+  min-width: 0;
+}
+.home-page input::placeholder {
+  color: var(--muted);
+  opacity: 0.85;
+}
+.home-filters select {
+  font-size: 13px;
+}
+.home-candidate-filters {
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.home-candidate-filters > label {
+  flex: 1;
+  min-width: 0;
+}
+.home-list-heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 10px 0;
+}
+.home-list-heading p {
+  margin: 4px 0;
+  font-size: 12px;
+}
+.home-card-top {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+}
+.home-tag {
+  display: inline-block;
+  font-size: 12px;
+  color: var(--muted);
+  background: var(--surface);
+  border-radius: 4px;
+  padding: 2px 7px;
+  margin-right: 6px;
+}
+.home-tag.active {
+  color: var(--accent);
+}
+.home-price {
+  font-size: 26px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
+}
+.home-price small {
+  font-size: 13px;
+  font-weight: normal;
+  margin-left: 4px;
+  color: var(--muted);
+}
+.home-caution {
+  color: var(--accent);
+  font-size: 12px;
+}
+.home-empty {
+  grid-column: 1/-1;
+  text-align: center;
+  background: var(--surface);
+  border-radius: 12px;
+  padding: 48px 20px;
+}
+.home-empty p {
+  color: var(--muted);
+  margin: 0 auto 22px;
+  max-width: 400px;
+}
+.home-help {
+  margin-top: 28px;
+  padding: 18px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  color: var(--muted);
+  font-size: 13px;
+}
+.home-help summary {
+  color: var(--ink);
+  cursor: pointer;
+  font-weight: 600;
+}
+.home-offline {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 12px;
+  color: var(--muted);
+  font-size: 12px;
+  padding: 18px 0;
+}
+.home-offline small {
+  flex-basis: 100%;
+}
+.home-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: var(--muted);
+  font-size: 12px;
+}
+@media (max-width: 640px) {
+  .home-page {
+    padding: 20px 16px 22px;
+  }
+  .home-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 18px;
+    margin-bottom: 12px;
+  }
+  .home-heading h1 {
+    font-size: 30px;
+  }
+  .home-filters {
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 18px;
+  }
+  .home-filters > label {
+    flex: 1;
+    min-width: 0;
+  }
+  .home-filters select {
+    font-size: 12px;
+    padding: 10px 6px;
+  }
+  .home-filters.home-candidate-filters > label {
+    flex: 1 1 calc(50% - 8px);
+  }
+}
+.home-discover {
+  margin: 28px 0 40px;
+}
+.home-discover h2 {
+  font-size: 1.3rem;
+  margin: 0 0 6px;
+}
+.home-candidates {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+.candidate-card {
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  min-width: 0;
+  background: var(--surface, var(--bg));
+}
+.candidate-card h3 {
+  margin: 14px 0 6px;
+  font-size: 1.14rem;
+  line-height: 1.4;
+}
+.candidate-card .home-price {
+  margin: 16px 0 6px;
+  font-size: 1.45rem;
+}
+.candidate-note {
+  font-size: 0.83rem;
+  line-height: 1.7;
+  margin: 14px 0;
+  overflow-wrap: anywhere;
+}
+.candidate-observed {
+  font-size: 0.72rem;
+  margin: 12px 0 0;
+}
+.candidate-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 20px;
+}
+.candidate-bottom a {
+  display: inline-block;
+  font-size: 0.83rem;
+  padding: 8px 4px 8px 0;
+  margin-right: 8px;
+}
+.candidate-history {
+  font-size: 0.8rem;
+  line-height: 1.7;
+  margin-top: 12px;
+}
+.candidate-history ul {
+  padding-left: 18px;
+}
+.home-source-list {
+  font-size: 0.8rem;
+  line-height: 1.7;
+}
+#candidate-more {
+  display: block;
+  margin: 20px auto;
+}
+#candidate-more[hidden] {
+  display: none;
+}
+@media (max-width: 680px) {
+  .home-candidates {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .candidate-card {
+    padding: 18px;
+  }
+  .home-discover .home-list-heading {
+    align-items: flex-start;
+    gap: 14px;
+  }
+}
+.home-candidate-filters label:first-child span {
+  display: block;
+  margin-bottom: 5px;
+}

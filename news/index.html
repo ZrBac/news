@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="news-shell-cache" content="__NEWS_SHELL_CACHE__" />
+    <script>
+      if (
+        location.protocol === "http:" &&
+        location.hostname === "__NEWS_SITE_HOST__"
+      ) {
+        location.replace(
+          "__NEWS_SITE_URL__" +
+            location.pathname +
+            location.search +
+            location.hash,
+        );
+      }
+    </script>
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" />
+    <script>
+      try {
+        const theme =
+          localStorage.getItem("zrbac-news-theme") === "dark"
+            ? "dark"
+            : "light";
+        document.documentElement.dataset.theme = theme;
+        document.querySelector('meta[name="theme-color"]').content =
+          theme === "dark" ? "#181818" : "#ffffff";
+        const size = JSON.parse(
+          localStorage.getItem("zrbac-reading-preferences-v1") || "{}",
+        )?.size;
+        if (["large", "larger"].includes(size))
+          document.documentElement.dataset.readingSize = size;
+      } catch {}
+    </script>
+    <meta
+      name="news-refresh-endpoint"
+      content="https://news-refresh.944052796.workers.dev/api/news-refresh"
+    />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="资讯" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/assets/news/icon-180.png" />
+    <meta
+      name="description"
+      content="浏览新闻与模型动态，查看汇率、杭州房价，寻找今晚和周末去处；生活指南与小游戏支持离线使用。"
+    />
+    <meta property="og:title" content="资讯 · 新闻与日常去处" />
+    <meta property="og:description" content="新闻、汇率、杭州房价、今晚与周末去处，还有可离线使用的指南和小游戏。" />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="__NEWS_SITE_URL__/" />
+    <link rel="canonical" href="__NEWS_SITE_URL__/" />
+    <link rel="icon" type="image/svg+xml" href="/assets/news/favicon.svg" />
+    <link
+      rel="alternate"
+      type="application/rss+xml"
+      title="资讯 RSS"
+      href="/news.xml"
+    />
+    <link rel="stylesheet" href="/assets/news/style.css" />
+    <title>资讯 · 新闻与日常去处</title>
+    <link rel="stylesheet" href="/assets/news/compat.css" />
+    <script src="/assets/news/compat.js" defer></script>
+    <script src="/assets/news/personal.js" defer></script>
+    <script src="/assets/news/archive.js" defer></script>
+    <script src="/assets/news/exchange-core.js" defer></script>
+    <script src="/assets/news/outings-data.js" defer></script>
+    <script src="/assets/news/outings-library.js" defer></script>
+    <script src="/assets/news/outings-profile.js" defer></script>
+    <script src="/assets/news/editorial.js" defer></script>
+    <script src="/assets/news/tonight-data.js" defer></script>
+    <script src="/assets/news/tonight-journal.js" defer></script>
+    <script src="/assets/news/tonight.js" defer></script>
+    <script src="/assets/news/outing-now.js" defer></script>
+    <script src="/assets/news/app.js" defer></script>
+    <script src="/assets/news/pwa.js" defer></script>
+  </head>
+  <body>
+    <a href="#section-title" class="skip-link">跳到当前栏目</a>
+    <header class="header">
+      <div class="header-inner">
+        <a class="brand" href="#all" aria-label="资讯首页"
+          ><span class="brand-name">资讯</span></a
+        >
+        <div class="header-actions">
+          <a href="#local" class="games-link outings-link" data-view="local"
+            >去处</a
+          >
+          <a href="/guide/" class="games-link guide-link">生活指南</a>
+          <a href="/games/" class="games-link">小游戏</a>
+          <button
+            id="theme-toggle"
+            class="icon-button"
+            aria-label="切换深色模式"
+            title="切换主题"
+          >
+            <span data-icon="moon"></span>
+          </button>
+          <a
+            href="#saved"
+            class="saved-link"
+            data-view="saved"
+            aria-label="我的收藏"
+            ><span data-icon="bookmark"></span><span>我的收藏</span
+            ><b id="saved-count" hidden>0</b></a
+          >
+        </div>
+      </div>
+    </header>
+
+    <main class="page">
+      <div class="update-bar">
+        <span id="edition-date">资讯更新</span>
+        <div class="connection-status">
+          <span id="update-status" role="status">正在加载…</span
+          ><span id="load-notice" role="status" hidden></span>
+        </div>
+        <button id="refresh-news" title="请求抓取并发布最新新闻">
+          刷新资讯
+        </button>
+        <button id="sources-trigger">来源状态</button>
+      </div>
+
+      <div class="main-layout">
+        <section
+          id="news-content"
+          class="news-section"
+          aria-labelledby="section-title"
+        >
+          <div class="section-heading">
+            <div>
+              <h1 id="section-title" tabindex="-1">每日速览</h1>
+            </div>
+            <span id="result-count" class="result-count"></span>
+          </div>
+          <nav id="outing-nav" aria-label="安排时间" hidden>
+            <a href="#tonight" data-outing-mode="tonight">今晚</a>
+            <a href="#local" data-outing-mode="weekend">周末</a>
+          </nav>
+          <p id="outing-load-status" class="view-note" hidden></p>
+          <details id="outing-now" hidden>
+            <summary>现在做什么 <span>即时建议</span></summary>
+            <form id="outing-now-form">
+              <div class="outing-now-options">
+                <label>有多少时间<select id="outing-now-minutes"><option value="30">半小时</option><option value="60" selected>1 小时</option><option value="120">2 小时</option><option value="240">半天</option></select></label>
+                <label>想在哪里<select id="outing-now-setting"><option value="auto">帮我选</option><option value="home">在家</option><option value="outside">出门</option></select></label>
+              </div>
+              <label class="outing-now-note" for="outing-now-note">补充一句 <span>选填</span></label>
+              <textarea id="outing-now-note" maxlength="300" rows="2" placeholder="比如：刚到家有点累，想做点能积累的；或想在附近走走。"></textarea>
+              <div class="trip-links"><button type="submit" id="outing-now-submit" class="text-button">给我建议</button><button type="button" id="outing-now-cancel" class="text-button" hidden>取消等待</button></div>
+            </form>
+            <p id="outing-now-status" class="trip-note" role="status" aria-live="polite">按当前时间、五常附近天气和共用偏好，现想几个可做的安排。</p>
+            <section id="outing-now-result" aria-label="即时建议结果" hidden></section>
+          </details>
+          <div id="outing-records" hidden></div>
+          <section id="tonight-plans" aria-label="今晚做点什么" hidden></section>
+          <div id="news-listing">
+          <details id="outing-adjust" hidden>
+            <summary>调整推荐</summary>
+            <form id="outing-suggestion-form">
+              <label for="outing-suggestion">这周有什么想法？</label>
+              <textarea id="outing-suggestion" maxlength="600" rows="3" placeholder="比如：想试木工，离五常近一点；这周不想逛书店。"></textarea>
+              <div class="trip-links"><button class="text-button" type="submit">保存建议</button><button id="refresh-outings" class="text-button" type="button">重新找一批</button></div>
+              <p id="outing-suggestion-status" class="trip-note" role="status">两人共用这些建议，下次更新会参考。清空后保存即可撤销。</p>
+            </form>
+            <p class="trip-note">每天 9 点、16 点自动检索。也可以重新查找活动和地点，再按天气与建议筛选；需要几分钟，合适的现有选择也会保留。去过或不感兴趣会避开，新增活动除外。</p>
+            <p class="trip-note">天气来自 <a href="https://open-meteo.com/" target="_blank" rel="noopener noreferrer">Open-Meteo</a>，预报时间见详情；营业、价格与余位以主办方确认为准。</p>
+          </details>
+          <p id="outing-refresh-notice" class="view-note" role="status" hidden></p>
+          <section id="outing-recommendations" aria-label="本周可选" hidden></section>
+          <details id="outing-library" hidden>
+            <summary>自己找地方 <span id="outing-library-count" class="trip-note"></span></summary>
+            <div id="outing-library-content"></div>
+          </details>
+          <div id="outing-catalog-heading" class="outing-section-heading" hidden>
+            <h2>地点库</h2>
+            <span id="outing-catalog-count"></span>
+          </div>
+          <div class="filter-tabs" aria-label="资讯栏目">
+            <div
+              class="filter-group filter-views"
+              role="group"
+              aria-label="阅读方式"
+            >
+              <a
+                href="#brief"
+                data-view="brief"
+                class="active"
+                aria-current="page"
+                >每日速览</a
+              >
+              <button data-filter="all" aria-pressed="false">全部</button>
+            </div>
+            <div
+              class="filter-group filter-categories"
+              role="group"
+              aria-label="新闻分类"
+            >
+              <button data-filter="general" aria-pressed="false">综合</button>
+              <button data-filter="finance" aria-pressed="false">财经</button>
+              <button data-filter="livelihood" aria-pressed="false">
+                民生
+              </button>
+              <button data-filter="tech" aria-pressed="false">科技</button>
+              <button data-filter="ai" aria-pressed="false">AI</button>
+              <button data-filter="models" aria-pressed="false">模型</button>
+              <button data-filter="entertainment" aria-pressed="false">
+                文娱
+              </button>
+              <button data-filter="gaming" aria-pressed="false">游戏</button>
+              <button data-filter="sports" aria-pressed="false">体育</button>
+            </div>
+            <div
+              class="filter-group filter-tools"
+              role="group"
+              aria-label="数据与工具"
+            >
+              <button data-filter="exchange" aria-pressed="false">汇率</button>
+              <button data-filter="housing" aria-pressed="false">
+                杭州房价
+              </button>
+            </div>
+          </div>
+          <div class="filter-row">
+            <label class="search-box"
+              ><span data-icon="search"></span
+              ><input
+                id="search"
+                type="search"
+                placeholder="搜索资讯"
+                aria-label="搜索资讯标题和摘要"
+              /><kbd>/</kbd></label
+            >
+            <label class="source-select"
+              ><span class="sr-only">按资讯源筛选</span
+              ><select id="source-filter">
+                <option value="all">全部来源</option>
+              </select></label
+            >
+            <button
+              id="date-trigger"
+              class="date-button"
+              aria-expanded="false"
+              aria-controls="date-panel"
+            >
+              <span data-icon="calendar"></span><span>日期</span>
+            </button>
+            <button id="outing-filter-toggle" class="date-button" aria-expanded="false" aria-controls="outing-filters" hidden>筛选</button>
+          </div>
+          <section id="outing-filters" aria-label="活动与地点筛选" hidden>
+            <div id="outing-topic-controls"></div>
+            <div id="outing-source-controls"></div>
+            <button id="outing-filter-reset" class="text-button">清除筛选</button>
+          </section>
+          <div id="date-panel" class="date-panel" hidden>
+            <label for="date-filter">按发布日期查看（北京时间）</label
+            ><input type="date" id="date-filter" /><button
+              id="clear-date"
+              class="text-button"
+            >
+              查看全部日期
+            </button>
+          </div>
+          <details class="reading-options">
+            <summary>阅读设置</summary>
+            <div class="reading-controls">
+              <label
+                >字号
+                <select id="reading-size">
+                  <option value="normal">标准</option>
+                  <option value="large">较大</option>
+                  <option value="larger">大号</option>
+                </select></label
+              >
+              <label><input id="only-unread" type="checkbox" /> 只看未读</label>
+              <button id="export-bookmarks" class="text-button">
+                导出收藏
+              </button>
+              <button id="import-bookmarks" class="text-button">
+                导入收藏
+              </button>
+              <input
+                id="bookmarks-file"
+                type="file"
+                accept="application/json,.json"
+                hidden
+              />
+            </div>
+            <p id="reading-status" class="reading-status" role="status"></p>
+          </details>
+          <p id="view-note" class="view-note">
+            按分类和来源选取，可切换日期回看。
+          </p>
+          <p id="refresh-notice" class="view-note" role="status" hidden></p>
+          <section
+            id="weekend-tools"
+            aria-label="周末玩法筛选"
+            hidden
+          ></section>
+          <div id="outing-library-updates" hidden></div>
+          <section id="outing-places" aria-labelledby="outing-places-title" hidden>
+            <div class="outing-section-heading">
+              <h2 id="outing-places-title">按玩法找地方</h2>
+              <span id="place-catalog-status">按玩法查找</span>
+            </div>
+            <div class="place-groups">
+              <details
+                id="hiking-places"
+                class="place-guide"
+                data-place-group
+                hidden
+              >
+                <summary><h2>
+                  杭州爬山 <span data-place-count>__HIKING_COUNT__ 个地点参考</span>
+                </h2></summary>
+                <p class="place-note" data-place-updates-summary="hiking">
+                  近期消息等待首次检索。
+                </p>
+                <p class="place-intro">
+                  先挑强度，再定路线。下列时长为步行加停留的粗略预留，强度为本站相对判断；不含往返交通。下雨、雷电或景区封山时不安排登山，可改看「下雨去哪」。
+                </p>
+                __HIKING_PLACES__
+                <p class="place-note">
+                  基础资料查阅日期见各卡片。依据文旅部门与本地媒体的路线资料整理，部分原文较早，不代表实时开放情况。只走开放步道，临时管制以景区公告为准。地点参考不随活动日期筛选。
+                </p>
+              </details>
+              <details
+                id="cycling-places"
+                class="place-guide"
+                data-place-group
+                hidden
+              >
+                <summary><h2>
+                  骑行路线
+                  <span data-place-count>__CYCLING_COUNT__ 个地点参考</span>
+                </h2></summary>
+                <p class="place-note" data-place-updates-summary="cycling">
+                  近期消息等待首次检索。
+                </p>
+                <p class="place-intro">
+                  先选平路休闲，再尝试茶山爬坡。里程注明单程或环线，预留时间为本站建议、不含交通；地图只定位起点，不是完整骑行轨迹。沿开放骑行道行进，禁骑处下车推行。
+                </p>
+                __CYCLING_PLACES__
+                <p class="place-note">
+                  基础资料查阅：2026-10-30。近期消息自动检索，路线资料不代表全线当天开放。出发前查看交通、施工与天气通知；已缓存的路线可离线读，地图与来源页需联网。
+                </p>
+              </details>
+              <details
+                id="rainy-places"
+                class="place-guide"
+                data-place-group
+                hidden
+              >
+                <summary><h2>
+                  下雨去哪 <span data-place-count>__RAINY_COUNT__ 个地点参考</span>
+                </h2></summary>
+                <p class="place-note" data-place-updates-summary="rainy"></p>
+                <p class="place-intro">
+                  手作、运动体验、书店和话剧，按兴趣挑一两项。时长为本站粗略预留，不含交通；需要课程或场次的先预约，停车与地铁接驳仍可能淋雨。
+                </p>
+                __RAINY_PLACES__
+                <p class="place-note">
+                  资料查阅：2026-10-23，依据经营者官网与公开场馆资料。以下为常设地点参考，课程、场次、费用和营业安排请在出发前向场地确认。地点资料可离线读，地图和来源页需联网。
+                </p>
+              </details>
+              <details
+                id="camping-places"
+                class="camping-places place-guide"
+                data-place-group
+                hidden
+              >
+                <summary><h2>
+                  露营去哪里
+                  <span id="camping-count" data-place-count
+                    >__CAMPING_COUNT__ 个地点参考</span
+                  >
+                </h2></summary>
+                <p class="place-note" data-place-updates-summary="camping">
+                  近期消息等待首次检索。
+                </p>
+                <p class="camping-intro place-intro">
+                  优先选“停车后少量搬运、能用卡式炉做饭”的营地，另列需确认用炉或卸货条件的备选。杭州与周边分开标注，订前按卡片说明确认。地点参考不随活动日期筛选。
+                </p>
+                __CAMPING_PLACES__
+                <p class="camping-note place-note">
+                  基础资料查阅日期见各卡片，依据公开预订页。日营、自带炉具、停车到营位距离及运送费用请订前电话确认；用炉按营地当日规定。
+                </p>
+              </details>
+            </div>
+          </section>
+          <section
+            id="exchange-rates"
+            aria-label="外币兑人民币汇率"
+            hidden
+          ></section>
+          <section id="housing-prices" aria-label="杭州房价" hidden></section>
+          <details id="outing-news-panel" hidden>
+            <summary id="outing-news-heading"><span>更多活动线索</span><span id="outing-news-count"></span></summary>
+            <p class="trip-note">尚未全部核实到日期、费用和预约条件；同一活动的报道合并显示。</p>
+            <div id="outing-news-content"></div>
+          </details>
+          <div
+            id="articles"
+            class="article-list"
+            aria-live="polite"
+            aria-busy="true"
+          >
+            <p class="sr-only">正在加载资讯…</p>
+            __NEWS_SKELETON__
+          </div>
+          <button id="load-more" class="load-more" hidden>
+            <span id="load-more-label">加载更多</span> <span data-icon="arrow-down"></span>
+          </button>
+          <p id="archive-notice" class="view-note" role="status" hidden></p>
+          <p id="list-end" class="list-end" hidden>已显示全部结果。</p>
+          </div>
+        </section>
+
+        <aside class="sidebar">
+          <section class="radar-card">
+            <div class="sidebar-heading">
+              <h2>各站最新</h2>
+              <span>每站一条</span>
+            </div>
+            <ol id="latest-list">
+              <li class="sidebar-placeholder">正在获取最新资讯…</li>
+            </ol>
+          </section>
+          <section class="sidebar-section">
+            <div class="sidebar-heading">
+              <h2>AI 动态</h2>
+              <a href="#ai">更多</a>
+            </div>
+            <ol id="tech-list" class="side-list"></ol>
+          </section>
+          <section class="source-card">
+            <div class="sidebar-heading"><h2>订阅来源</h2></div>
+            <div id="source-badges" class="source-badges"></div>
+            <button id="about-trigger" class="text-button">关于本站</button>
+          </section>
+        </aside>
+      </div>
+    </main>
+    <footer class="footer">
+      <span class="copyright">© <span id="year">2026</span> ZrBac</span>
+      <div class="footer-links">
+        <a href="/news.xml">RSS</a>
+        <button id="footer-sources">资讯来源</button>
+        <button id="install-app">安装到桌面</button>
+        <a
+          href="https://github.com/ZrBac/news"
+          target="_blank"
+          rel="noopener noreferrer"
+          >GitHub</a
+        >
+      </div>
+    </footer>
+    <dialog id="info-dialog" aria-labelledby="dialog-title">
+      <div class="dialog-heading">
+        <h2 id="dialog-title">资讯来源</h2>
+        <button id="close-dialog" class="icon-button" aria-label="关闭窗口">
+          <span data-icon="x"></span>
+        </button>
+      </div>
+      <div id="dialog-content"></div>
+    </dialog>
+    <div id="toast" class="toast" role="status" hidden></div>
+    <noscript
+      ><div class="noscript">
+        资讯列表需要 JavaScript。你也可以阅读
+        <a href="/news.xml">RSS 资讯订阅</a>。
+      </div></noscript
+    >
+  </body>
+</html>

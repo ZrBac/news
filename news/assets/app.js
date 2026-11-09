@@ -1,0 +1,2541 @@
+(() => {
+  "use strict";
+  const $ = (selector) => document.querySelector(selector);
+  const $$ = (selector) => [...document.querySelectorAll(selector)];
+  new MutationObserver(() => {
+    $("#update-status").hidden = !$("#load-notice").hidden;
+    $("#outing-load-status").hidden = state.view !== "local" || $("#load-notice").hidden;
+  }).observe($("#load-notice"), {
+    attributes: true,
+    attributeFilter: ["hidden"],
+  });
+  const paths = {
+    search: '<circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 4.5 4.5"/>',
+    moon: '<path d="M20.9 13a9 9 0 0 1-10-10 9 9 0 1 0 10 10Z"/>',
+    sun: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/>',
+    bookmark: '<path d="M6 4h12v17l-6-4-6 4V4Z"/>',
+    "arrow-up-right": '<path d="M6 18 18 6M6 6h12v12"/>',
+    "arrow-down": '<path d="M12 4v16m-6-6 6 6 6-6"/>',
+    radio:
+      '<circle cx="12" cy="12" r="2"/><path d="M7.8 7.8a6 6 0 0 0 0 8.4m8.4-8.4a6 6 0 0 1 0 8.4M5 5a10 10 0 0 0 0 14M19 5a10 10 0 0 1 0 14"/>',
+    calendar:
+      '<rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4m10-4v4M3 11h18"/>',
+    activity: '<path d="M2 12h5l3-8 4 16 3-8h5"/>',
+    sparkles:
+      '<path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5L12 3ZM20 2v4m-2-2h4"/>',
+    globe:
+      '<circle cx="12" cy="12" r="9"/><ellipse cx="12" cy="12" rx="4" ry="9"/><path d="M3 12h18"/>',
+    rss: '<circle cx="5" cy="19" r="1"/><path d="M4 11a9 9 0 0 1 9 9M4 4a16 16 0 0 1 16 16"/>',
+    x: '<path d="m6 6 12 12M6 18 18 6"/>',
+    clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>',
+  };
+  const icon = (name) =>
+    `<svg class="icon" viewBox="0 0 24 24" aria-hidden="true">${paths[name] || paths.globe}</svg>`;
+  $$("[data-icon]").forEach((el) => {
+    el.innerHTML = icon(el.dataset.icon);
+  });
+  const escape = (value) =>
+    String(value ?? "").replace(
+      /[&<>"']/g,
+      (c) =>
+        ({
+          "&": "&amp;",
+          "<": "&lt;",
+          ">": "&gt;",
+          '"': "&quot;",
+          "'": "&#39;",
+        })[c],
+    );
+  const safeUrl = (value) => {
+    try {
+      const u = new URL(value);
+      return ["https:", "http:"].includes(u.protocol) &&
+        !u.username &&
+        !u.password
+        ? u.href
+        : "";
+    } catch {
+      return "";
+    }
+  };
+  const articleUrl = (article) =>
+    safeUrl(article.originalUrl) || safeUrl(article.url);
+  const categoryNames = {
+    general: "综合热点",
+    finance: "财经",
+    local: "去处",
+    livelihood: "民生服务",
+    tech: "科技动态",
+    ai: "人工智能",
+    models: "模型发布",
+    entertainment: "文娱",
+    gaming: "游戏",
+    sports: "体育",
+    housing: "杭州房市",
+  };
+  const state = {
+    data: null,
+    view: "brief",
+    filter: "all",
+    query: "",
+    source: "all",
+    date: "",
+    limit: 12,
+    housingLimit: 6,
+    outingType: "all",
+    outingKind: "all",
+    outingFiltersOpen: false,
+    outingRange: "weekend",
+    outingMode: "weekend",
+    saved: new Map(),
+  };
+  const pageSize = () => (state.view === "local" ? 3 : 12);
+  const placePageSize = 4;
+  const dayFormatter = new Intl.DateTimeFormat("en-CA", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
+  const dateParts = (date) => dayFormatter.formatToParts(new Date(date));
+  const dayOf = (date) => {
+    const parts = Object.fromEntries(
+      dateParts(date).map((p) => [p.type, p.value]),
+    );
+    return `${parts.year}-${parts.month}-${parts.day}`;
+  };
+  state.date = dayOf(Date.now());
+  const outingTypes = {
+    market: "市集活动",
+    culture: "展览演出",
+    experience: "手作与体验",
+    outdoor: "户外出游",
+  };
+  const outingKinds = { hiking: "爬山徒步", cycling: "骑行", camping: "露营" };
+  const experienceWords = /手作|手工|工作坊|非遗体验|陶艺|拼豆|拓印|泥塑|竹编|体验课|匹克球|保龄球|卡丁车|桌游|密室|射箭|运动乐园|DIY|VR/i;
+  function outingActivity(type, text) {
+    if (type === "camping" || /露营|营地|野营/.test(text)) return { type: "outdoor", kind: "camping" };
+    if (type === "market") return { type: "market", kind: "all" };
+    if (experienceWords.test(text)) return { type: "experience", kind: "all" };
+    if (type === "culture") return { type: "culture", kind: "all" };
+    return { type: "outdoor", kind: /骑行|自行车|单车/.test(text) ? "cycling" : /爬山|登山|徒步|古道/.test(text) ? "hiking" : "all" };
+  }
+  function activityMatches(activity) {
+    return (state.outingType === "all" || activity.type === state.outingType) &&
+      (state.outingType !== "outdoor" || state.outingKind === "all" || activity.kind === state.outingKind);
+  }
+  function placeActivity(place) {
+    const group = place.closest("[data-place-group]").id;
+    const kind = { "hiking-places": "hiking", "cycling-places": "cycling", "camping-places": "camping" }[group];
+    return kind ? { type: "outdoor", kind } : outingActivity("culture", place.dataset.search + " " + place.querySelector("h3").textContent);
+  }
+  const outingExcluded = window.OutingLibrary.excluded;
+  function outingInfo(article) {
+    const info = { ...article.outing };
+    if (/露营|营地|野营/.test(article.title)) info.type = "camping";
+    else if (!["market", "culture", "outdoor", "camping"].includes(info.type))
+      info.type = /手作|手工|工作坊|非遗|读书会|阅读会|讲座|展览|演出/.test(
+        article.title,
+      )
+        ? "culture"
+        : "outdoor";
+    return info;
+  }
+  function outingWeekend() {
+    const start = new Date(dayOf(Date.now()) + "T12:00:00Z");
+    start.setUTCDate(start.getUTCDate() - ((start.getUTCDay() + 6) % 7) + 5);
+    const end = new Date(start);
+    end.setUTCDate(end.getUTCDate() + 1);
+    return [start.toISOString().slice(0, 10), end.toISOString().slice(0, 10)];
+  }
+  function outingLabel(article) {
+    const activity = outingActivity(outingInfo(article).type, article.title);
+    return outingKinds[activity.kind] || outingTypes[activity.type] || "出游消息";
+  }
+  function outingDates(info) {
+    return (
+      info &&
+      /^\d{4}-\d{2}-\d{2}$/.test(info.start) &&
+      /^\d{4}-\d{2}-\d{2}$/.test(info.end) &&
+      info.start <= info.end
+    );
+  }
+  function outingMatches(article) {
+    if (outingExcluded.test(article.title)) return false;
+    const info = outingInfo(article);
+    const today = dayOf(Date.now());
+    if (info.cancelled || (outingDates(info) && info.end < today)) return false;
+    if (
+      typeof info.until === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(info.until)
+    ) {
+      if (info.until < today) return false;
+      if (state.outingRange === "weekend" && info.until < outingWeekend()[0])
+        return false;
+    }
+    if (!activityMatches(outingActivity(info.type, article.title)))
+      return false;
+    if (
+      state.outingRange === "weekend" &&
+      typeof info.month === "string" &&
+      !outingWeekend().some((day) => day.slice(0, 7) === info.month)
+    )
+      return false;
+    if (outingDates(info)) {
+      const [start, end] = outingWeekend();
+      return (
+        state.outingRange !== "weekend" ||
+        (info.start <= end && info.end >= start)
+      );
+    }
+    if (
+      typeof info.until === "string" &&
+      /^\d{4}-\d{2}-\d{2}$/.test(info.until)
+    )
+      return true;
+    const age = Date.parse(today) - Date.parse(dayOf(article.publishedAt));
+    return (
+      age <= (["outdoor", "camping"].includes(info.type) ? 21 : 10) * 86400000
+    );
+  }
+  function outingSummary(article) {
+    const info = outingInfo(article);
+    const dated = outingDates(info);
+    const ended = dated && info.end < dayOf(Date.now());
+    const when = dated
+      ? info.start === info.end
+        ? info.start
+        : info.start + " 至 " + info.end
+      : info.month
+        ? `${info.month} 活动日历，具体日期见原文`
+        : info.until
+          ? `持续至 ${info.until}，开始时间见原文`
+          : "活动时间见原文";
+    const labels = { date: "日期", venue: "地点", cost: "费用", parking: "停车", stove: "用炉", booking: "预约", closure: "开放安排" };
+    const facts = Array.isArray(article.facts) ? article.facts.filter((f) => labels[f.kind] && typeof f.text === "string").slice(0, 5) : [];
+    return `<p class="outing-summary"><span>${escape(outingLabel(article))}</span><span>${escape(when)}${ended ? " · 已结束" : ""}</span></p>
+      ${info.venue || info.cost ? `<p class="outing-details">${[info.venue, info.cost].filter(Boolean).map(escape).join(" · ")}</p>` : ""}
+      ${facts.length ? `<details class="outing-facts"><summary>实用信息 · 原文摘录</summary>${facts.map((f) => `<p><strong>${labels[f.kind]}：</strong>${escape(f.text)}</p>`).join("")}</details>` : ""}`;
+  }
+  function renderPlaceUpdates() {
+    const records = state.data.placeUpdates?.places || {};
+    const dateOK = (value) =>
+      typeof value === "string" && Number.isFinite(Date.parse(value));
+    $$("[data-place-updates-summary]").forEach((summary) => {
+      const cards = [
+        ...summary
+          .closest("[data-place-group]")
+          .querySelectorAll("[data-place-id]"),
+      ];
+      const statuses = cards
+        .map((card) => records[card.dataset.placeId])
+        .filter(Boolean);
+      const latest = statuses
+        .map((record) => record.searchedAt)
+        .filter(dateOK)
+        .sort()
+        .pop();
+      const failed = statuses.some((record) => record.status === "unavailable");
+      summary.textContent =
+        "近期消息随日间资讯更新检查；每天 9 点、16 点按地点补充检索。" +
+        (latest ? `最近检索 ${formatTime(latest)}。` : "等待首次检索。") +
+        (failed ? "部分检索暂未成功，已有消息继续保留。" : "") +
+        (summary.dataset.placeUpdatesSummary === "camping"
+          ? "检索时间不代表现场开放或用炉许可已核实。"
+          : "消息不代表当天营业或路线全线开放。");
+      cards.forEach((card) => {
+        const panel = card.querySelector("[data-place-updates]");
+        if (!panel) return;
+        const record = records[card.dataset.placeId] || {};
+        const items = (Array.isArray(record.items) ? record.items : [])
+          .filter(
+            (item) =>
+              item &&
+              typeof item.title === "string" &&
+              dateOK(item.publishedAt) &&
+              Date.parse(item.publishedAt) >= Date.now() - 30 * 86400000 &&
+              Date.parse(item.publishedAt) <= Date.now() + 600000 &&
+              safeUrl(item.originalUrl || item.url),
+          )
+          .slice(0, 2);
+        const checked = dateOK(record.searchedAt)
+          ? `最近检索 ${formatTime(record.searchedAt)}`
+          : "尚无成功检索记录";
+        const status =
+          record.status === "unavailable"
+            ? "本次检索暂未成功" + (items.length ? "，保留已收录消息" : "")
+            : items.length
+              ? "近期消息"
+              : dateOK(record.searchedAt)
+                ? "上次检索未发现近 30 天的新消息"
+                : "等待首次检索";
+        panel.innerHTML =
+          `<p class="place-news-label">${escape(status)}</p>` +
+          items
+            .map(
+              (item) =>
+                `<p><a href="${escape(safeUrl(item.originalUrl || item.url))}" target="_blank" rel="noopener noreferrer">${escape(item.title.replace(/ - [^-]+$/, ""))} ↗</a><br><span>${escape(item.publisher || "来源原文")} · 报道 ${escape(formatTime(item.publishedAt))}</span></p>`,
+            )
+            .join("") +
+          `<p class="place-news-time">${escape(checked)}</p>`;
+      });
+    });
+  }
+  function renderWeekendTools() {
+    const panel = $("#weekend-tools");
+    panel.hidden = state.view !== "local";
+    if (!panel.hidden) { window.OutingLibrary.render(state.data, formatTime); renderPlaceUpdates(); }
+    const words = state.query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+    const searchExpansion = (details, searching) => {
+      if (searching) {
+        if (details.dataset.beforeSearch === undefined)
+          details.dataset.beforeSearch = String(details.open);
+        details.open = true;
+      } else if (details.dataset.beforeSearch !== undefined) {
+        details.open = details.dataset.beforeSearch === "true";
+        delete details.dataset.beforeSearch;
+      }
+    };
+    let referenceCount = 0;
+    $$("[data-place-group]").forEach((group) => {
+      const places = [...group.querySelectorAll("[data-place-types]")];
+      const matches = places.filter(
+        (place) =>
+          activityMatches(placeActivity(place)) &&
+          words.every((word) =>
+            `${place.dataset.search} ${place.textContent}`
+              .toLocaleLowerCase()
+              .includes(word),
+          ),
+      );
+      const limit = Number(group.dataset.placeLimit) || placePageSize;
+      places.forEach((place) => {
+        const index = matches.indexOf(place);
+        place.hidden = index < 0 || (!words.length && index >= limit);
+        searchExpansion(
+          place.querySelector(".place-details"),
+          words.length && !panel.hidden && !place.hidden,
+        );
+      });
+      group.hidden = panel.hidden || !matches.length;
+      group.querySelector("[data-place-count]").textContent =
+        `${matches.length} 个地点参考`;
+      if (!group.hidden) referenceCount += matches.length;
+      // Search reaches every matching place, then restores the reader's choices.
+      searchExpansion(group, words.length && !group.hidden);
+      const more = group.querySelector("[data-place-more]");
+      const remaining = Math.max(0, matches.length - limit);
+      more.hidden = !!words.length || matches.length <= placePageSize;
+      more.dataset.remaining = String(remaining);
+      more.textContent = remaining
+        ? `再看 ${Math.min(placePageSize, remaining)} 个地点 · 还有 ${remaining} 个`
+        : `收起到 ${placePageSize} 个地点`;
+    });
+    $("#outing-places").hidden = panel.hidden || !referenceCount;
+    $("#search").placeholder =
+      state.view === "local" ? "搜索活动、地点或玩法" : "搜索资讯";
+    if (panel.hidden) return 0;
+    const [start, end] = outingWeekend();
+    const search = state.data.weekendGuide?.search;
+    const research = state.data.editorial?.research;
+    const researched = research?.searchedAt && Number.isFinite(Date.parse(research.searchedAt)) && Date.parse(research.searchedAt) <= Date.now() + 300000
+      ? `补充资料核对 ${formatTime(research.searchedAt)}${research.status !== "ok" ? "（本次更新暂未完成）" : ""}。`
+      : "";
+    const last =
+      search?.searchedAt && Number.isFinite(Date.parse(search.searchedAt))
+        ? `最近专题检索 ${formatTime(search.searchedAt)}。`
+        : "";
+    const camping = state.data.weekendGuide?.camping;
+    const campSources =
+      camping?.sources ||
+      state.data.sources.filter((s) =>
+        s.id.startsWith("gnews-hangzhou-camping"),
+      );
+    const checked = campSources
+      .map((s) => s.checkedAt)
+      .filter((v) => v && Number.isFinite(Date.parse(v)))
+      .sort()
+      .pop();
+    const failed = campSources.filter((s) => s.status !== "ok").length;
+    const campingNote =
+      state.outingType === "outdoor" && state.outingKind === "camping"
+        ? `<p class="outing-checked" id="camping-updates">露营消息随日间资讯更新检查${checked ? `，最近检查 ${escape(formatTime(checked))}` : "，等待首次检查"}；${camping?.latestAt ? `最新消息 ${escape(formatTime(camping.latestAt))}。` : "暂无新消息时保留近期报道。"}${failed ? "部分来源暂不可用，保留已收录消息。" : ""} 下方营地为地点参考，停车和用炉条件请向营地确认。</p>`
+        : "";
+    const updatesOpen = panel.querySelector(".outing-update-info")?.open;
+    panel.innerHTML = `<div class="outing-ranges" role="group" aria-label="活动日期范围">
+      <button data-outing-range="weekend" aria-pressed="${state.outingRange === "weekend"}">本周末 ${start.slice(5).replace("-", "/")}—${end.slice(5).replace("-", "/")}</button>
+      <button data-outing-range="recent" aria-pressed="${state.outingRange === "recent"}">近期安排</button></div>
+      <div class="outing-types" role="group" aria-label="选择玩法">${Object.entries(
+        { all: "全部玩法", ...outingTypes },
+      )
+        .map(
+          ([key, label]) =>
+            `<button data-outing-type="${key}" aria-pressed="${state.outingType === key}">${escape(label)}</button>`,
+        )
+        .join("")}</div>
+      ${state.outingType === "outdoor" ? `<div class="outing-subtypes" role="group" aria-label="户外玩法">${Object.entries({ all: "全部户外", ...outingKinds }).map(([key, label]) => `<button data-outing-kind="${key}" aria-pressed="${state.outingKind === key}">${escape(label)}</button>`).join("")}</div>` : ""}
+      <details class="outing-update-info"${updatesOpen ? " open" : ""}><summary>更新说明</summary>
+      <p class="outing-checked">每天9—21点每两小时检查来源，16点额外更新去处；每天9点、16点补充检索（北京时间，采集发布需要几分钟）。${escape(researched || last)}活动时间与报名以原文为准。</p></details>${campingNote}`;
+    return referenceCount;
+  }
+  // Reuse the same controls and event listeners in news and outings. DOM order
+  // matches reading/tab order; no duplicate search or source fields are needed.
+  let outingControlHomes;
+  function renderOutingLayout() {
+    const local = state.view === "local";
+    if (!outingControlHomes) {
+      outingControlHomes = [
+        ["#load-notice", "#outing-load-status"],
+        ["#outing-catalog-heading", "#outing-library-content"], [".filter-row", "#outing-library-content"],
+        ["#outing-filters", "#outing-library-content"], ["#outing-library-updates", "#outing-library-content"],
+        ["#outing-places", "#outing-library-content"], ["#outing-news-panel", "#outing-library-content"],
+        [".source-select", "#outing-source-controls"], ["#date-trigger", "#outing-source-controls"],
+        ["#date-panel", "#outing-filters"], [".reading-options", "#outing-filters"],
+        ["#weekend-tools", "#outing-topic-controls"], ["#result-count", "#outing-catalog-count"],
+        ["#articles", "#outing-news-content"], ["#load-more", "#outing-news-content"], ["#list-end", "#outing-news-content"],
+      ].map(([selector, target]) => {
+        const node = $(selector), home = document.createComment("control position");
+        node.before(home);
+        return { node, home, target: $(target) };
+      });
+    }
+    for (const { node, home, target } of outingControlHomes) {
+      if (local && node.parentNode !== target) target.insertBefore(node, target.id === "outing-filters" ? $("#outing-filter-reset") : null);
+      else if (!local && node.previousSibling !== home) home.after(node);
+    }
+    $("#outing-catalog-heading").hidden = !local;
+    $("#outing-load-status").hidden = !local || $("#load-notice").hidden;
+    $("#outing-library").hidden = !local || state.outingMode === "tonight";
+    $("#outing-adjust").hidden = !local || state.outingMode === "tonight";
+    $("#outing-refresh-notice").hidden = !local || state.outingMode === "tonight" || !$("#outing-refresh-notice").textContent;
+    $("#outing-filter-toggle").hidden = !local;
+    $("#outing-filters").hidden = !local || !state.outingFiltersOpen;
+    $("#outing-filter-toggle").setAttribute("aria-expanded", String(state.outingFiltersOpen));
+    const count = [state.outingType !== "all", state.outingKind !== "all", state.outingRange !== "weekend", state.source !== "all", !!state.date].filter(Boolean).length;
+    $("#outing-filter-toggle").textContent = `筛选${count ? ` · ${count}` : ""}`;
+    $("#outing-filter-toggle").classList.toggle("active", count > 0);
+    $("#search").setAttribute("aria-label", local ? "搜索全部活动、地点或玩法" : "搜索资讯标题和摘要");
+  }
+  const timeFormatter = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  });
+  const formatTime = (date) => timeFormatter.format(new Date(date));
+  const relativeTime = (date) => {
+    const minutes = Math.max(
+      0,
+      Math.floor((Date.now() - new Date(date).getTime()) / 60000),
+    );
+    if (minutes < 1) return "刚刚";
+    if (minutes < 60) return `${minutes} 分钟前`;
+    if (minutes < 1440) return `${Math.floor(minutes / 60)} 小时前`;
+    return formatTime(date);
+  };
+  function validArticle(a) {
+    return (
+      a &&
+      typeof a.id === "string" &&
+      typeof a.title === "string" &&
+      !!safeUrl(a.url) &&
+      Number.isFinite(Date.parse(a.publishedAt)) &&
+      Object.prototype.hasOwnProperty.call(categoryNames, a.category)
+    );
+  }
+  let toastTimer;
+  function toast(message) {
+    $("#toast").textContent = message;
+    $("#toast").hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      $("#toast").hidden = true;
+    }, 3000);
+  }
+  function loadSaved() {
+    try {
+      const data = JSON.parse(
+        localStorage.getItem("zrbac-news-saved-v1") || "[]",
+      );
+      if (Array.isArray(data))
+        state.saved = new Map(data.filter(validArticle).map((a) => [a.id, a]));
+    } catch {
+      state.saved = new Map();
+    }
+    updateSavedCount();
+  }
+  function updateSavedCount() {
+    $("#saved-count").textContent = state.saved.size;
+    $("#saved-count").hidden = !state.saved.size;
+  }
+  function sourceFor(article) {
+    if (article.sourceId === "web-discovery" && article.sourceName)
+      return { name: article.sourceName };
+    return (
+      state.data?.sources.find((s) => s.id === article.sourceId) || {
+        name: article.sourceName || article.sourceId,
+      }
+    );
+  }
+  function saveArticle(id) {
+    if (state.saved.has(id)) {
+      state.saved.delete(id);
+      toast("已移出收藏");
+    } else {
+      const article =
+        state.data.weekendArticles?.find((a) => a.id === id) ||
+        state.data.articles.find((a) => a.id === id) ||
+        state.data.housingArticles?.find((a) => a.id === id) ||
+        state.data.gamingArticles?.find((a) => a.id === id) ||
+        state.data.briefArticles?.find((a) => a.id === id) ||
+        state.data.modelReleases?.find((a) => a.id === id);
+      if (!article) return;
+      state.saved.set(id, { ...article, sourceName: sourceFor(article).name });
+      toast("已收藏，可在「我的收藏」中查看");
+    }
+    try {
+      localStorage.setItem(
+        "zrbac-news-saved-v1",
+        JSON.stringify([...state.saved.values()]),
+      );
+    } catch {
+      toast("浏览器未允许保存；本次收藏仅在当前页面有效");
+    }
+    updateSavedCount();
+    render();
+  }
+  function articleCard(article, index) {
+    const saved = state.saved.has(article.id);
+    const outingRecord = article.category === "local" ? window.OutingLibrary.articleRecord(article) : null;
+    const wanted = outingRecord && window.OutingProfile.snapshot().records.some(r=>r.id===outingRecord.id && r.status==="want");
+    const source = sourceFor(article);
+    const read = window.NewsPersonal?.isRead(article.id);
+    const aggregated = /^https?:\/\/news\.google\.com\//.test(article.url);
+    let suffix = aggregated ? article.title.lastIndexOf(" - ") : -1;
+    if (suffix > 0) {
+      const publisher = article.title.slice(suffix + 3).trim();
+      let prefix = article.title.slice(0, suffix);
+      // Some feeds repeat the publisher in both the page title and RSS suffix.
+      while (publisher && prefix.endsWith(publisher)) {
+        const before = prefix.slice(0, -publisher.length).trimEnd();
+        if (!before.endsWith("-")) break;
+        prefix = before.slice(0, -1).trimEnd();
+        suffix = prefix.length;
+      }
+    }
+    const headline =
+      suffix > 0
+        ? escape(article.title.slice(0, suffix)) +
+          `<span class="article-publisher-suffix">${escape(article.title.slice(suffix))}</span>`
+        : escape(article.title);
+    const textKey = (value) => value.replace(/[\s\p{P}]/gu, "").toLowerCase();
+    const excerptKey = textKey(article.excerpt || "");
+    const repeatsTitle =
+      aggregated &&
+      excerptKey.length >= 8 &&
+      textKey(article.title).startsWith(excerptKey);
+    const detail = window.NewsEditorial?.detail(article);
+    const summary = detail?.summary || (state.view === "brief" && window.NewsEditorial?.metadata(article)?.summary);
+    const publishedLabel = article.sourceTimeBasis === "verified" ? "来源核对 " + formatTime(article.verifiedAt || article.publishedAt) : article.dateOnly ? dayOf(article.publishedAt) : relativeTime(article.publishedAt);
+    const publishedTitle = article.sourceTimeBasis === "verified" ? "原公告未标注发布日期，此处为来源核对时间" : article.dateOnly ? dayOf(article.publishedAt) + "（来源仅提供日期）" : "北京时间 " + formatTime(article.publishedAt);
+    return `<article class="article${read ? " read" : ""}" data-article-id="${escape(article.id)}"><div class="article-body">
+      ${state.view === "brief" ? `<span class="article-number">${String(index + 1).padStart(2, "0")}</span>` : ""}
+      <h3><a href="${escape(articleUrl(article))}" aria-label="${escape(article.title)}" target="_blank" rel="noopener noreferrer">${headline}</a></h3>
+      ${article.category === "local" ? outingSummary(article) : ""}
+      ${summary ? `<p class="editorial-summary"${detail ? ' data-summary-source="article"' : ""}>${escape(summary)}</p>` : article.excerpt ? `<p${repeatsTitle ? ' class="repeated-excerpt"' : ""}>${escape(article.excerpt)}</p>` : ""}
+      <div class="article-meta"><span>${escape(source.name)}</span><time datetime="${escape(article.publishedAt)}" title="${escape(publishedTitle)}">${escape(publishedLabel)}</time><span class="category-label ${escape(article.category)}">${categoryNames[article.category]}</span>${read ? '<span class="read-label">已读</span>' : ""}</div>
+      ${article.reports?.length ? `<details class="article-reports"><summary>其他 ${article.reports.length} 篇报道</summary>${article.reports.map((a) => `<a href="${escape(articleUrl(a))}" target="_blank" rel="noopener noreferrer">${escape(sourceFor(a).name)} · ${escape(a.title)}</a>`).join("")}</details>` : ""}
+      </div>${outingRecord ? `<button class="text-button outing-save" data-outing-story="${escape(article.id)}" aria-pressed="${!!wanted}">${wanted?"已想去":"想去"}</button>` : `<button class="save-button${saved ? " saved" : ""}" data-save="${escape(article.id)}" aria-label="${saved ? "取消收藏" : "收藏"}：${escape(article.title)}" aria-pressed="${saved}" title="${saved ? "取消收藏" : "收藏文章"}">${icon("bookmark")}</button>`}</article>`;
+  }
+  function selectBrief(articles) {
+    const rank = (article) => {
+      const meta = window.NewsEditorial?.metadata(article);
+      if (article.briefPriority === 3) return 3;
+      if (meta?.isBackground === true) return -1;
+      return Number.isInteger(meta?.priority) && meta.priority >= 0 && meta.priority <= 3 ? meta.priority : 1;
+    };
+    // Group after ranking so a lower-priority follow-up cannot hide the main
+    // announcement when it becomes the newest report of the same event.
+    articles = [...articles].sort((a, b) => rank(b) - rank(a) ||
+      Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
+    if (window.NewsEditorial)
+      articles = window.NewsEditorial.group(articles, (a) => a.title.replace(/ - [^-]+$/, "").replace(/[\s\p{P}]/gu, "").toLowerCase());
+    const seen = new Set();
+    articles = articles.filter((a) => {
+      const title = a.title
+        .replace(/ - [^-]+$/, "")
+        .replace(/[\s\p{P}]/gu, "")
+        .toLowerCase();
+      if (seen.has(title)) return false;
+      seen.add(title);
+      return true;
+    });
+    // Reserve a few leading places for major events, even when several belong
+    // to one category. Fill the rest with a broad reading selection.
+    const selected = articles.filter((a) => rank(a) >= 3).slice(0, 3);
+    const selectedIds = new Set(selected.map((a) => a.id));
+    const represented = new Set(selected.map((a) => a.category));
+    const counts = {};
+    for (const article of selected)
+      counts[article.sourceId] = (counts[article.sourceId] || 0) + 1;
+    const queues = [
+      "general",
+      "finance",
+      "livelihood",
+      "tech",
+      "ai",
+      "models",
+      "entertainment",
+      "gaming",
+      "sports",
+      "housing",
+    ]
+      .sort((a, b) => Number(represented.has(a)) - Number(represented.has(b)))
+      .map((category) => articles.filter((a) => a.category === category && !selectedIds.has(a.id)))
+      .filter((queue) => queue.length);
+    // If more than ten categories have news, rotate the starting category by
+    // calendar date so the last section is not permanently left out.
+    if (queues.length > 10) {
+      const offset =
+        Math.floor(
+          Date.parse((state.date || dayOf(Date.now())) + "T00:00:00Z") /
+            86400000,
+        ) % queues.length;
+      queues.push(...queues.splice(0, offset));
+    }
+    // Rotate the remaining categories and sources; these are editorial choices,
+    // not measured popularity or click counts.
+    while (selected.length < 10 && queues.some((q) => q.length)) {
+      for (const q of queues) {
+        if (!q.length || selected.length >= 10) continue;
+        const best = q.findIndex((a) => (counts[a.sourceId] || 0) < 2);
+        const [article] = q.splice(best < 0 ? 0 : best, 1);
+        selected.push(article);
+        counts[article.sourceId] = (counts[article.sourceId] || 0) + 1;
+      }
+    }
+    return selected;
+  }
+  function hasSectionSnapshot(data = state.data) {
+    return (
+      (state.view === "models" && Array.isArray(data?.modelReleases)) ||
+      (state.view === "local" && Array.isArray(data?.weekendArticles))
+    );
+  }
+  function matchingArticles() {
+    let articles =
+      state.view === "saved"
+        ? [...state.saved.values()].sort((a, b) =>
+            b.publishedAt.localeCompare(a.publishedAt),
+          )
+        : state.view === "local" && Array.isArray(state.data.weekendArticles)
+          ? state.data.weekendArticles
+          : state.view === "models" && Array.isArray(state.data.modelReleases)
+            ? state.data.modelReleases
+            : state.data.articles;
+    if (state.view === "gaming")
+      articles = [
+        ...new Map(
+          [...articles, ...(state.data.gamingArticles || [])].map((article) => [
+            article.id,
+            article,
+          ]),
+        ).values(),
+      ].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+    if (state.view === "brief")
+      articles = [
+        ...new Map(
+          [
+            ...articles,
+            ...(state.data.briefArticles || []),
+            ...(state.data.modelReleases || []),
+            ...(state.data.gamingArticles || []),
+          ].map((a) => [a.id, a]),
+        ).values(),
+      ].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+    if (state.filter !== "all")
+      articles = articles.filter((a) => a.category === state.filter);
+    // Outings have their own entrance and list; keep saved outings accessible.
+    if (!["local", "saved"].includes(state.view))
+      articles = articles.filter((a) => a.category !== "local");
+    if (state.view === "local")
+      articles = articles
+        .filter(outingMatches)
+        .sort((a, b) => Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
+    if (state.source !== "all")
+      articles = articles.filter((a) => a.sourceId === state.source);
+    if (state.date)
+      articles = articles.filter((a) => dayOf(a.publishedAt) === state.date);
+    if (state.query) {
+      const words = state.query
+        .toLocaleLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
+      articles = articles.filter((a) => {
+        const summary = window.NewsEditorial?.detail(a)?.summary;
+        const text = `${a.title} ${a.excerpt} ${summary || ""} ${sourceFor(a).name} ${a.outing?.venue || ""} ${a.category === "local" ? outingLabel(a) : ""}`.toLocaleLowerCase();
+        return words.every(word => text.includes(word));
+      });
+    }
+    if (window.NewsPersonal?.onlyUnread())
+      articles = articles.filter((a) => !window.NewsPersonal.isRead(a.id));
+    if (state.view === "brief") return selectBrief(articles);
+    if (state.view === "saved") return articles;
+    if (window.NewsEditorial)
+      return window.NewsEditorial.group(articles, (article) => {
+        const title = /^https?:\/\/news\.google\.com\//.test(article.url)
+          ? article.title.replace(/ - [^-]+$/, "") : article.title;
+        return title.replace(/[\s“”‘’"'《》【】「」。，、：:!?！？]/gu, "").toLowerCase();
+      });
+    const groups = new Map();
+    for (const article of articles) {
+      const title = /^https?:\/\/news\.google\.com\//.test(article.url)
+        ? article.title.replace(/ - [^-]+$/, "")
+        : article.title;
+      const key = title
+        .replace(/[\s“”‘’"'《》【】「」。，、：:!?！？]/gu, "")
+        .toLowerCase();
+      const existing = groups.get(key);
+      if (existing) existing.reports.push(article);
+      else groups.set(key, { ...article, reports: [] });
+    }
+    return [...groups.values()];
+  }
+  function housingIssue(status) {
+    const labels = {
+      rate_limited: "来源暂时限流",
+      access_restricted: "来源限制公开访问",
+      connection_failed: "部分来源连接失败",
+      not_public: "公开页面未提供完整数值",
+      unrecognized_report: "尚未提取到明确统计数据",
+    };
+    const reasons = [
+      ...new Set(
+        (status?.issues || []).map((code) => labels[code]).filter(Boolean),
+      ),
+    ];
+    return reasons.length ? reasons.join("；") : "本轮部分数据未能核实";
+  }
+  function housingMarket(data) {
+    const market = data.market || {};
+    const note = (kind, r) => {
+      const status = (data.marketSources || []).find((s) => s.kind === kind);
+      const stale =
+        Date.now() - Date.parse(r.periodEnd + "T00:00:00+08:00") >
+        (kind === "cric" ? 45 : 60) * 86400000;
+      return `<p class="price-period">统计期 ${escape(r.periodStart)} 至 ${escape(r.periodEnd)}</p>
+        <p class="price-published">${escape(r.scope)}${r.publishedAt ? ` · 发布于 ${escape(r.publishedAt)}` : ""}</p>
+        <a href="${escape(safeUrl(r.url))}" target="_blank" rel="noopener noreferrer">${escape(r.source)} ↗</a>
+        ${stale ? '<p class="price-status">统计期较早，等待来源发布可核实的新数据。</p>' : ""}
+        ${status && status.status !== "ok" ? `<p class="price-status">${escape(housingIssue(status))}，保留已核实数据和原统计期。</p>` : ""}`;
+    };
+    const valid = (r) =>
+      r && safeUrl(r.url) && /^\d{4}-\d{2}-\d{2}$/.test(r.periodEnd);
+    const change = (index) => {
+      const value = Math.round((index - 100) * 10) / 10;
+      return value === 0
+        ? "持平"
+        : `${value > 0 ? "上涨" : "下降"} ${Math.abs(value).toFixed(1)}%`;
+    };
+    let html = "";
+    const official = market.official;
+    if (
+      valid(official) &&
+      Array.isArray(official.values) &&
+      official.values.length === 2
+    ) {
+      const values = official.values.filter(
+        (v) =>
+          ["new", "resale"].includes(v.kind) &&
+          Number.isFinite(v.momIndex) &&
+          Number.isFinite(v.yoyIndex),
+      );
+      if (values.length === 2)
+        html += `<section class="housing-market official-prices"><h2>官方房价走势</h2>
+        <p class="price-intro">国家统计局的价格指数变化，用于观察涨跌，不是每平方米成交价格。</p>
+        <div class="official-grid">${values.map((v) => `<div><h3>${v.kind === "new" ? "新房" : "二手房"}</h3><p>环比 <strong>${change(v.momIndex)}</strong></p><p>同比 <strong>${change(v.yoyIndex)}</strong></p></div>`).join("")}</div>
+        ${note("official", official)}</section>`;
+    }
+    const districts = market.districts;
+    if (
+      valid(districts) &&
+      Array.isArray(districts.rows) &&
+      districts.rows.length
+    ) {
+      const rows = districts.rows.filter((r) =>
+        [r.count, r.area, r.amount].every(Number.isFinite),
+      );
+      html += `<section class="housing-market district-prices"><h2>各区新房成交</h2>
+        <p class="price-intro">按来源公布的成交套数、面积和金额展示，统计范围为所列十区。</p>
+        <table class="housing-table"><thead><tr><th scope="col">区域</th><th scope="col">套数</th><th scope="col">面积<small>万㎡</small></th><th scope="col">金额<small>亿元</small></th></tr></thead><tbody>${rows.map((r) => `<tr><th scope="row">${escape(r.name)}</th><td>${escape(r.count.toLocaleString("zh-CN"))}</td><td>${r.area.toFixed(2)}</td><td>${r.amount.toFixed(2)}</td></tr>`).join("")}</tbody></table>
+        ${note("districts", districts)}</section>`;
+    }
+    const cric = market.cric;
+    if (valid(cric) && Number.isFinite(cric.price) && cric.price > 0)
+      html += `<section class="housing-market cric-prices"><h2>克而瑞新房成交均价</h2>
+      <p class="market-price">${escape(cric.price.toLocaleString("zh-CN"))}<small>元/㎡</small></p>
+      <p class="price-intro">独立来源的月度统计。与上方周报的统计周期、范围不同，请分别查看。</p>${note("cric", cric)}</section>`;
+    return html;
+  }
+  let exchangePoints = [];
+  let exchangeCurrency = "USD";
+  let exchangeAmount = "";
+  let exchangeRate = null;
+  const exchangeNames = { USD: "美元", JPY: "日元", THB: "泰铢" };
+  function updateExchangeConversion() {
+    const input = $("#fx-amount"),
+      output = $("#fx-converted");
+    if (!input || !output) return;
+    const result = window.NewsExchange.convertAmount(
+      exchangeAmount,
+      exchangeRate,
+    );
+    const invalid = exchangeAmount.trim() !== "" && result === null;
+    input.setAttribute("aria-invalid", String(invalid));
+    $("#fx-amount-error").textContent = invalid
+      ? "请输入非负金额，最多9位整数、2位小数。"
+      : "";
+    output.textContent =
+      result === null
+        ? "—"
+        : `约 ${result.replace(/\B(?=(\d{3})+\.)/g, ",")} 元`;
+  }
+  function renderExchangeRates() {
+    const panel = $("#exchange-rates");
+    const active = state.view === "exchange";
+    panel.hidden = !active;
+    $("#news-content").classList.toggle("exchange-view", active);
+    if (!active) return;
+    const name = exchangeNames[exchangeCurrency];
+    const allRates = state.data.exchangeRates || {};
+    const data =
+      exchangeCurrency === "USD"
+        ? allRates
+        : allRates.currencies?.[exchangeCurrency];
+    const tabs = `<div class="fx-currencies" role="group" aria-label="选择汇率币种">${Object.entries(
+      exchangeNames,
+    )
+      .map(
+        ([code, label]) =>
+          `<button data-fx-currency="${code}" aria-pressed="${code === exchangeCurrency}">${label} <span>${code}</span></button>`,
+      )
+      .join("")}</div>`;
+    const info = window.NewsExchange.analyze(data, dayOf(Date.now()));
+    exchangeRate = info ? info.latest.rate : null;
+    if (!info) {
+      panel.innerHTML = `${tabs}<p class="view-note">${name}兑人民币数据暂未获取成功，后续更新会自动重试。</p>`;
+      exchangePoints = [];
+      return;
+    }
+    exchangePoints = info.points;
+    const rateText = (rate) => rate.toFixed(6);
+    let graph = '<p class="price-published">近30天暂无可展示的报价。</p>';
+    if (info.points.length) {
+      const rates = info.points.map((p) => p.rate);
+      const min = Math.min(...rates),
+        max = Math.max(...rates);
+      const pad = Math.max((max - min) * 0.12, min * 0.0001, 0.000001);
+      const bottom = min - pad,
+        top = max + pad;
+      const start = Date.parse(info.periodStart),
+        end = Date.parse(info.periodEnd);
+      const coords = info.points.map((p) => [
+        58 + ((Date.parse(p.date) - start) / Math.max(1, end - start)) * 560,
+        18 + ((top - p.rate) / (top - bottom)) * 150,
+      ]);
+      graph = `<svg class="fx-chart" viewBox="0 0 640 210" role="img" aria-labelledby="fx-chart-title fx-chart-desc"><title id="fx-chart-title">${name}兑人民币近30天参考汇率走势</title><desc id="fx-chart-desc">1${name}折合人民币。最低${rateText(min)}，最高${rateText(max)}。可使用下方滑块或每日记录查看具体日期。</desc>
+        ${[0, 1, 2]
+          .map((i) => {
+            const y = 18 + i * 75;
+            return `<line x1="58" x2="618" y1="${y}" y2="${y}" class="fx-grid"/><text x="50" y="${y + 4}" text-anchor="end">${(top - ((top - bottom) * i) / 2).toFixed(4)}</text>`;
+          })
+          .join("")}
+        <polyline points="${coords.map((p) => p.map((v) => v.toFixed(2)).join(",")).join(" ")}" class="fx-line"/>
+        ${coords.map(([x, y], i) => `<circle cx="${x.toFixed(2)}" cy="${y.toFixed(2)}" r="4" data-fx-point="${i}" class="fx-point${i === coords.length - 1 ? " selected" : ""}"/>`).join("")}
+        <text x="58" y="196">${escape(info.periodStart.slice(5))}</text><text x="618" y="196" text-anchor="end">${escape(info.periodEnd.slice(5))}</text></svg>
+        <p id="fx-readout" class="fx-readout" aria-live="polite">${escape(info.points[info.points.length - 1].date)} · 1 ${name} = ${rateText(info.points[info.points.length - 1].rate)} 人民币</p>
+        ${info.points.length > 1 ? `<label class="fx-slider-label" for="fx-day">滑动查看日期</label><input id="fx-day" type="range" min="0" max="${info.points.length - 1}" value="${info.points.length - 1}" step="1" aria-describedby="fx-readout"/>` : ""}`;
+    }
+    const alert = info.low
+      ? `<p class="fx-alert" role="status">${info.tied ? "并列" : "达到"}近30天最低</p>`
+      : "";
+    const status = !info.verified
+      ? "本轮获取失败，显示上次数据，暂停最低提醒。"
+      : info.stale
+        ? "报价日期较早，暂停最低提醒，等待来源更新。"
+        : !info.complete
+          ? "历史数据不足，暂不判断30天最低。"
+          : info.low
+            ? "按最新已公布的参考汇率比较。"
+            : "最新参考汇率尚未达到近30天最低。";
+    panel.innerHTML = `${tabs}<section class="fx-summary${info.low ? " is-low" : ""}"><div class="fx-heading"><h2>${name} <span>${exchangeCurrency} / CNY</span></h2>${alert}</div>
+      <p class="fx-unit">1 ${name}兑人民币</p><p class="fx-value">${rateText(info.latest.rate)} <small>元</small></p>
+      <p class="price-published">报价日期 ${escape(info.latest.date)} · 每日参考汇率</p><p class="fx-status">${status}</p>
+      ${info.complete ? `<p class="price-published">30天区间最低 ${rateText(info.min)} · ${escape(info.windowStart)} 至 ${escape(info.windowEnd)} · ${info.samples} 个报价日</p>` : ""}</section>
+      <section class="fx-converter" aria-labelledby="fx-converter-title">
+        <h2 id="fx-converter-title">金额换算</h2>
+        <div class="fx-converter-fields">
+          <div><label for="fx-amount">${name}金额（${exchangeCurrency}）</label>
+            <input id="fx-amount" type="text" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="输入金额" value="${escape(exchangeAmount)}" aria-describedby="fx-amount-error fx-conversion-note"/>
+          </div>
+          <div><label for="fx-converted">折合人民币（CNY）</label>
+            <output id="fx-converted" for="fx-amount" aria-live="polite">—</output>
+          </div>
+        </div>
+        <p id="fx-amount-error" class="fx-amount-error" aria-live="polite"></p>
+        <p id="fx-conversion-note" class="price-published">按${escape(info.latest.date)}参考汇率换算，实际兑换以银行或支付平台为准。</p>
+      </section>
+      <section class="fx-history"><h2>近一个月走势</h2><p class="price-published">${escape(info.periodStart)} 至 ${escape(info.periodEnd)} · 最近30个自然日</p>${graph}</section>
+      <details class="fx-records"><summary>每日记录（${info.points.length} 个报价日）</summary><table class="housing-table"><thead><tr><th scope="col">日期</th><th scope="col">1${name}兑人民币</th></tr></thead><tbody>${[
+        ...info.points,
+      ]
+        .reverse()
+        .map(
+          (p) =>
+            `<tr><th scope="row">${escape(p.date)}</th><td>${rateText(p.rate)}</td></tr>`,
+        )
+        .join("")}</tbody></table></details>
+      <div class="fx-notes"><p>来源：<a href="${escape(safeUrl(data.sourceUrl))}" target="_blank" rel="noopener noreferrer">欧洲央行（ECB）参考汇率 ↗</a>。由同日人民币兑欧元报价除以${name}兑欧元报价换算；不是银行现汇买入价或卖出价。</p>
+      <p>随网站自动检查更新，来源通常在欧洲工作日每日发布一次。周末及休市日不新增报价，图表只连接已公布的数据点。</p>
+      <p>提醒比较截至最新报价日期的30个自然日（含当天），达到或并列最低均高亮；按六位小数比较，历史不足、获取失败或报价超过4天时暂停提醒。</p>
+      ${data.checkedAt ? `<p>最近检查 ${escape(formatTime(data.checkedAt))}（北京时间）；检查时间不代表新报价。</p>` : ""}</div>`;
+    updateExchangeConversion();
+  }
+  function housingNews() {
+    const articles = Array.isArray(state.data.housingArticles)
+      ? state.data.housingArticles
+      : [...state.data.articles, ...(state.data.briefArticles || [])].filter(
+          (a) => a.category === "housing",
+        );
+    const news = articles
+      .slice(0, state.housingLimit)
+      .map(articleCard)
+      .join("");
+    return `<section class="housing-news" id="housing-news" aria-labelledby="housing-news-title">
+      <h2 id="housing-news-title" tabindex="-1">楼盘与房市动态</h2>
+      <p class="price-intro">开盘、预售、报名登记、交付与房市报道，按发布时间更新。点击标题查看原文和楼盘详情。</p>
+      ${news || '<p class="price-intro">暂未收录近期报道，可通过上方入口查询楼盘。</p>'}
+      ${articles.length > state.housingLimit ? '<button class="housing-more" type="button" data-housing-more>查看更多动态</button>' : ""}
+      <p class="price-published">展示近30天最新${articles.length}条报道；楼盘报价的口径以原文为准。</p></section>`;
+  }
+  function renderHousingPrices() {
+    const panel = $("#housing-prices");
+    const active = state.view === "housing";
+    panel.hidden = !active;
+    $("#news-content").classList.toggle("housing-view", active);
+    if (!active) {
+      panel.innerHTML = "";
+      return;
+    }
+    const data = state.data.housingPrices || {};
+    const records = (Array.isArray(data.records) ? data.records : [])
+      .filter(
+        (r) =>
+          r &&
+          ["new", "resale"].includes(r.kind) &&
+          Number.isFinite(r.price) &&
+          r.price > 0 &&
+          safeUrl(r.url) &&
+          /^\d{4}-\d{2}-\d{2}$/.test(r.periodStart) &&
+          /^\d{4}-\d{2}-\d{2}$/.test(r.periodEnd),
+      )
+      .sort(
+        (a, b) =>
+          b.periodEnd.localeCompare(a.periodEnd) ||
+          String(b.publishedAt).localeCompare(String(a.publishedAt)),
+      );
+    const cards = ["new", "resale"]
+      .map((kind) => {
+        const record = records.find((r) => r.kind === kind);
+        const label = kind === "new" ? "新房" : "二手房";
+        if (!record)
+          return `<section class="price-card"><h2>${label}</h2><p>暂未收录可核实的成交价格。</p></section>`;
+        const status = (data.sources || []).find((s) => s.kind === kind);
+        const stale =
+          Date.now() - Date.parse(record.periodEnd + "T00:00:00+08:00") >
+          (kind === "new" ? 14 : 45) * 86400000;
+        const backup =
+          kind === "new" &&
+          new URL(record.url).hostname === "www.haofangdp.com" &&
+          status?.usingFallback;
+        return `<section class="price-card"><h2>${label}<span>${escape(record.metric)}</span></h2>
+        <p class="price-value">${escape(record.price.toLocaleString("zh-CN"))}<small>元/㎡</small></p>
+        <p class="price-period">统计期 ${escape(record.periodStart)} 至 ${escape(record.periodEnd)}</p>
+        <p>${escape(record.scope)}</p>
+        <a href="${escape(safeUrl(record.url))}" target="_blank" rel="noopener noreferrer">${escape(record.source)} ↗</a>
+        <p class="price-published">发布于 ${escape(record.publishedAt)}</p>
+        ${stale ? `<p class="price-status">统计期已超过 ${kind === "new" ? 14 : 45} 天，请留意原站后续发布。</p>` : ""}
+        ${backup ? '<p class="price-status">中指云本轮暂未能核实，补充展示克而瑞公开周报，口径以原文为准。</p>' : status && status.status !== "ok" ? `<p class="price-status">${escape(housingIssue(status))}，保留已收录价格。</p>` : ""}</section>`;
+      })
+      .join("");
+    panel.innerHTML = `<a class="housing-home-book" href="/homes/live/"><span><strong>看房源 · 新房与二手房</strong><small>按预算和板块筛选，每天检查房源与报价变化</small></span><span aria-hidden="true">→</span></a><h2 class="city-price-heading">杭州整体成交</h2><p class="price-intro">新房成交均价按周、二手房及其他月度统计按月发布。随网站自动检查，没有新数据时保留上次结果。</p>
+      ${data.checkedAt ? `<p class="price-published housing-checked">最近检查 ${escape(formatTime(data.checkedAt))}（北京时间）；数据日期以各项统计期为准。</p>` : ""}
+      <div class="housing-links" aria-label="楼盘信息查询">
+        <button type="button" class="text-button" data-housing-jump>楼盘动态 ↓</button>
+        <a href="https://xinpan.zjol.com.cn/loupan/" target="_blank" rel="noopener noreferrer">住在杭州楼盘库 ↗</a>
+        <a href="https://zzhz.zjol.com.cn/yaohao/" target="_blank" rel="noopener noreferrer">登记查询 ↗</a>
+        <a href="https://hz.newhouse.fang.com/house/s/" target="_blank" rel="noopener noreferrer">房天下新房 ↗</a>
+      </div>
+      <div class="price-grid">${cards}</div>
+      <p class="price-explanation">这里展示已公开的成交、网签统计；暂未接入全市实时逐套成交库。不同周期和成交房源构成的均价不能直接比较。</p>${housingMarket(data)}${housingNews()}`;
+  }
+
+  let revealedCategory = null;
+  let revealedWidth = 0;
+  function revealCategory() {
+    if (!window.matchMedia("(max-width: 760px)").matches) return;
+    const group = $(".filter-categories");
+    const selected = group.querySelector(".selected");
+    if (selected === revealedCategory && group.clientWidth === revealedWidth)
+      return;
+    revealedCategory = selected;
+    revealedWidth = group.clientWidth;
+    if (selected)
+      group.scrollLeft = Math.max(
+        0,
+        selected.offsetLeft - (group.clientWidth - selected.offsetWidth) / 2,
+      );
+  }
+  window.addEventListener("resize", revealCategory);
+  function render() {
+    const titles = {
+      all: "最新资讯",
+      general: "综合热点",
+      finance: "财经",
+      local: "去处",
+      livelihood: "民生服务",
+      tech: "科技动态",
+      ai: "人工智能",
+      models: "模型发布",
+      entertainment: "文娱",
+      gaming: "游戏",
+      sports: "体育",
+      housing: "杭州房价",
+      exchange: "汇率",
+      brief: "每日速览",
+      saved: "我的收藏",
+    };
+    $("#section-title").textContent = titles[state.view] || titles.all;
+    document.title = (state.view === "local"
+      ? state.outingMode === "tonight" ? "今晚做点什么" : "周末去处"
+      : titles[state.view] || titles.all) + " · 资讯";
+    const outings = state.view === "local";
+    $(".filter-tabs").hidden = outings;
+    $(".sidebar").hidden = outings;
+    $(".main-layout").classList.toggle("outings-view", outings);
+    $(".update-bar").hidden = outings;
+    $("#outing-news-panel").hidden = !outings;
+    renderOutingLayout();
+    $("#outing-nav").hidden = !outings;
+    $("#outing-now").hidden = !outings;
+    $("#news-listing").hidden = outings && state.outingMode === "tonight";
+    $$("[data-outing-mode]").forEach(el => {
+      if (el.dataset.outingMode === state.outingMode) el.setAttribute("aria-current", "page");
+      else el.removeAttribute("aria-current");
+    });
+    window.NewsTonight?.render(state.data || {}, state, formatTime);
+    $$("[data-view]").forEach((el) => {
+      const active =
+        el.dataset.view === state.view ||
+        (el.dataset.view === "tech" && state.view === "ai");
+      el.classList.toggle("active", active);
+      if (active) el.setAttribute("aria-current", "page");
+      else el.removeAttribute("aria-current");
+    });
+    $$("[data-filter]").forEach((el) => {
+      const active =
+        el.dataset.filter === state.filter && state.view !== "brief";
+      el.classList.toggle("selected", active);
+      el.setAttribute("aria-pressed", active);
+    });
+    revealCategory();
+    const note = $("#view-note");
+    note.hidden = ![
+      "saved",
+      "brief",
+      "finance",
+      "livelihood",
+      "models",
+      "tech",
+      "ai",
+      "entertainment",
+      "housing",
+      "gaming",
+    ].includes(state.view);
+    if (state.view === "finance")
+      note.textContent =
+        "经济政策、金融市场与企业经营消息，按报道发布时间更新。";
+    if (state.view === "livelihood")
+      note.textContent =
+        "社保医保、补贴、就业与消费提醒，附官方辟谣消息。各地政策的适用范围和办理时间见原报道。";
+    if (state.view === "gaming")
+      note.textContent =
+        "新游发布、版本更新、主机与游戏行业动态。可按来源、日期回看已收录报道。";
+    if (state.view === "housing")
+      note.textContent =
+        "关注杭州新房、二手房成交、价格变化、购房政策与土拍。按报道发布时间排序，点击标题查看原报道及数据口径。";
+    if (state.view === "entertainment")
+      note.textContent =
+        "娱乐圈、影视和综艺消息，按发布时间更新。点击标题查看原报道。";
+    if (state.view === "models")
+      note.textContent =
+        "国内外 AI 模型发布、版本升级与开放使用消息，按发布时间排序。汇集官方公告与中文报道，展示近30天最新60条，点击标题阅读原文。";
+    if (state.view === "tech")
+      note.textContent =
+        "手机、电脑、硬件、系统与通用软件动态。AI 工具和模型发布分别收录在对应栏目。";
+    if (state.view === "ai")
+      note.textContent =
+        "AI 工具、应用、研究、行业与监管动态。新模型发布和版本升级可在「模型」查看。";
+    if (state.view === "saved")
+      note.textContent =
+        "收藏保存在当前浏览器，可保留已超出资讯归档期限的条目。清除浏览器数据会移除收藏，不会自动跨设备同步。";
+    if (state.view === "brief")
+      note.textContent = state.data?.editorial?.news?.processed
+        ? "部分要点由 AI 整理，原文可核对。"
+        : "按分类和来源选取，可切换日期回看。";
+    $("#date-trigger").classList.toggle("active", !!state.date);
+    $("#date-trigger span:last-child").textContent = state.date
+      ? state.date.slice(5).replace("-", "/")
+      : "日期";
+    if (!state.data) return;
+    renderSourceFilter();
+    renderHousingPrices();
+    renderExchangeRates();
+    const referenceCount = renderWeekendTools();
+    $("#outing-library-count").textContent = `${window.OutingLibrary.places().length} 个地点`;
+    renderOutingSuggestion();
+    window.NewsEditorial?.render(state.data, state, formatTime);
+    window.NewsEditorial?.renderRecords(state.data, state, formatTime);
+    if (outings && (state.query || state.source !== "all" || state.date || state.outingType !== "all")) $("#outing-news-panel").open = true;
+    const articles = matchingArticles();
+    $("#outing-news-count").textContent = `${articles.length} 条消息 · 按发布时间`;
+    const partial =
+      hasArchive() &&
+      state.view !== "saved" &&
+      !hasBriefSnapshot() &&
+      !hasSectionSnapshot();
+    $("#result-count").textContent =
+      partial && state.view !== "brief"
+        ? `已加载 ${articles.length} 条资讯`
+        : `${articles.length} 条资讯`;
+    if (state.view === "housing")
+      $("#result-count").textContent = "成交数据 · 楼盘动态";
+    if (state.view === "exchange")
+      $("#result-count").textContent = "美元 · 日元 · 泰铢";
+    if (state.view === "local")
+      $("#result-count").textContent =
+        `${articles.length} 条出游消息${referenceCount ? ` · ${referenceCount} 个地点参考` : ""}`;
+    $("#articles").setAttribute("aria-busy", "false");
+    if (articles.length) {
+      $("#articles").innerHTML = articles
+        .slice(0, state.limit)
+        .map(articleCard)
+        .join("");
+    } else {
+      const emptySaved = state.view === "saved" && !state.saved.size;
+      const emptyBrief = state.view === "brief" && state.date && !partial;
+      $("#articles").innerHTML =
+        state.view === "local"
+          ? referenceCount
+            ? '<div class="empty-state"><p>地点参考见上方；当前筛选下暂无近期活动消息。</p></div>'
+            : '<div class="empty-state"><h3>暂时没有匹配的出游消息</h3><p>可切换玩法、调整关键词，或查看近期安排。</p><button data-outing-range="recent">查看近期安排</button></div>'
+          : `<div class="empty-state">${icon(emptySaved ? "bookmark" : "search")}<h3>${emptySaved ? "还没有收藏" : emptyBrief ? "这一天暂无匹配的资讯" : partial ? "已加载的资讯中暂无匹配" : "暂时没有匹配的资讯"}</h3><p>${emptySaved ? "点击新闻右侧的书签即可收藏。" : emptyBrief ? "可选择其他日期，或查看全部资讯。" : partial ? "正在查找较早资讯；也可调整关键词、来源或日期。" : "试试其他关键词、来源或日期。"}</p><button data-reset>浏览全部资讯</button></div>`;
+    }
+    $("#load-more").hidden =
+      articles.length <= state.limit &&
+      (!partial || (state.view === "brief" && articles.length >= 10));
+    $("#load-more").disabled = archiveJob?.data === state.data;
+    $("#load-more-label").textContent = outings ? "查看更多动态" : "加载更多";
+    $("#list-end").hidden =
+      partial || !articles.length || articles.length > state.limit;
+  }
+  function route(scroll = false) {
+    const hash = location.hash === "#tonight" ? "local" : location.hash.slice(1);
+    if (hash === "news-content" || hash === "section-title") {
+      if (!state.data) return;
+      render();
+      return;
+    }
+    state.outingMode = location.hash === "#tonight" ? "tonight" : "weekend";
+    clearTimeout(searchTimer);
+    searchTimer = null;
+    state.view = [
+      "all",
+      "general",
+      "finance",
+      "local",
+      "livelihood",
+      "tech",
+      "ai",
+      "models",
+      "entertainment",
+      "gaming",
+      "sports",
+      "housing",
+      "exchange",
+      "brief",
+      "saved",
+    ].includes(hash)
+      ? hash
+      : "brief";
+    state.filter = [
+      "general",
+      "finance",
+      "local",
+      "livelihood",
+      "tech",
+      "ai",
+      "models",
+      "entertainment",
+      "gaming",
+      "sports",
+      "housing",
+      "exchange",
+    ].includes(state.view)
+      ? state.view
+      : "all";
+    state.limit = pageSize();
+    state.housingLimit = 6;
+    state.outingType = "all";
+    state.outingKind = "all";
+    state.outingFiltersOpen = false;
+    state.outingRange = "weekend";
+    state.query = "";
+    state.source = "all";
+    state.date = state.view === "brief" ? dayOf(Date.now()) : "";
+    $("#search").value = "";
+    $("#source-filter").value = "all";
+    $("#date-filter").value = state.date;
+    const showDate =
+      state.view === "brief" &&
+      !window.matchMedia("(max-width: 760px)").matches;
+    $("#date-panel").hidden = !showDate;
+    $("#date-trigger").setAttribute("aria-expanded", showDate);
+    render();
+    ensureArticles();
+    if (scroll)
+      $("#news-content").scrollIntoView({ behavior: "smooth", block: "start" });
+  }
+  function renderSidebar() {
+    const seenSources = new Set();
+    const latest = [];
+    for (const a of state.data.articles) {
+      if (a.category === "local") continue;
+      if (!seenSources.has(a.sourceId)) {
+        latest.push(a);
+        seenSources.add(a.sourceId);
+      }
+      if (latest.length === 5) break;
+    }
+    $("#latest-list").innerHTML = latest
+      .map(
+        (a) =>
+          `<li><div><a href="${escape(articleUrl(a))}" target="_blank" rel="noopener noreferrer">${escape(a.title)}</a><p>${escape(sourceFor(a).name)} · ${escape(relativeTime(a.publishedAt))}</p></div></li>`,
+      )
+      .join("");
+    $("#tech-list").innerHTML = state.data.articles
+      .filter((a) => a.category === "ai")
+      .slice(0, 5)
+      .map(
+        (a) =>
+          `<li><a href="${escape(articleUrl(a))}" target="_blank" rel="noopener noreferrer">${escape(a.title)}</a><p>${escape(sourceFor(a).name)} · ${escape(relativeTime(a.publishedAt))}</p></li>`,
+      )
+      .join("");
+    $("#source-badges").innerHTML = state.data.sources
+      .map(
+        (s) =>
+          `<a href="${escape(safeUrl(s.home))}" target="_blank" rel="noopener noreferrer">${escape(s.name)}</a>`,
+      )
+      .join("");
+    const ok = state.data.sources.filter((s) => s.status === "ok").length;
+    const newsCheckedAt = state.data.newsCheckedAt || state.data.updatedAt;
+    // Only a missed scheduled slot is late. Allow 45 minutes for collection
+    // and publishing; the overnight pause is intentional, including midnight.
+    const deadline = new Date(Date.now() - 45 * 60000 + 8 * 3600000);
+    const hour = deadline.getUTCHours();
+    if (hour < 9) {
+      deadline.setUTCDate(deadline.getUTCDate() - 1);
+      deadline.setUTCHours(21, 0, 0, 0);
+    } else deadline.setUTCHours(Math.min(21, hour % 2 ? hour : hour - 1), 0, 0, 0);
+    const stale = Date.parse(newsCheckedAt) < deadline.getTime() - 8 * 3600000;
+    const latestPublished = state.data.articles.reduce(
+      (date, a) => Math.max(date, Date.parse(a.publishedAt)),
+      0,
+    );
+    const checked = `${stale ? "检查已延迟 · " : ""}最近检查 ${formatTime(newsCheckedAt)}`;
+    const detail = ` · 最新文章 ${latestPublished ? formatTime(latestPublished) : "暂无"} · ${ok}/${state.data.sources.length} 个来源可用`;
+    $("#update-status").innerHTML =
+      `${escape(checked)}<span class="update-detail">${escape(detail)}</span>`;
+    $("#update-status").setAttribute("aria-label", checked + detail);
+    $("#update-status").title =
+      "最近检查为资讯源抓取时间，最新文章为已收录文章的发布时间。每天9、11、13、15、17、19、21点检查，夜间暂停；采集发布可能延迟，时间均为北京时间。";
+    const dates = state.data.articles.map((a) => dayOf(a.publishedAt)).sort();
+    if (dates.length)
+      $("#date-filter").min = state.data.archive?.oldest
+        ? dayOf(state.data.archive.oldest)
+        : dates[0];
+    $("#date-filter").max = dayOf(Date.now());
+  }
+  function renderSourceFilter() {
+    const catalog = state.data.archive?.categories;
+    const ids =
+      state.view === "local" ? new Set((state.data.weekendArticles || []).filter(a=>!outingExcluded.test(a.title)).map(a=>a.sourceId)) : state.view === "saved"
+        ? new Set(
+            [...state.saved.values()]
+              .filter(
+                (a) => state.filter === "all" || a.category === state.filter,
+              )
+              .map((a) => a.sourceId),
+          )
+        : catalog && state.filter !== "all"
+          ? new Set(catalog[state.filter] || [])
+          : null;
+    if (ids && state.filter === "models")
+      (state.data.modelReleases || []).forEach((a) => ids.add(a.sourceId));
+    if (ids && state.filter === "local")
+      (state.data.weekendArticles || []).forEach((a) => ids.add(a.sourceId));
+    const sources = state.data.sources.filter(
+      (source) =>
+        (!ids || ids.has(source.id)) &&
+        (state.filter !== "all" ||
+          state.view === "saved" ||
+          source.category !== "local"),
+    );
+    if (!sources.some((source) => source.id === state.source))
+      state.source = "all";
+    const markup =
+      '<option value="all">全部来源</option>' +
+      sources
+        .map(
+          (source) =>
+            `<option value="${escape(source.id)}">${escape(source.name)}</option>`,
+        )
+        .join("");
+    if ($("#source-filter").innerHTML !== markup)
+      $("#source-filter").innerHTML = markup;
+    $("#source-filter").value = state.source;
+  }
+  let sourceDialogToken = 0;
+  let sourceQuality = null;
+  let sourceQualityMessage = "";
+  let sourceQualityRetry = false;
+  let sourceSort = "default",
+    sourceCategory = "all",
+    sourceAttention = false;
+  const qualityStorage = "zrbac-source-quality-v1";
+  function validateSourceQuality(quality, meta) {
+    const count = (n) => Number.isInteger(n) && n >= 0;
+    if (
+      !quality ||
+      quality.schema !== 1 ||
+      quality.windowDays !== 7 ||
+      quality.updatedAt !== meta.updatedAt ||
+      quality.startedAt !== meta.startedAt ||
+      !Number.isFinite(Date.parse(quality.startedAt)) ||
+      !Array.isArray(quality.sources) ||
+      quality.sources.length > 200
+    )
+      throw new Error("Invalid source quality summary");
+    const ids = new Set();
+    for (const item of quality.sources) {
+      if (
+        !item ||
+        typeof item.id !== "string" ||
+        ids.has(item.id) ||
+        !Number.isFinite(Date.parse(item.startedAt)) ||
+        ![
+          "newCount",
+          "duplicateCount",
+          "checks",
+          "successes",
+          "failureStreak",
+          "observedDays",
+        ].every((key) => count(item[key])) ||
+        item.duplicateCount > item.newCount ||
+        item.successes > item.checks ||
+        item.observedDays > 7 ||
+        !(item.noNewDays === null || count(item.noNewDays)) ||
+        !(
+          item.lastNewAt === null || Number.isFinite(Date.parse(item.lastNewAt))
+        ) ||
+        !(item.duplicateRate === null
+          ? item.newCount === 0
+          : Number.isFinite(item.duplicateRate) &&
+            item.newCount > 0 &&
+            Math.abs(
+              item.duplicateRate - item.duplicateCount / item.newCount,
+            ) <= 0.0001) ||
+        !Array.isArray(item.daily) ||
+        item.daily.length > 7
+      )
+        throw new Error("Invalid source quality row");
+      ids.add(item.id);
+      const days = new Set();
+      for (const day of item.daily) {
+        if (
+          !day ||
+          typeof day.date !== "string" ||
+          !/^\d{4}-\d{2}-\d{2}$/.test(day.date) ||
+          !Number.isFinite(Date.parse(day.date + "T00:00:00+08:00")) ||
+          days.has(day.date) ||
+          !["checks", "successes", "newCount", "duplicateCount"].every((key) =>
+            count(day[key]),
+          ) ||
+          day.successes > day.checks ||
+          day.duplicateCount > day.newCount
+        )
+          throw new Error("Invalid source quality day");
+        days.add(day.date);
+      }
+      if (
+        item.observedDays !== item.daily.length ||
+        ["checks", "successes", "newCount", "duplicateCount"].some(
+          (key) =>
+            item[key] !== item.daily.reduce((sum, day) => sum + day[key], 0),
+        )
+      )
+        throw new Error("Inconsistent source quality totals");
+    }
+    return quality;
+  }
+  function sourceFlags(source, quality) {
+    const flags = [];
+    if (source.status !== "ok")
+      flags.push(
+        quality?.failureStreak > 1
+          ? `连续失败 ${quality.failureStreak} 次`
+          : "本轮暂不可用",
+      );
+    if (quality?.noNewDays >= 7) flags.push(`${quality.noNewDays} 天未新增`);
+    if (quality?.newCount >= 20 && quality.duplicateRate >= 0.5)
+      flags.push("同标题较多");
+    return flags;
+  }
+  function renderSources() {
+    if (!state.data) {
+      $("#dialog-content").innerHTML = "<p>资讯尚未加载完成，请稍后再试。</p>";
+      return;
+    }
+    const metrics = new Map(
+      (sourceQuality?.sources || []).map((item) => [item.id, item]),
+    );
+    let sources = state.data.sources.filter(
+      (source) =>
+        (sourceCategory === "all" || source.category === sourceCategory) &&
+        (!sourceAttention ||
+          sourceFlags(source, metrics.get(source.id)).length),
+    );
+    if (sourceSort !== "default")
+      sources = [...sources].sort((a, b) => {
+        const left = metrics.get(a.id),
+          right = metrics.get(b.id);
+        const key = {
+          new: "newCount",
+          duplicate: "duplicateRate",
+          idle: "noNewDays",
+        }[sourceSort];
+        return (right?.[key] ?? -1) - (left?.[key] ?? -1);
+      });
+    const summary = sourceQuality
+      ? `近 7 天 · 统计自 ${formatTime(sourceQuality.startedAt)} 开始 · 最近统计 ${formatTime(sourceQuality.updatedAt)}`
+      : sourceQualityMessage;
+    $("#dialog-content").innerHTML =
+      "<p>来源连接状态与质量统计。新增量从开始统计后逐次积累，首轮只建立基线；日期均为北京时间。</p>" +
+      `<p id="source-quality-status" role="status">${escape(summary)}${sourceQualityRetry ? ' <button class="text-button" data-retry-quality>重试统计</button>' : ""}</p>` +
+      `<div class="source-controls"><label>分类 <select id="source-quality-category"><option value="all">全部</option>${[...new Set(state.data.sources.map((source) => source.category))].map((category) => `<option value="${escape(category)}"${sourceCategory === category ? " selected" : ""}>${escape(categoryNames[category] || category)}</option>`).join("")}</select></label>` +
+      `<label>排序 <select id="source-quality-sort">${[
+        ["default", "默认"],
+        ["new", "新增量最多"],
+        ["duplicate", "重复率最高"],
+        ["idle", "未新增最久"],
+      ]
+        .map(
+          ([value, label]) =>
+            `<option value="${value}"${sourceSort === value ? " selected" : ""}>${label}</option>`,
+        )
+        .join("")}</select></label>` +
+      `<label><input id="source-quality-attention" type="checkbox"${sourceAttention ? " checked" : ""}> 只看需关注</label></div>` +
+      `<p class="source-count">${sources.length} 个来源</p><div id="source-quality-list">` +
+      sources
+        .map((source) => {
+          const quality = metrics.get(source.id),
+            flags = sourceFlags(source, quality);
+          const rate =
+            quality?.duplicateRate == null
+              ? "—"
+              : `${Math.round(quality.duplicateRate * 100)}%`;
+          return (
+            `<div class="source-row" data-source-id="${escape(source.id)}"><div class="source-name"><a href="${escape(safeUrl(source.home))}" target="_blank" rel="noopener noreferrer">${escape(source.name)} ${icon("arrow-up-right")}</a><small>${source.latestAt ? "最近发布：" + escape(formatTime(source.latestAt)) : source.status === "ok" ? "订阅中暂无可收录的近期资讯" : "本轮未取得有效资讯"}</small></div>` +
+            `<span class="source-status ${source.status === "ok" ? "" : "unavailable"}">${source.status === "ok" ? (source.fetchedCount === 0 ? "● 已连接 · 暂无近期内容" : "● 本轮已连接") : "○ 暂不可用"}</span>` +
+            `<dl class="source-metrics"><div><dt>近7天新增</dt><dd>${quality ? quality.newCount + " 条" : "—"}</dd></div><div><dt>同标题重复率</dt><dd>${rate}</dd></div><div><dt>连续未新增</dt><dd>${quality?.noNewDays == null ? "—" : quality.noNewDays + " 天"}</dd></div></dl>` +
+            (flags.length
+              ? `<p class="source-flags">${flags.map(escape).join(" · ")}</p>`
+              : "") +
+            (quality
+              ? `<details class="source-history"><summary>已记录 ${quality.observedDays}/7 天 · 每日统计</summary><table><thead><tr><th scope="col">日期</th><th scope="col">新增</th><th scope="col">同标题</th><th scope="col">成功检查</th></tr></thead><tbody>${[
+                  ...quality.daily,
+                ]
+                  .reverse()
+                  .map(
+                    (day) =>
+                      `<tr><td>${escape(day.date.slice(5).replace("-", "/"))}</td><td>${day.newCount}</td><td>${day.duplicateCount}</td><td>${day.successes}/${day.checks}</td></tr>`,
+                  )
+                  .join("")}</tbody></table></details>`
+              : "") +
+            "</div>"
+          );
+        })
+        .join("") +
+      (sources.length
+        ? ""
+        : '<p class="source-empty">当前没有符合筛选条件的来源。</p>') +
+      '</div><details class="source-explanation"><summary>统计口径</summary><p>近7天包含今天和前6个自然日；不足7天时显示已有记录。新增为首次观察到的有效资讯，同一来源同日同标题的修订不再计数。重复率为新增条目中，与其他来源同日同标题的比例，Google 新闻末尾的发布方标签不参与比较；不同标题的同一事件不算入。</p><p>连续未新增按成功检查的连续观察时长计算，满24小时计1天；采集失败或错过计划检查时段超过1小时后重新计时，夜间暂停不算中断。重复率达到50%且至少新增20条、连续7天未新增或本轮采集失败时列入“需关注”。低频官方公告源可结合发布周期判断。</p><p>只展示标题、短摘要和原文链接。标注“聚合”的来源由 Google 新闻汇集报道。资讯归档保留最近30天、最多6000条；质量记录独立保存，不受资讯归档条数限制。</p></details>';
+  }
+  async function loadSourceQuality(token) {
+    const data = state.data,
+      meta = data?.sourceQuality;
+    if (
+      !meta ||
+      meta.schema !== 1 ||
+      !/^\/data\/source-quality\.[a-f0-9]{16}\.json$/.test(meta.path) ||
+      meta.updatedAt !== (data.newsCheckedAt || data.updatedAt)
+    ) {
+      sourceQualityMessage = "质量统计将在下次自动更新后开始记录。";
+      renderSources();
+      return;
+    }
+    let quality;
+    try {
+      try {
+        const cached = JSON.parse(
+          localStorage.getItem(qualityStorage) || "null",
+        );
+        if (cached?.path === meta.path)
+          quality = validateSourceQuality(cached.data, meta);
+      } catch {}
+      if (!quality) {
+        quality = validateSourceQuality(
+          await requestJSON(meta.path, { cache: "no-cache" }, 10000),
+          meta,
+        );
+        try {
+          localStorage.setItem(
+            qualityStorage,
+            JSON.stringify({ path: meta.path, data: quality }),
+          );
+        } catch {}
+      }
+      if (token !== sourceDialogToken || !$("#info-dialog").open) return;
+      if (state.data !== data) {
+        showSources();
+        return;
+      }
+      sourceQuality = quality;
+      sourceQualityMessage = "";
+      sourceQualityRetry = false;
+    } catch {
+      if (token !== sourceDialogToken || !$("#info-dialog").open) return;
+      if (state.data !== data) {
+        showSources();
+        return;
+      }
+      sourceQualityMessage =
+        navigator.onLine === false
+          ? "当前离线，尚未保存本轮质量统计；联网后可重试。"
+          : "质量统计暂时未能加载，来源连接状态仍可查看。";
+      sourceQualityRetry = true;
+    }
+    renderSources();
+  }
+  function showSources() {
+    const token = ++sourceDialogToken;
+    $("#dialog-title").textContent = "资讯来源";
+    sourceQuality = null;
+    sourceQualityMessage = "正在读取质量统计…";
+    sourceQualityRetry = false;
+    renderSources();
+    $("#info-dialog").showModal();
+    if (state.data) loadSourceQuality(token);
+  }
+  $("#dialog-content").addEventListener("change", (event) => {
+    if (event.target.id === "source-quality-sort")
+      sourceSort = event.target.value;
+    else if (event.target.id === "source-quality-category")
+      sourceCategory = event.target.value;
+    else if (event.target.id === "source-quality-attention")
+      sourceAttention = event.target.checked;
+    else return;
+    renderSources();
+  });
+  $("#dialog-content").addEventListener("click", (event) => {
+    if (event.target.closest("[data-retry-quality]")) showSources();
+  });
+  function showAbout() {
+    sourceDialogToken++;
+    $("#dialog-title").textContent = "关于本站";
+    $("#dialog-content").innerHTML =
+      '<p>个人新闻订阅页，汇总综合、财经、民生、科技、AI、模型、文娱、游戏、体育和杭州房市资讯，每天北京时间9—21点每两小时检查更新。顶部「去处」提供晚间安排与杭州及周边的周末玩法。</p><h3>排序与分类</h3><p>新闻按来源标注的发布时间排列。模型栏目筛选模型发布、升级与开放消息，标题识别可能遗漏；普通产品功能更新与发布传闻不收录到该栏目。每日速览优先展示重大公共消息，再兼顾不同分类与来源，最多 10 条，不代表点击热度排名。</p><h3>内容与收藏</h3><p>标题和原始摘要来自对应资讯源，部分短摘要经 AI 整理并标注，点击标题可核对原文。收藏仅保存在当前浏览器，不会跨设备同步。</p><p><a href="https://github.com/ZrBac/news/issues" target="_blank" rel="noopener noreferrer">问题反馈</a></p>';
+    $("#info-dialog").showModal();
+  }
+  function theme(value) {
+    document.documentElement.dataset.theme = value;
+    $("#theme-toggle").innerHTML = icon(value === "dark" ? "sun" : "moon");
+    $("#theme-toggle").setAttribute(
+      "aria-label",
+      value === "dark" ? "切换浅色模式" : "切换深色模式",
+    );
+    $('meta[name="theme-color"]').content =
+      value === "dark" ? "#181818" : "#ffffff";
+  }
+  let storedTheme;
+  try {
+    storedTheme = localStorage.getItem("zrbac-news-theme");
+  } catch {}
+  theme(storedTheme === "dark" ? "dark" : "light");
+  $("#theme-toggle").addEventListener("click", () => {
+    const value =
+      document.documentElement.dataset.theme === "dark" ? "light" : "dark";
+    theme(value);
+    try {
+      localStorage.setItem("zrbac-news-theme", value);
+    } catch {}
+  });
+  $("#edition-date").textContent = new Intl.DateTimeFormat("zh-CN", {
+    timeZone: "Asia/Shanghai",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    weekday: "long",
+  }).format(new Date());
+  $("#year").textContent = new Date().getFullYear();
+  function focusSearch() {
+    if (state.view === "exchange" || (state.view === "local" && state.outingMode === "tonight")) {
+      history.replaceState(null, "", state.view === "exchange" ? "#all" : "#local");
+      route();
+    }
+    if (state.view === "local") $("#outing-library").open = true;
+    $(state.view === "local" ? "#outing-catalog-heading" : "#news-content").scrollIntoView({ behavior: "smooth" });
+    $("#search").focus({ preventScroll: true });
+  }
+  document.addEventListener("keydown", (e) => {
+    if ($("#info-dialog").open || e.isComposing) return;
+    if (
+      (e.key === "k" && (e.ctrlKey || e.metaKey)) ||
+      (e.key === "/" &&
+        !/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName) &&
+        !$("#info-dialog").open)
+    ) {
+      e.preventDefault();
+      focusSearch();
+    }
+  });
+  let searchTimer;
+  $("#outing-filter-toggle").addEventListener("click", () => {
+    state.outingFiltersOpen = !state.outingFiltersOpen;
+    renderOutingLayout();
+  });
+  $("#outing-filter-reset").addEventListener("click", () => {
+    state.outingType = state.outingKind = "all";
+    state.outingRange = "weekend";
+    state.query = state.date = "";
+    state.source = "all";
+    state.limit = pageSize();
+    $("#search").value = $("#date-filter").value = "";
+    $("#source-filter").value = "all";
+    render();
+  });
+  $("#search").addEventListener("input", (e) => {
+    state.query = e.target.value.trim();
+    state.limit = pageSize();
+    clearTimeout(searchTimer);
+    render();
+    searchTimer = setTimeout(() => {
+      searchTimer = null;
+      render();
+      ensureArticles();
+    }, 250);
+  });
+  $("#source-filter").addEventListener("change", (e) => {
+    state.source = e.target.value;
+    state.limit = pageSize();
+    render();
+    ensureArticles();
+  });
+  $("#date-trigger").addEventListener("click", () => {
+    const open = $("#date-panel").hidden;
+    $("#date-panel").hidden = !open;
+    $("#date-trigger").setAttribute("aria-expanded", open);
+    if (open) $("#date-filter").focus();
+  });
+  $("#date-filter").addEventListener("change", (e) => {
+    state.date = e.target.value;
+    state.limit = pageSize();
+    render();
+    ensureArticles();
+  });
+  $("#clear-date").addEventListener("click", () => {
+    state.date = "";
+    $("#date-filter").value = "";
+    render();
+    ensureArticles();
+  });
+  $("#load-more").addEventListener("click", () => {
+    state.limit += pageSize();
+    render();
+    ensureArticles();
+  });
+  document.addEventListener("input", (e) => {
+    if (e.target.id === "fx-amount") {
+      exchangeAmount = e.target.value;
+      updateExchangeConversion();
+      return;
+    }
+    if (e.target.id !== "fx-day") return;
+    const index = Number(e.target.value),
+      point = exchangePoints[index];
+    if (!point) return;
+    $("#fx-readout").textContent =
+      `${point.date} · 1 ${exchangeNames[exchangeCurrency]} = ${point.rate.toFixed(6)} 人民币`;
+    $$("[data-fx-point]").forEach((el) =>
+      el.classList.toggle("selected", Number(el.dataset.fxPoint) === index),
+    );
+  });
+  document.addEventListener("click", (e) => {
+    const tonightOpen=e.target.closest('[data-tonight-open]');
+    if(tonightOpen) {history.replaceState(null,'','#tonight');route(false);window.NewsTonight.reveal(tonightOpen.dataset.tonightOpen);return;}
+    const saveOuting = e.target.closest("[data-outing-story]");
+    if (saveOuting) {
+      const a = (state.data?.weekendArticles || []).concat([...state.saved.values()]).find(a=>a.id===saveOuting.dataset.outingStory);
+      if (a) window.OutingProfile.mark(window.OutingLibrary.articleRecord(a), "want");
+      return;
+    }
+    const readLink = e.target.closest(".article h3 a, .article-reports a");
+    if (readLink) {
+      const card = readLink.closest(".article");
+      window.NewsPersonal?.markRead(card.dataset.articleId);
+      card.classList.add("read");
+      if (!card.querySelector(".read-label"))
+        card
+          .querySelector(".article-meta")
+          .insertAdjacentHTML(
+            "beforeend",
+            '<span class="read-label">已读</span>',
+          );
+      if (window.NewsPersonal?.onlyUnread()) setTimeout(render, 0);
+    }
+    if (e.target.closest("[data-housing-jump]")) {
+      $("#housing-news").scrollIntoView({ behavior: "smooth", block: "start" });
+      $("#housing-news-title").focus({ preventScroll: true });
+      return;
+    }
+    if (e.target.closest("[data-housing-more]")) {
+      state.housingLimit += 6;
+      renderHousingPrices();
+      return;
+    }
+    const placeMore = e.target.closest("[data-place-more]");
+    if (placeMore) {
+      const group = placeMore.closest("[data-place-group]");
+      const collapse = Number(placeMore.dataset.remaining) === 0;
+      group.dataset.placeLimit = String(
+        collapse ? placePageSize :
+          (Number(group.dataset.placeLimit) || placePageSize) + placePageSize,
+      );
+      renderWeekendTools();
+      if (collapse) {
+        group.querySelector("summary").focus({ preventScroll: true });
+        group.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      return;
+    }
+    const tripPlace = e.target.closest("[data-trip-place]");
+    if (tripPlace) {
+      if(state.outingMode === "tonight") {history.replaceState(null,"","#local");route(false);}
+      $("#outing-library").open = true;
+      const card = $$("[data-place-id]").find(
+        (place) => place.dataset.placeId === tripPlace.dataset.tripPlace,
+      );
+      if (!card) return;
+      const group = card.closest("[data-place-group]");
+      const index = [...group.querySelectorAll("[data-place-id]")].indexOf(card);
+      group.dataset.placeLimit = String(Math.max(
+        Number(group.dataset.placeLimit) || placePageSize, index + 1,
+      ));
+      renderWeekendTools();
+      // A recommendation may match its reason while its reference uses different words.
+      if (card.hidden || group.hidden) {
+        clearTimeout(searchTimer);
+        state.query = "";
+        state.outingType = "all";
+        state.outingKind = "all";
+        $("#search").value = "";
+        render();
+      }
+      group.open = true;
+      card.querySelector(".place-details").open = true;
+      card.scrollIntoView({ behavior: "smooth", block: "start" });
+      return;
+    }
+    const currency = e.target.closest("[data-fx-currency]");
+    if (
+      currency &&
+      Object.prototype.hasOwnProperty.call(
+        exchangeNames,
+        currency.dataset.fxCurrency,
+      )
+    ) {
+      exchangeCurrency = currency.dataset.fxCurrency;
+      renderExchangeRates();
+      return;
+    }
+    const viewLink = e.target.closest("a[data-view], a.brand");
+    if (
+      viewLink &&
+      !e.ctrlKey &&
+      !e.metaKey &&
+      !e.shiftKey &&
+      !e.altKey &&
+      e.button === 0
+    ) {
+      e.preventDefault();
+      const hash = "#" + (viewLink.dataset.view || "brief");
+      if (location.hash !== hash) history.pushState(null, "", hash);
+      // A repeated click should also reset the date/search instead of doing nothing.
+      route(true);
+      return;
+    }
+    const outingType = e.target.closest("[data-outing-type]");
+    const outingRange = e.target.closest("[data-outing-range]");
+    const outingKind = e.target.closest("[data-outing-kind]");
+    if (outingType || outingRange || outingKind) {
+      if (
+        outingType &&
+        ["all", ...Object.keys(outingTypes)].includes(
+          outingType.dataset.outingType,
+        )
+      ) {
+        state.outingType = outingType.dataset.outingType;
+        state.outingKind = "all";
+      }
+      if (outingKind && ["all", ...Object.keys(outingKinds)].includes(outingKind.dataset.outingKind))
+        state.outingKind = outingKind.dataset.outingKind;
+      if (
+        outingRange &&
+        ["weekend", "recent"].includes(outingRange.dataset.outingRange)
+      )
+        state.outingRange = outingRange.dataset.outingRange;
+      state.limit = pageSize();
+      render();
+      return;
+    }
+    const filter = e.target.closest("[data-filter]");
+    if (
+      filter &&
+      (state.view === "brief" ||
+        ["exchange", "housing"].includes(filter.dataset.filter))
+    ) {
+      history.replaceState(null, "", "#" + filter.dataset.filter);
+      route();
+      return;
+    }
+    if (filter) {
+      state.filter = filter.dataset.filter;
+      if (!["saved", "brief"].includes(state.view)) {
+        state.view = state.filter;
+        history.replaceState(null, "", "#" + state.view);
+      }
+      state.limit = pageSize();
+      render();
+      ensureArticles();
+    }
+    const save = e.target.closest("[data-save]");
+    if (save) saveArticle(save.dataset.save);
+    if (e.target.closest("[data-reset]")) {
+      location.hash = "all";
+      route();
+    }
+    if (e.target.closest("[data-retry-archive]")) ensureArticles(true);
+    if (e.target.closest("[data-retry]")) load(true, false, true);
+  });
+  window.addEventListener("hashchange", () => route(true));
+  window.addEventListener("outing-feedback-change", () => { if(state.data && state.view === "local") render(); });
+  window.addEventListener("storage", (e) => {
+    if (e.key === "zrbac-news-saved-v1") {
+      loadSaved();
+      render();
+    }
+  });
+  ["#sources-trigger", "#footer-sources"].forEach((id) =>
+    $(id).addEventListener("click", showSources),
+  );
+  $("#about-trigger").addEventListener("click", showAbout);
+  $("#close-dialog").addEventListener("click", () => $("#info-dialog").close());
+  $("#info-dialog").addEventListener("click", (e) => {
+    if (e.target === $("#info-dialog")) {
+      const r = e.target.getBoundingClientRect();
+      if (
+        e.clientX < r.left ||
+        e.clientX > r.right ||
+        e.clientY < r.top ||
+        e.clientY > r.bottom
+      )
+        e.target.close();
+    }
+  });
+  loadSaved();
+  window.addEventListener("reading-change", () => {
+    loadSaved();
+    render();
+    ensureArticles();
+  });
+  const cacheKey = "zrbac-news-cache-v1";
+  let archiveJob = null;
+  let loading = false;
+  let refreshing = false;
+  let suggestionDirty = false;
+  const outingRefreshKey = "news-outing-refresh-v1";
+  let outingRefreshJob = null, outingProgressChecked = 0;
+  try {
+    const job = JSON.parse(localStorage.getItem(outingRefreshKey));
+    if (job?.schema === 1 && ["pending", "done", "failed", "idle"].includes(job.stage) &&
+        Number.isFinite(job.startedAt) && job.startedAt > Date.now() - 86400000 && job.startedAt <= Date.now() + 300000 &&
+        Number.isFinite(job.baseline) && Number.isFinite(job.tripBaseline) &&
+        typeof job.message === "string" && job.message.length < 800) outingRefreshJob = job;
+  } catch (_) {}
+  function renderOutingSuggestion() {
+    const profile = window.OutingProfile.snapshot();
+    const settings = profile.settings || {};
+    if (!suggestionDirty) $("#outing-suggestion").value = settings.weekendNote || "";
+    $("#outing-suggestion-status").textContent = profile.pending.some(op => op.action === "suggestion")
+      ? navigator.onLine ? window.OutingProfile.status() : "建议已保存在本机，联网后自动同步。"
+      : settings.weekendNoteUpdatedAt
+        ? settings.weekendNoteUpdatedAt === state.data?.editorial?.trip?.suggestionAppliedAt
+          ? state.data.editorial.trip.suggestionOutsideWeekend
+            ? "这条建议的日期不在本周末，本轮未作为筛选条件。想用于本周末，可改成具体日期后重新找一批。"
+            : "这些建议已用于本轮推荐。清空后保存即可撤销。"
+          : "建议已同步，下次更新会参考；也可以点“重新找一批”。"
+        : "两人共用这些建议，下次更新会参考。";
+    const notice = $("#outing-refresh-notice");
+    if (notice.dataset.syncPending && !profile.pending.length) {
+      delete notice.dataset.syncPending;
+      notice.textContent = "建议和反馈已同步，可以再点“重新找一批”。";
+    }
+  }
+  function saveOutingSuggestion() {
+    const text = $("#outing-suggestion").value.trim();
+    suggestionDirty = false;
+    if (text !== (window.OutingProfile.snapshot().settings?.weekendNote || ""))
+      window.OutingProfile.update({action:"suggestion", text});
+    renderOutingSuggestion();
+  }
+  $("#outing-suggestion").addEventListener("input", () => { suggestionDirty = true; });
+  $("#outing-suggestion-form").addEventListener("submit", event => {
+    event.preventDefault();
+    saveOutingSuggestion();
+  });
+  function validateData(data) {
+    if (
+      !data ||
+      !Array.isArray(data.articles) ||
+      !Array.isArray(data.sources) ||
+      !Number.isFinite(Date.parse(data.updatedAt))
+    )
+      throw Object.assign(new Error("Invalid data"), { name: "DataError" });
+    if (
+      data.archive &&
+      (!Array.isArray(data.archive.pages) ||
+        data.archive.pages.length > 1000 ||
+        !data.archive.pages.every(
+          (path) =>
+            typeof path === "string" &&
+            /^\/data\/archive\/[a-f0-9]{16}\.json$/.test(path),
+        ) ||
+        !Number.isInteger(data.archive.loaded) ||
+        data.archive.loaded < 0 ||
+        data.archive.loaded > data.archive.pages.length ||
+        !Number.isInteger(data.archive.total) ||
+        data.archive.total < data.articles.length ||
+        (data.archive.oldest != null &&
+          !Number.isFinite(Date.parse(data.archive.oldest))))
+    )
+      throw Object.assign(new Error("Invalid archive index"), {
+        name: "DataError",
+      });
+    data.articles = data.articles.filter(validArticle);
+    if (
+      data.archive?.lookup &&
+      (!window.NewsArchive.available(data) ||
+        !window.NewsArchive.validMetadata(data))
+    )
+      throw Object.assign(new Error("Invalid lookup index"), {
+        name: "DataError",
+      });
+    if (Array.isArray(data.modelReleases))
+      data.modelReleases = data.modelReleases
+        .filter((a) => validArticle(a) && a.category === "models")
+        .slice(0, 60);
+    if (Array.isArray(data.gamingArticles))
+      data.gamingArticles = data.gamingArticles
+        .filter((a) => validArticle(a) && a.category === "gaming")
+        .slice(0, 60);
+    if (Array.isArray(data.housingArticles))
+      data.housingArticles = data.housingArticles
+        .filter((a) => validArticle(a) && a.category === "housing")
+        .slice(0, 60);
+    if (Array.isArray(data.weekendArticles))
+      data.weekendArticles = data.weekendArticles
+        .filter((a) => validArticle(a) && a.category === "local")
+        .slice(0, 48);
+    if (Array.isArray(data.briefArticles))
+      data.briefArticles = data.briefArticles
+        .filter(validArticle)
+        .slice(0, 100);
+    if (Array.isArray(data.briefDays))
+      data.briefDays = data.briefDays
+        .filter(
+          (day) => typeof day === "string" && /^\d{4}-\d{2}-\d{2}$/.test(day),
+        )
+        .slice(0, 2);
+    return data;
+  }
+  async function requestJSON(url, options = {}, timeout = 30000) {
+    const controller =
+      typeof AbortController === "function" ? new AbortController() : null;
+    let timer;
+    try {
+      return await Promise.race([
+        fetch(url, {
+          ...options,
+          ...(controller ? { signal: controller.signal } : {}),
+        }).then(async (response) => {
+          if (!response.ok)
+            throw Object.assign(new Error("News data unavailable"), {
+              name: "HTTPError",
+              status: response.status,
+            });
+          try {
+            return await response.json();
+          } catch (error) {
+            if (error.name === "SyntaxError") error.name = "DataError";
+            throw error;
+          }
+        }),
+        new Promise((resolve, reject) => {
+          timer = setTimeout(() => {
+            const error = new Error("News request timed out");
+            error.name = "TimeoutError";
+            reject(error);
+            if (controller) controller.abort();
+          }, timeout);
+        }),
+      ]);
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+  function hasArchive(data = state.data) {
+    if (window.NewsArchive.available(data)) {
+      const remaining = window.NewsArchive.remaining(data, state);
+      return remaining === null || remaining.length > 0;
+    }
+    return !!data?.archive && data.archive.loaded < data.archive.pages.length;
+  }
+  function hasBriefSnapshot(data = state.data) {
+    return (
+      state.view === "brief" &&
+      state.date &&
+      !state.query &&
+      state.source === "all" &&
+      Array.isArray(data?.briefArticles) &&
+      Array.isArray(data.briefDays) &&
+      data.briefDays.length &&
+      (data.briefDays.includes(state.date) || state.date > data.briefDays[0])
+    );
+  }
+  function persistData(data) {
+    try {
+      localStorage.setItem(
+        cacheKey,
+        JSON.stringify(
+          window.NewsArchive.available(data)
+            ? {
+                ...data,
+                articles: data.articles.slice(0, 150),
+                archive: { ...data.archive, loaded: 0 },
+              }
+            : data,
+        ),
+      );
+    } catch {
+      // A large archive can exceed localStorage; keep the small current-news page.
+      if (data.archive)
+        try {
+          localStorage.setItem(
+            cacheKey,
+            JSON.stringify({
+              ...data,
+              articles: data.articles.slice(0, 150),
+              archive: { ...data.archive, loaded: 0 },
+            }),
+          );
+        } catch {}
+    }
+  }
+  function ensureArticles(fresh = false) {
+    if (
+      loading ||
+      searchTimer ||
+      hasBriefSnapshot() ||
+      ["saved", "housing", "exchange"].includes(state.view) ||
+      hasSectionSnapshot() ||
+      !hasArchive()
+    )
+      return;
+    if (archiveJob?.data === state.data) return archiveJob.promise;
+    const data = state.data;
+    const needed = () => (state.view === "brief" ? 10 : state.limit + 1);
+    const criteriaKey = () =>
+      JSON.stringify([
+        state.view,
+        state.filter,
+        state.query,
+        state.source,
+        state.date,
+        state.limit,
+      ]);
+    const needsArticles = () => {
+      const articles = matchingArticles();
+      if (articles.length < needed()) return true;
+      // The gaming snapshot already contains the newest 60 game stories.
+      if (
+        state.view === "gaming" &&
+        !state.query &&
+        state.source === "all" &&
+        !state.date &&
+        needed() <= 60
+      )
+        return false;
+      const next = window.NewsArchive.available(data)
+        ? window.NewsArchive.newestRemaining(data, state)
+        : null;
+      return (
+        next &&
+        Date.parse(next) > Date.parse(articles[needed() - 1].publishedAt)
+      );
+    };
+    if (!needsArticles()) return;
+    const notice = $("#archive-notice");
+    const job = { data, criteria: criteriaKey() };
+    archiveJob = job;
+    job.promise = (async () => {
+      let failed = false;
+      try {
+        while (
+          state.data === data &&
+          !searchTimer &&
+          !hasBriefSnapshot(data) &&
+          !["saved", "housing", "exchange"].includes(state.view) &&
+          !hasSectionSnapshot(data) &&
+          hasArchive(data) &&
+          needsArticles()
+        ) {
+          job.criteria = criteriaKey();
+          notice.hidden = false;
+          notice.textContent = "正在查找较早资讯…";
+          $("#load-more").disabled = true;
+          if (window.NewsArchive.available(data)) {
+            await window.NewsArchive.prepare(data, state, requestJSON, fresh);
+            if (state.data !== data) return;
+            const remaining = window.NewsArchive.remaining(data, state);
+            if (remaining === null) continue;
+            job.criteria = criteriaKey();
+            const pages = remaining.slice(0, 3);
+            if (!pages.length) break;
+            const articles = await Promise.all(
+              pages.map((number) =>
+                window.NewsArchive.page(
+                  data,
+                  number,
+                  requestJSON,
+                  validArticle,
+                  fresh,
+                ),
+              ),
+            );
+            if (state.data !== data) return;
+            window.NewsArchive.mark(data, pages);
+            data.articles = [
+              ...new Map(
+                [...data.articles, ...articles.flat()].map((a) => [a.id, a]),
+              ).values(),
+            ].sort((a, b) => b.publishedAt.localeCompare(a.publishedAt));
+            render();
+            continue;
+          }
+          if (!navigator.onLine) throw new Error("Offline");
+          // Commit complete batches in order, so the loaded list stays a continuous
+          // newest-first prefix even when a request fails or filters change.
+          const paths = data.archive.pages.slice(
+            data.archive.loaded,
+            data.archive.loaded + 3,
+          );
+          const pages = await Promise.all(
+            paths.map(async (path) => {
+              const page = await requestJSON(
+                fresh ? path + "?retry=" + Date.now() : path,
+                { cache: fresh ? "no-store" : "default" },
+                20000,
+              );
+              if (
+                !page ||
+                !Array.isArray(page.articles) ||
+                !page.articles.every(validArticle)
+              )
+                throw new Error("Invalid archive page");
+              return page.articles;
+            }),
+          );
+          if (state.data !== data) return;
+          data.articles.push(...pages.flat());
+          data.archive.loaded += paths.length;
+          persistData(data);
+          render();
+        }
+      } catch {
+        failed = true;
+        if (state.data === data) {
+          notice.hidden = false;
+          notice.innerHTML = navigator.onLine
+            ? '历史资讯暂时未能加载，当前内容仍可阅读。<button class="text-button" data-retry-archive>继续加载</button> <button class="text-button" data-retry>更新资讯后重试</button>'
+            : "当前离线，只能检索已经保存在本机的资讯。";
+        }
+      } finally {
+        if (archiveJob === job) {
+          archiveJob = null;
+          const changed = job.criteria !== criteriaKey();
+          if (!failed || changed) notice.hidden = true;
+          if (state.data === data && window.NewsArchive.available(data))
+            window.NewsArchive.prune(data);
+          render();
+          if (changed) setTimeout(() => ensureArticles(), 0);
+        }
+      }
+    })();
+    return job.promise;
+  }
+  async function fetchData(checkVersion = false, fresh = false) {
+    if (!navigator.onLine)
+      throw Object.assign(new Error("Offline"), { name: "OfflineError" });
+    if (checkVersion && state.data) {
+      try {
+        const version = await requestJSON(
+          "/data/status.json",
+          { cache: "no-cache" },
+          4000,
+        );
+        if (version.updatedAt === state.data.updatedAt) return state.data;
+      } catch {
+        // A missing or unavailable status file must not prevent a data refresh.
+      }
+    }
+    return validateData(
+      await requestJSON(
+        fresh ? "/data/latest.json?retry=" + Date.now() : "/data/latest.json",
+        { cache: fresh ? "no-store" : "no-cache" },
+        30000,
+      ),
+    );
+  }
+  function showData(data, preserveFilters = false, persist = true) {
+    const hadData = !!state.data;
+    state.data = data;
+    if (persist) persistData(data);
+    $("#archive-notice").hidden = true;
+    renderSidebar();
+    if (preserveFilters && hadData) {
+      if (
+        state.source !== "all" &&
+        !data.sources.some((s) => s.id === state.source)
+      )
+        state.source = "all";
+      $("#source-filter").value = state.source;
+      render();
+    } else route();
+    ensureArticles();
+  }
+  async function load(
+    preserveFilters = false,
+    checkVersion = false,
+    fresh = false,
+  ) {
+    if (loading) return;
+    loading = true;
+    $("#refresh-news").disabled = $("#refresh-outings").disabled = true;
+    $("#load-notice").hidden = true;
+    if (!state.data) {
+      try {
+        const cached = validateData(JSON.parse(localStorage.getItem(cacheKey)));
+        showData(cached, false, false);
+      } catch {}
+    }
+    if (state.data) {
+      $("#load-notice").textContent = navigator.onLine
+        ? "正在显示上次成功获取的资讯，后台检查更新中…"
+        : "当前离线，正在显示上次成功获取的资讯。";
+      $("#load-notice").hidden = false;
+    }
+    $("#articles").setAttribute("aria-busy", String(!state.data));
+    try {
+      let data;
+      for (let attempt = 0; attempt < 2; attempt++) {
+        try {
+          data = await fetchData(
+            checkVersion && attempt === 0 && !fresh,
+            fresh || attempt > 0,
+          );
+          break;
+        } catch (error) {
+          if (attempt === 1 || !navigator.onLine) throw error;
+          if (state.data) {
+            $("#load-notice").textContent =
+              "连接暂时不畅，正在重试；可继续阅读上次成功获取的资讯。";
+          } else $("#update-status").textContent = "连接暂时不畅，正在重试…";
+          await new Promise((resolve) => setTimeout(resolve, 1000));
+        }
+      }
+      // The reader may have changed tab, search, date or pagination while fetching.
+      if (data !== state.data) showData(data, preserveFilters || !!state.data);
+      $("#load-notice").hidden = true;
+      return true;
+    } catch (error) {
+      const reason =
+        error.name === "TimeoutError"
+          ? "资讯下载超时"
+          : error.name === "HTTPError"
+            ? `资讯请求失败（HTTP ${error.status}）`
+            : error.name === "DataError"
+              ? "收到的资讯数据异常"
+              : error.name === "OfflineError" || !navigator.onLine
+                ? "当前离线"
+                : "网络连接失败";
+      if (state.data) {
+        $("#load-notice").innerHTML =
+          `${escape(reason)}，当前显示上次成功获取的资讯（${escape(formatTime(state.data.newsCheckedAt || state.data.updatedAt))}）。<button class="text-button" data-retry>重新连接</button>`;
+        $("#load-notice").hidden = false;
+        return false;
+      }
+      $("#articles").setAttribute("aria-busy", "false");
+      $("#articles").innerHTML =
+        `<div class="empty-state">${icon("radio")}<h3>资讯加载失败</h3><p>${escape(reason)}，请重试或换个网络。</p><button data-retry>重新加载</button></div>`;
+      $("#update-status").textContent = "数据加载失败，请稍后重试";
+      $("#latest-list").innerHTML = "<li><div>等待资讯恢复连接</div></li>";
+      return false;
+    } finally {
+      loading = false;
+      $("#refresh-news").disabled = $("#refresh-outings").disabled = refreshing;
+      $("#articles").setAttribute("aria-busy", "false");
+      ensureArticles();
+    }
+  }
+  function outingProgress(message, stage) {
+    const notice = $("#outing-refresh-notice");
+    notice.textContent = message;
+    notice.hidden = state.view !== "local" || state.outingMode === "tonight";
+    if (outingRefreshJob) {
+      outingRefreshJob.message = message;
+      if (stage) outingRefreshJob.stage = stage;
+      try { localStorage.setItem(outingRefreshKey, JSON.stringify(outingRefreshJob)); } catch (_) {}
+    }
+  }
+  function finishOutingRefresh(data, job) {
+    const trip = data?.editorial?.trip;
+    const applied = !job.suggestionStamp || Date.parse(trip?.suggestionAppliedAt) >= Date.parse(job.suggestionStamp);
+    if (trip?.status !== "ok" || Date.parse(data.updatedAt) <= job.baseline || Date.parse(trip.updatedAt) <= job.tripBaseline || !applied) return false;
+    if (data !== state.data) showData(data, true);
+    $("#load-notice").hidden = true;
+    outingProgress(`已重新检索并筛选，${formatTime(trip.updatedAt)} 更新；合适的现有选择也会保留。`, "done");
+    return true;
+  }
+  function resumeOutingRefresh() {
+    if (refreshing || loading || document.hidden || !navigator.onLine || state.view !== "local" ||
+        state.outingMode === "tonight" || outingRefreshJob?.stage !== "pending" || Date.now() - outingProgressChecked < 15000) return;
+    // Resume only status/data reads. Returning to the page never submits another search.
+    refresh("outings", outingRefreshJob);
+  }
+  async function refresh(scope = "news", resume = null) {
+    if (refreshing || loading) return;
+    const outings = scope === "outings";
+    if (outings && outingRefreshJob?.stage === "pending") resume = outingRefreshJob;
+    const button = $(outings ? "#refresh-outings" : "#refresh-news");
+    const notice = $(outings ? "#outing-refresh-notice" : "#refresh-notice");
+    if (!navigator.onLine) {
+      if (outings && !resume) saveOutingSuggestion();
+      notice.textContent = outings ? resume ? "当前离线，上次检索进度已保留；联网后继续查询。" : "当前离线，建议会先保存在本机；联网后再重新检索。" : "当前离线，可继续阅读已缓存的资讯；联网后再刷新。";
+      notice.hidden = false;
+      return;
+    }
+    refreshing = true;
+    $("#refresh-news").disabled = $("#refresh-outings").disabled = true;
+    button.textContent = outings ? resume ? "正在查进度…" : "正在同步…" : "正在刷新…";
+    notice.hidden = false;
+    delete notice.dataset.syncPending;
+    notice.textContent = "正在请求更新…";
+    const endpoint =
+      document.querySelector('meta[name="news-refresh-endpoint"]')?.content ||
+      "https://news-refresh.944052796.workers.dev/api/news-refresh";
+    let baseline = resume ? resume.baseline : Date.parse(state.data?.updatedAt || "") || 0;
+    const tripBaseline = resume ? resume.tripBaseline : Date.parse(state.data?.editorial?.trip?.updatedAt || "") || 0;
+    try {
+      let result = {status:"running"};
+      if (outings && !resume) {
+        outingRefreshJob = null;
+        try { localStorage.removeItem(outingRefreshKey); } catch (_) {}
+        saveOutingSuggestion();
+        notice.textContent = "正在同步建议和反馈，最多等待 30 秒…";
+        await window.OutingProfile.sync(true);
+        if (window.OutingProfile.snapshot().pending.length) {
+          notice.dataset.syncPending = "true";
+          notice.textContent = window.OutingProfile.status() + " 同步完成后可再点“重新找一批”。";
+          return;
+        }
+        outingRefreshJob = {schema:1, stage:"pending", startedAt:Date.now(), baseline, tripBaseline,
+          suggestionStamp:window.OutingProfile.snapshot().settings?.weekendNoteUpdatedAt || "", accepted:false, message:""};
+        // Persist before POST: an interrupted acknowledgement must not cause a
+        // second search when the page is reopened.
+        outingProgress("建议已同步，正在提交检索请求…");
+        button.textContent = "正在提交…";
+      }
+      if (!resume) result = await requestJSON(
+        endpoint,
+        {
+          method: "POST",
+          credentials: "omit",
+          headers: {
+            "Content-Type": "application/json",
+            "X-News-Refresh": "1",
+          },
+          body: JSON.stringify(outings ? {scope:"outings"} : {}),
+        },
+        outings ? 25000 : 90000,
+      );
+      if (result.status === "fresh" || result.status === "cooldown") {
+        if (outings) {
+          outingProgress(`刚提交过检索，请约 ${Math.max(1, Math.ceil((result.retryAfter || 900) / 60))} 分钟后再试；现有推荐仍可查看。`, "idle");
+          return;
+        }
+        const loaded = await load(true);
+        notice.textContent = loaded
+          ? "已重新读取已发布的资讯。为避免重复抓取，后台刷新最多每 15 分钟触发一次。"
+          : "后台近期已有刷新请求，但当前未能读取最新资讯，请稍后重试。";
+        return;
+      }
+      if (result.status === "busy") {
+        if (outings) outingProgress("已有更新正在运行，完成后可再点“重新找一批”；保存的建议会用于下一轮筛选。", "idle");
+        else notice.textContent = "后台正在检查更新，请稍后再试。";
+        return;
+      }
+      if (result.status !== "running") throw new Error("Refresh unavailable");
+      baseline = Math.max(baseline, Date.parse(result.baselineAt || "") || 0);
+      if (outings) {
+        outingProgressChecked = Date.now();
+        outingRefreshJob.baseline = baseline;
+        if (!resume) outingRefreshJob.accepted = true;
+        button.textContent = "正在重新检索…";
+        if (finishOutingRefresh(state.data, outingRefreshJob)) return;
+      }
+      const deadline = outings ? outingRefreshJob.startedAt + 1200000 : Date.now() + 180000;
+      let first = true;
+      while (first || Date.now() < deadline) {
+        const elapsed = outings ? Math.max(0, Math.floor((Date.now() - outingRefreshJob.startedAt) / 1000)) : 0;
+        const elapsedText = `${elapsed >= 60 ? Math.floor(elapsed / 60) + " 分 " : ""}${elapsed % 60} 秒`;
+        if (outings) button.textContent = `检索中 · ${elapsedText}`;
+        const progress =
+          result.status === "ready"
+            ? "发布已完成，正在读取最新内容…"
+            : outings ? `正在重新检索和筛选，已等待 ${elapsedText}。通常需要几分钟；可以离开此页，回来后会继续查结果。` : "正在采集和发布，通常需要几分钟；排队时可能更久。";
+        if (outings) outingProgress(progress);
+        else notice.textContent = progress;
+        if (!first || !resume) await new Promise((resolve) => setTimeout(resolve, 5000));
+        result = await requestJSON(
+          endpoint + "/status",
+          { credentials: "omit", cache: "no-store" },
+          15000,
+        );
+        if (result.status === "ready" || outings && (result.status === "failed" || first && resume)) {
+          const data = await fetchData(false, outings);
+          if (outings && finishOutingRefresh(data, outingRefreshJob)) return;
+          if (Date.parse(data.updatedAt) > baseline) {
+            showData(data, true);
+            $("#load-notice").hidden = true;
+            if (!outings) {
+              const checked = data.newsCheckedAt || data.updatedAt;
+              notice.textContent = Date.parse(checked) > baseline
+                ? `刷新完成，最近检查 ${formatTime(checked)}。`
+                : "本次任务更新了其他内容，新闻尚未重新采集；可稍后再点刷新资讯。";
+              return;
+            }
+            if (["ready", "failed"].includes(result.status)) {
+              outingProgress("网站已更新，但本轮推荐暂未核对完成，继续显示之前的选择；可以稍后重新检索。", "failed");
+              return;
+            }
+          }
+        }
+        if (result.status === "failed") {
+          if (outings) outingProgress("本次检索或发布未成功，保留现有推荐；请稍后再试。", "failed");
+          else notice.textContent = "本次抓取或发布未成功，现有资讯仍可阅读，请稍后再试。";
+          return;
+        }
+        if (outings && !outingRefreshJob.accepted && ["idle", "ready"].includes(result.status) && Date.now() - outingRefreshJob.startedAt > 120000) {
+          outingProgress("未确认检索任务已启动，建议已保留，可以重新找一批。", "failed");
+          return;
+        }
+        first = false;
+      }
+      if (outings) outingProgress("检索请求已提交，暂未读到新推荐；可点“查看进度”，重新打开也会继续查询。");
+      else notice.textContent = "更新请求已提交，暂未读到新版本，请稍后再点刷新查看。";
+    } catch (error) {
+      if (outings && !outingRefreshJob?.accepted && error.name === "HTTPError" && error.status === 429)
+        outingProgress("检索请求较多，请稍等一分钟后再试；建议已保留。", "idle");
+      else if (outings) outingProgress(outingRefreshJob?.stage === "pending"
+        ? "暂时无法读取检索进度，任务可能仍在后台继续；已有推荐和请求记录已保留，可点“查看进度”。"
+        : "暂时无法同步建议，内容已保存在本机，请稍后再试。");
+      else {
+        await load(true);
+        notice.textContent = "暂时无法确认后台刷新状态，已尝试重新读取网站资讯，请稍后再试。";
+      }
+    } finally {
+      refreshing = false;
+      $("#refresh-news").disabled = $("#refresh-outings").disabled = loading;
+      button.textContent = outings ? outingRefreshJob?.stage === "pending" ? "查看进度" : "重新找一批" : "刷新资讯";
+      if (outings) outingProgressChecked = Date.now();
+    }
+  }
+  $("#refresh-news").addEventListener("click", () => refresh());
+  $("#refresh-outings").addEventListener("click", () => refresh("outings"));
+  window.addEventListener("online", () => {
+    if ($("#refresh-notice").textContent.includes("当前离线"))
+      $("#refresh-notice").hidden = true;
+    load(true, true).then(resumeOutingRefresh);
+  });
+  window.addEventListener("offline", () => {
+    if (state.data) {
+      $("#load-notice").textContent = "当前离线，正在显示上次成功获取的资讯。";
+      $("#load-notice").hidden = false;
+    }
+  });
+  route();
+  window.newsInitialLoad = load(false, true);
+  window.newsInitialLoad.then(() => {
+    if (outingRefreshJob) {
+      outingProgress(outingRefreshJob.message);
+      $("#refresh-outings").textContent = outingRefreshJob.stage === "pending" ? "查看进度" : "重新找一批";
+    }
+    resumeOutingRefresh();
+  });
+  window.addEventListener("hashchange", resumeOutingRefresh);
+  window.addEventListener("pageshow", resumeOutingRefresh);
+  document.addEventListener("visibilitychange", () => { if (!document.hidden) resumeOutingRefresh(); });
+  setInterval(resumeOutingRefresh, 30000);
+})();

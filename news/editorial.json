@@ -1,0 +1,13 @@
+{
+  "enabled": true,
+  "newsModel": "gpt-6-luna",
+  "researchModel": "gpt-6.1-sol",
+  "monthlyBudgetUsd": 200,
+  "runBudgetUsd": 20,
+  "maxNewsPerRun": 60,
+  "maxSearchCalls": 6,
+  "newsDetails": {
+    "enabled": true,
+    "maxPerRun": 80
+  }
+}

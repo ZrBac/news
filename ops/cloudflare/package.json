@@ -1,0 +1,15 @@
+{
+  "name": "news-refresh-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test test/*.test.js",
+    "check": "wrangler deploy --dry-run",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev"
+  },
+  "devDependencies": {
+    "miniflare": "5.20260921.0-alpha",
+    "wrangler": "4.137.0"
+  }
+}

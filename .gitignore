@@ -1,0 +1,12 @@
+.DS_Store
+Thumbs.db
+*.log
+node_modules/
+_site/
+news/data/
+__pycache__/
+.wrangler/
+.dev.vars*
+.cache/
+codex_key
+.env*

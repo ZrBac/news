@@ -1,0 +1,52 @@
+{
+  "id": "/",
+  "name": "资讯",
+  "short_name": "资讯",
+  "description": "新闻、汇率、杭州房价、今晚与周末去处，以及离线生活指南和小游戏。",
+  "lang": "zh-CN",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ffffff",
+  "icons": [
+    {
+      "src": "/assets/news/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/assets/news/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "每日速览",
+      "url": "/#brief"
+    },
+    {
+      "name": "汇率",
+      "url": "/#exchange"
+    },
+    {
+      "name": "今晚做点什么",
+      "url": "/#tonight"
+    },
+    {
+      "name": "周末去处",
+      "url": "/#local"
+    },
+    {
+      "name": "我的收藏",
+      "url": "/#saved"
+    },
+    {
+      "name": "小游戏",
+      "url": "/games/"
+    }
+  ]
+}

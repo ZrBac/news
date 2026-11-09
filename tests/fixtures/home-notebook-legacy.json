@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "revision": 1,
+  "profile": {
+    "budgetMin": 300,
+    "budgetMax": 350,
+    "areas": "西湖区、上城区、西溪及周边",
+    "priority": "new",
+    "driver": "undecided",
+    "maxDrive": null,
+    "maxTransit": null
+  },
+  "homes": [
+    {
+      "id": "kept-home",
+      "createdAt": "2026-11-01T08:00:00.000Z",
+      "updatedAt": "2026-11-01T08:00:00.000Z",
+      "name": "升级前收藏的房子",
+      "kind": "new",
+      "district": "",
+      "address": "",
+      "sourceUrl": "",
+      "size": null,
+      "layout": "",
+      "detail": "旧版留下的现场记录",
+      "status": "planned",
+      "reason": "",
+      "costs": {
+        "parking": null,
+        "tax": null,
+        "decoration": null
+      },
+      "commute": {
+        "driver": "undecided",
+        "station": "",
+        "driverTotal": null,
+        "detour": null,
+        "drop": null,
+        "wait": null,
+        "metro": null,
+        "lastLeg": null,
+        "date": "",
+        "note": ""
+      },
+      "prices": [],
+      "visits": []
+    }
+  ]
+}

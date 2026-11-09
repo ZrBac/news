@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="news-shell-cache" content="__NEWS_SHELL_CACHE__" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" />
+    <meta name="robots" content="noindex" />
+    <meta
+      name="description"
+      content="按预算和区域查看杭州新房与二手房，自动检查公开房源并保留报价变化。"
+    />
+    <meta name="home-candidates-feed" content="/data/home-candidates.json" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <script>
+      try {
+        const theme =
+          localStorage.getItem("zrbac-news-theme") === "dark"
+            ? "dark"
+            : "light";
+        document.documentElement.dataset.theme = theme;
+        document.querySelector('meta[name="theme-color"]').content =
+          theme === "dark" ? "#181818" : "#ffffff";
+      } catch {}
+    </script>
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/assets/news/icon-180.png" />
+    <link rel="icon" type="image/svg+xml" href="/assets/news/favicon.svg" />
+    <link rel="stylesheet" href="/assets/news/style.css" />
+    <link rel="stylesheet" href="/assets/news/compat.css" />
+    <link rel="stylesheet" href="/assets/news/homes.css" />
+    <script src="/assets/news/compat.js" defer></script>
+    <script src="/assets/news/homes-core.js" defer></script>
+    <script src="/assets/news/home-finder.js" defer></script>
+    <script src="/assets/news/pwa.js" defer></script>
+    <title>杭州房源 · 资讯</title>
+  </head>
+  <body>
+    <a href="#homes-title" class="skip-link">跳到杭州房源</a>
+    <header class="header">
+      <div class="header-inner">
+        <a class="brand" href="/"><span class="brand-name">资讯</span></a>
+        <div class="header-actions">
+          <a href="/#housing" class="games-link">杭州房价</a
+          ><button
+            id="theme-toggle"
+            class="icon-button"
+            aria-label="切换深色模式"
+          >
+            ◐
+          </button>
+        </div>
+      </div>
+    </header>
+    <main id="home-book" class="home-page">
+      <div class="home-heading">
+        <div>
+          <p class="home-eyebrow">新房 · 二手房</p>
+          <h1 id="homes-title" tabindex="-1">杭州房源</h1>
+          <p class="home-muted">按预算和区域找线索，跟踪公开报价的变化。</p>
+        </div>
+      </div>
+      <section
+        id="home-discover"
+        class="home-discover"
+        aria-labelledby="discover-title"
+      >
+        <div class="home-list-heading">
+          <div>
+            <h2 id="discover-title">房源列表</h2>
+            <p class="home-muted" id="candidate-summary">正在整理候选房源…</p>
+          </div>
+        </div>
+        <p id="candidate-requirements" class="home-muted">
+          100㎡及以上 · 至少 3 室（不含两室）
+        </p>
+        <div class="home-filters home-candidate-filters">
+          <label><span class="home-muted">预算上限（万元）</span><input id="candidate-budget" type="number" min="1" max="100000" step="10" value="350" inputmode="decimal" /></label>
+          <label
+            ><span class="sr-only">候选范围</span
+            ><select id="candidate-scope">
+              <option value="budget">预算内线索</option>
+              <option value="verify">价格待核实</option>
+              <option value="other">超预算 / 状态存疑</option>
+              <option value="all">全部观察</option>
+            </select></label
+          >
+          <label
+            ><span class="sr-only">候选类型</span
+            ><select id="candidate-kind">
+              <option value="">新房优先，二手房也看</option>
+              <option value="new">只看新房</option>
+              <option value="resale">只看二手房</option>
+            </select></label
+          >
+          <label
+            ><span class="sr-only">候选区域</span
+            ><select id="candidate-area">
+              <option value="">全部覆盖区域</option>
+              <option value="西湖">西湖</option>
+              <option value="余杭">余杭 · 西溪及周边</option>
+              <option value="上城">上城</option>
+            </select></label
+          >
+          <label
+            ><span class="sr-only">候选板块</span
+            ><select id="candidate-region">
+              <option value="">全部板块</option>
+            </select></label
+          >
+        </div>
+        <p id="candidate-message" class="home-muted" role="status"></p>
+        <div
+          id="candidate-list"
+          class="home-candidates"
+          aria-live="polite"
+        ></div>
+        <button id="candidate-more" hidden>再看一些</button>
+        <details class="home-help">
+          <summary>覆盖范围、更新时间和通勤</summary>
+          <p id="candidate-coverage"></p>
+          <p>
+            面积或户型不明确，以及展示范围内含不足
+            100㎡或两室及以下户型的新盘，暂不收录。
+          </p>
+          <p>
+            总价参考和按均价估算的金额，不代表有对应房号在售。挂牌价格、余房、税费、车位、装修需要分别核实。
+          </p>
+          <p>
+            通勤时间尚未核实，请从房源的地图入口查看位置，按实际出发地、目的地和早高峰时间查询。在建地铁不计入已开通线路。
+          </p>
+          <div id="candidate-sources" class="home-source-list"></div>
+          <button id="candidate-refresh">重新读取最新结果</button>
+        </details>
+      </section>
+      <div id="offline-tools" class="home-offline">
+        <span id="offline-status" role="status">正在检查离线资源…</span
+        ><button id="prepare-offline">准备离线使用</button
+        ><small id="offline-hint"></small
+        ><a id="offline-secure-link" href="__NEWS_SITE_URL__/homes/" hidden
+          >用 Safari 打开安全页面</a
+        >
+      </div>
+      <noscript>开启 JavaScript 后可查看和筛选房源。</noscript>
+      <footer class="home-footer">
+        <span>公开房源 · 每天检查两次</span
+        ><button id="install-app">安装到桌面</button>
+      </footer>
+    </main>
+    <dialog id="info-dialog" aria-labelledby="dialog-title">
+      <div class="dialog-heading">
+        <h2 id="dialog-title">安装到桌面</h2>
+        <button id="close-dialog" aria-label="关闭">×</button>
+      </div>
+      <div id="dialog-content"></div>
+    </dialog>
+  </body>
+</html>

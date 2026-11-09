@@ -1,0 +1,764 @@
+import gzip
+import importlib.util
+import io
+import json
+import os
+import re
+import subprocess
+import sys
+import tempfile
+import unittest
+from unittest.mock import patch
+from datetime import datetime, timedelta, timezone
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+spec = importlib.util.spec_from_file_location('collector', ROOT / 'scripts/collect_news.py')
+collector = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(collector)
+
+
+class FeedTests(unittest.TestCase):
+    def setUp(self):
+        self.now = datetime(2026, 9, 23, 4, tzinfo=timezone.utc)
+        self.source = {'id': 'example', 'category': 'tech'}
+
+    def feed(self, link='https://example.com/story?utm_source=rss', date='Wed, 23 Sep 2026 03:00:00 GMT'):
+        return f'''<rss><channel><item><title><![CDATA[AI &amp; 科技 <script>alert(1)</script>]]></title>
+          <link>{link}</link><pubDate>{date}</pubDate>
+          <description><![CDATA[<p>正文摘要</p><script>bad()</script><img src="x" onerror="bad()"/>]]></description>
+          </item></channel></rss>'''.encode()
+
+    def test_feed_has_clean_text_and_canonical_link(self):
+        items = collector.parse_feed(self.feed(), self.source, self.now)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['title'], 'AI & 科技')
+        self.assertEqual(items[0]['excerpt'], '正文摘要')
+        self.assertEqual(items[0]['url'], 'https://example.com/story')
+        self.assertEqual(items[0]['category'], 'ai')
+
+    def test_reachable_empty_feeds_are_not_outages_but_invalid_responses_still_fail(self):
+        source = dict(self.source, name='Example', home='https://example.com', color='#777777',
+                      url='https://example.com/feed')
+        for body in (b'<rss><channel><title>Example</title></channel></rss>',
+                     self.feed(date='Wed, 20 Aug 2025 03:00:00 GMT')):
+            with self.subTest(body=body), patch.object(collector, 'fetch', return_value=body):
+                articles, status = collector.collect(source, self.now)
+                self.assertEqual(articles, [])
+                self.assertEqual(status['status'], 'ok')
+                self.assertEqual(status['fetchedCount'], 0)
+                self.assertIsNone(status['latestAt'])
+        for body in (b'<html><body>Access denied</body></html>', b'<rss>', b'<rss/>'):
+            with self.subTest(body=body), patch.object(collector, 'fetch', return_value=body):
+                articles, status = collector.collect(source, self.now)
+                self.assertEqual(articles, [])
+                self.assertEqual(status['status'], 'unavailable')
+        with patch.object(collector, 'fetch', side_effect=TimeoutError):
+            self.assertEqual(collector.collect(source, self.now)[1]['status'], 'unavailable')
+
+    def test_google_redirect_uses_publisher_url_and_rejects_unsafe_responses(self):
+        url = 'https://news.google.com/rss/articles/CBMiExample?oc=5'
+        page = b'<c-wiz data-n-a-ts="1791858350" data-n-a-sg="public-signature">'
+        for destination, expected in (
+            ('https://publisher.example/story?utm_source=google', 'https://publisher.example/story'),
+            ('javascript:alert(1)', None),
+            ('https://user:password@publisher.example/story', None),
+            ('https://consent.google.com/', None),
+            (url, None),
+            ({'unexpected': 'object'}, None),
+        ):
+            reply = ")]}'\n\n" + json.dumps([['wrb.fr', 'Fbv4je', json.dumps(['garturlres', destination, 1])]])
+            with self.subTest(destination=destination), patch.object(collector.urllib.request, 'urlopen',
+                    side_effect=[io.BytesIO(page), io.BytesIO(reply.encode())]):
+                self.assertEqual(collector.google_original_url(url), expected)
+        with patch.object(collector.urllib.request, 'urlopen', return_value=io.BytesIO(b'consent page')):
+            self.assertIsNone(collector.google_original_url(url))
+
+    def test_original_links_survive_feed_refresh_and_failed_resolution_without_changing_ids(self):
+        url = 'https://news.google.com/rss/articles/CBMiCached'
+        old = collector.parse_feed(self.feed(link=url), self.source, self.now)[0]
+        old['originalUrl'] = 'https://publisher.example/cached'
+        fresh = dict(old)
+        fresh.pop('originalUrl')
+        other = collector.parse_feed(self.feed(link='https://news.google.com/rss/articles/CBMiFailed'), self.source, self.now)[0]
+        other['title'] = 'AI 新文章链接检查'
+        merged = collector.merge_articles([old], [fresh, other], self.now, {'example'})
+        identities = [(a['id'], a['url']) for a in merged]
+        with patch.object(collector, 'google_original_url', side_effect=TimeoutError) as resolve:
+            collector.resolve_original_links(merged, [old])
+        resolve.assert_called_once()
+        self.assertEqual([(a['id'], a['url']) for a in merged], identities)
+        self.assertEqual(next(a for a in merged if a['url'] == url)['originalUrl'], old['originalUrl'])
+        self.assertNotIn('originalUrl', next(a for a in merged if a['url'] != url))
+        self.assertEqual(collector.merge_articles([old], [], self.now, {'example'}), [old])
+
+    def test_link_resolution_is_bounded_and_shared_across_article_snapshots(self):
+        base = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        articles = [dict(base, url='https://news.google.com/rss/articles/CBMi' + str(i),
+                         publishedAt=collector.iso(self.now - timedelta(hours=i))) for i in range(5)]
+        duplicate = dict(articles[0])
+        direct = dict(base, url='https://publisher.example/direct')
+        articles += [duplicate, direct]
+        with patch.object(collector, 'google_original_url', return_value='https://publisher.example/resolved') as resolve:
+            collector.resolve_original_links(articles, [], limit=2)
+        self.assertEqual(resolve.call_count, 2)
+        self.assertIn('originalUrl', duplicate)
+        self.assertNotIn('originalUrl', direct)
+        self.assertNotIn('originalUrl', articles[2])
+        with patch.object(collector, 'google_original_url') as resolve:
+            collector.resolve_original_links(articles, [], budget=0)
+        resolve.assert_not_called()
+
+    def test_fetch_decodes_gzip_feeds_with_or_without_encoding_header(self):
+        feed = self.feed()
+        for body, headers in ((feed, {}), (gzip.compress(feed), {'Content-Encoding': 'gzip'}),
+                              (gzip.compress(feed), {})):
+            with self.subTest(headers=headers, compressed=body != feed):
+                response = io.BytesIO(body)
+                response.headers = headers
+                with patch.object(collector.urllib.request, 'urlopen', return_value=response):
+                    decoded = collector.fetch('https://example.com/feed')
+                self.assertEqual(decoded, feed)
+                self.assertEqual(len(collector.parse_feed(decoded, self.source, self.now)), 1)
+
+    def test_fetch_limits_downloaded_and_decompressed_response_sizes(self):
+        for body, message in ((b'x' * 101, 'Response exceeds size limit'),
+                              (gzip.compress(b'x' * 10000), 'Decompressed response exceeds size limit')):
+            with self.subTest(message=message):
+                response = io.BytesIO(body)
+                response.headers = {}
+                with patch.object(collector.urllib.request, 'urlopen', return_value=response):
+                    with self.assertRaisesRegex(ValueError, message):
+                        collector.fetch('https://example.com/feed', max_bytes=100)
+
+    def test_rejects_unsafe_links_undated_old_and_future_articles(self):
+        self.assertFalse(collector.parse_feed(self.feed(link='javascript:alert(1)'), self.source, self.now))
+        for date in ['', 'Wed, 23 Sep 2026 03:00:00', 'Wed, 23 Sep 2020 03:00:00 GMT', 'Wed, 30 Sep 2026 03:00:00 GMT']:
+            self.assertFalse(collector.parse_feed(self.feed(date=date), self.source, self.now))
+
+    def test_failed_source_history_is_retained_and_duplicate_is_replaced(self):
+        old = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        revised = dict(old, title='AI 更新后的标题')
+        retained = collector.merge_articles([old], [], self.now, {'example'})
+        self.assertEqual(retained, [old])
+        merged = collector.merge_articles([old], [revised], self.now, {'example'})
+        self.assertEqual(len(merged), 1)
+        self.assertEqual(merged[0]['title'], revised['title'])
+        self.assertFalse(collector.merge_articles([old], [], self.now + timedelta(days=31), {'example'}))
+
+    def test_limit_excerpt_and_keep_source_provenance(self):
+        feed = self.feed().replace('正文摘要'.encode(), ('很长的内容' * 100).encode())
+        item = collector.parse_feed(feed, self.source, self.now)[0]
+        self.assertLessEqual(len(item['excerpt']), 90)
+        self.assertEqual(item['sourceId'], 'example')
+
+    def test_busy_sources_do_not_displace_older_low_volume_sources_and_categories(self):
+        base = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        allowed = {key: {'id': key, 'category': category} for key, category in
+                   (('busy', 'sports'), ('quiet', 'sports'), ('games', 'gaming'))}
+        busy = [dict(base, title='比赛新闻' + str(i), category='sports', sourceId='busy',
+                     url=f'https://example.com/busy/{i}', publishedAt=collector.iso(self.now)) for i in range(6500)]
+        quiet = [dict(base, title='赛场记录' + str(i), category='sports', sourceId='quiet',
+                      url=f'https://example.com/quiet/{i}', publishedAt=collector.iso(self.now - timedelta(days=28))) for i in range(5)]
+        games = [dict(base, title='游戏发布' + str(i), category='gaming', sourceId='games',
+                      url=f'https://example.com/games/{i}', publishedAt=collector.iso(self.now - timedelta(days=29))) for i in range(20)]
+        archive = collector.merge_articles(busy + quiet + games, [], self.now, allowed)
+        self.assertEqual(len(archive), 6000)
+        self.assertEqual(len([a for a in archive if a['sourceId'] == 'quiet']), 5)
+        self.assertEqual(len([a for a in archive if a['category'] == 'gaming']), 20)
+        self.assertEqual([a['publishedAt'] for a in archive],
+                         sorted([a['publishedAt'] for a in archive], reverse=True))
+        self.assertFalse(collector.merge_articles(archive, [], self.now + timedelta(days=31), allowed))
+
+    def test_stable_id_and_unique_titles(self):
+        item = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        same_title = dict(item, url='https://example.com/duplicate')
+        self.assertEqual(len(collector.merge_articles([item], [same_title], self.now, {'example'})), 1)
+        self.assertIsNone(collector.safe_url('https://user:password@example.com/'))
+
+    def test_local_and_livelihood_routing_keeps_housing_and_specialized_news_separate(self):
+        general = dict(self.source, category='general')
+        local = dict(self.source, category='local', titleFilter='hangzhou-local')
+        livelihood = dict(self.source, category='livelihood', titleFilter='livelihood')
+        examples = (
+            ('杭州地铁12号线迎来新进展 - 杭州网', 'general'),
+            ('杭州市区天气预报 - 杭州网', 'general'),
+            ('余杭招聘会发布5000个岗位', 'livelihood'),
+            ('桐庐公园正式开放', 'local'),
+            ('杭州居民医保补贴申领启动', 'livelihood'),
+            ('杭州二手房成交209套', 'housing'),
+            ('西湖区新房预售政策公布', 'housing'),
+            ('上城区住房补贴申领启动', 'housing'),
+            ('社会保险关系转移接续办理指南', 'livelihood'),
+            ('湖南医保新政11月起施行', 'livelihood'),
+            ('消费者权益保护典型案例公布', 'livelihood'),
+            ('新就业形态劳动者权益保障迎新规', 'livelihood'),
+            ('多地公布中小学春秋假安排', 'livelihood'),
+            ('国联民生控股股东增持承诺触发', 'finance'),
+            ('民生银行财报公布', 'finance'),
+            ('日本医保缴费调整', 'general'),
+            ('杭州企业股价上涨', 'finance'),
+            ('巴黎地铁延长运营时间 - 杭州网', 'general'),
+        )
+        base = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        for title, category in examples:
+            with self.subTest(title=title):
+                self.assertEqual(collector.article_category(title, general), category)
+                old = dict(base, title=title, category='general')
+                merged = collector.merge_articles([old], [], self.now, {'example': general})
+                self.assertEqual(merged[0]['category'], category)
+        for title in ('杭州周末农夫市集开市', '安吉秋日徒步路线发布',
+                      '杭州书店读书会本周末开放报名', '杭州飞盘运动体验日',
+                      '铜鉴湖花海露营地开放', '径山露营基地周末预约'):
+            self.assertEqual(collector.article_category(title, local), 'local')
+        for title in ('临平亲子手作活动预告','浙江省博物馆特展上新','3.73亿起拍！萧山宝龙广场被摆上货架', '北京公交开通', '杭州企业财报公布', '散文随笔：杭州秋日生活与公园', '杭州地铁新线通车',
+                      '杭州露营产业市场规模增长', '杭州音乐节圆满落幕', '去年杭州展览回顾',
+                      '杭州演唱会开票', '杭州11月演唱会日历', '杭州歌友会演出预告',
+                      '杭州假期活动' + '漫游心情' * 40):
+            self.assertIsNone(collector.article_category(title, local))
+        self.assertIsNone(collector.article_category('养老行业论坛开幕', livelihood))
+        self.assertIsNone(collector.article_category('国联民生股价上涨', livelihood))
+        self.assertEqual(collector.article_category('医保新规发布', livelihood), 'livelihood')
+        self.assertEqual(collector.article_category('杭州演唱会开票', dict(general, category='entertainment')), 'entertainment')
+        camping = dict(local, titleFilter='hangzhou-camping')
+        for title in ('杭州露营地推荐', '铜鉴湖花海露营地开放', '径山营地周末预约'):
+            self.assertEqual(collector.article_category(title, camping), 'local')
+        for title in ('杭州演唱会开票', '上海露营地开放', '杭州医保补贴申领',
+                      '巴黎车展变成中国车展_杭州网 - 车行杭州'):
+            self.assertIsNone(collector.article_category(title, camping))
+        self.assertEqual(collector.article_category('杭州电竞比赛开幕', dict(general, category='gaming')), 'gaming')
+        self.assertEqual(collector.article_category('日本医保新规发布', dict(general, id='chinanews-world')), 'general')
+        housing = dict(base, title='杭州二手房成交209套', category='housing')
+        self.assertEqual(collector.recent_housing_articles([housing], [], self.now, {'example': general})[0]['category'], 'housing')
+
+    def test_public_rumors_require_actual_corrections_and_reject_promotion(self):
+        source = dict(self.source, category='livelihood', titleFilter='public-rumors')
+        for title in ('网传成都小区楼顶现坟堆系谣言', '今日辟谣（2026年10月12日）',
+                      '办社保金卡可以多领补贴？警惕诈骗', '高铁座椅传播疾病？真相来了'):
+            self.assertEqual(collector.article_category(title, source), 'livelihood')
+        for title in ('网络辟谣宣传活动开展', '杭州开展网络辟谣宣传活动',
+                      '抵制谣言共筑清朗空间', '举报辟谣号流动课堂', '科技展览即将开幕'):
+            self.assertIsNone(collector.article_category(title, source))
+
+    def test_archive_limit_still_holds_with_eleven_populated_categories(self):
+        base = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        titles = {'general': '综合消息', 'finance': '央行利率调整', 'local': '杭州周末市集开市', 'livelihood': '医保新政公布',
+                  'tech': '电脑硬件更新', 'ai': 'AI工具更新', 'models': 'Qwen3模型发布',
+                  'entertainment': '电影上映', 'gaming': '游戏发行', 'sports': '体育赛事',
+                  'housing': '杭州新盘预售'}
+        sources = {category: {'id': category, 'category': category} for category in titles}
+        articles = [dict(base, title=title + str(i), sourceId=category, category=category,
+                         url=f'https://example.com/{category}/{i}')
+                    for category, title in titles.items() for i in range(751)]
+        archive = collector.merge_articles(articles, [], self.now, sources)
+        self.assertEqual(len(archive), 6000)
+        self.assertEqual({article['category'] for article in archive}, set(titles))
+
+    def test_dedicated_categories_survive_ai_keyword_and_archive_merge(self):
+        for category in ('entertainment', 'gaming', 'sports'):
+            with self.subTest(category=category):
+                source = dict(self.source, category=category)
+                items = collector.parse_feed(self.feed(), source, self.now)
+                self.assertEqual(items[0]['category'], category)
+                self.assertEqual(collector.merge_articles(items, [], self.now, {'example'}), items)
+
+    def test_finance_filters_market_news_and_preserves_public_service_boundaries(self):
+        general = dict(self.source, category='general')
+        finance = dict(self.source, category='finance', titleFilter='finance')
+        for title in ('央行发布人民币汇率政策', 'GDP和CPI数据即将公布', '银行利率调整',
+                      '公司营收和净利润增长', '债券ETF规模扩大', 'A股午盘指数下跌',
+                      'OpenAI完成新一轮融资', 'NVIDIA quarterly earnings rise'):
+            self.assertEqual(collector.article_category(title, general), 'finance')
+            self.assertEqual(collector.article_category(title, finance), 'finance')
+        self.assertEqual(collector.article_category('杭州二手房成交统计公布', finance), 'housing')
+        self.assertIsNone(collector.article_category('杭州地铁新线开通', finance))
+        self.assertEqual(collector.article_category('金融消费者合法权益保护案例公布', finance), 'livelihood')
+        self.assertEqual(collector.article_category('医保补贴申领启动', finance), 'livelihood')
+        self.assertIsNone(collector.article_category('巴拿马发生强震', finance))
+        self.assertIsNone(collector.article_category('稳赚！股票荐股群开户送红包', finance))
+        self.assertEqual(collector.article_category('警惕稳赚荐股群股票诈骗', finance), 'finance')
+        self.assertEqual(collector.article_category('苹果新款电脑上市', self.source), 'tech')
+        self.assertEqual(collector.article_category('OpenAI发布GPT-6.1模型', finance), 'models')
+        old = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        old.update(title='央行发布人民币汇率政策', category='general')
+        self.assertEqual(collector.merge_articles([old], [], self.now, {'example': general})[0]['category'], 'finance')
+
+    def test_hangzhou_housing_requires_location_and_housing_topic(self):
+        source = dict(self.source, category='housing')
+        for title in ('杭州二手房成交327套', '杭州新房成交99套', '临平推出购房补贴', '杭州AI选房服务与购房政策解读', '杭州楼盘户型首次亮相', '杭州新盘开放示范区'):
+            with self.subTest(title=title):
+                feed = self.feed().replace(b'AI &amp; \xe7\xa7\x91\xe6\x8a\x80 <script>alert(1)</script>', title.encode())
+                articles = collector.parse_feed(feed, source, self.now)
+                self.assertEqual(len(articles), 1)
+                self.assertEqual(articles[0]['category'], 'housing')
+                self.assertEqual(len(collector.merge_articles(articles, [], self.now, {'example'})), 1)
+        for title in ('杭州银行利润增长', '杭州国庆旅游客流', '杭州电影预售开启', '杭州演唱会门票预售', '上海新房成交99套', '全国楼市政策调整', '王石不卖房了？ - 杭州网', '上海新房成交99套 - 住在杭州网'):
+            with self.subTest(title=title):
+                self.assertFalse(collector.is_hangzhou_housing(title))
+        article = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        unrelated = dict(article, title='杭州天气降温', category='housing')
+        self.assertFalse(collector.merge_articles([unrelated], [], self.now, {'example'}))
+
+    def test_direct_housing_bulletins_use_dated_publisher_rows_and_safe_links(self):
+        source = {'id': 'hz-housing-daily', 'category': 'housing',
+                  'url': 'https://zzhz.zjol.com.cn/hz/bb/'}
+        def row(link, date, title='9月23日，杭州新房2盘预售，3盘报名中'):
+            return f'<li class="news_item"><a href="{link}"><img alt="不要当作标题" />' \
+                   f'<h2>{title}</h2><span class="resource">住在杭州网</span>' \
+                   f'<span class="time">| {date}</span></a></li>'
+        link = '//zzhz.zjol.com.cn/hz/bb/202609/t20260921_1234.shtml'
+        content = '<aside><a href="' + link + '">杭州新房报道</a></aside><ul>'
+        content += row(link, '2026-09-23')
+        for invalid_link, date, title in ((link, '', '杭州楼盘信息'),
+                                         (link, '2026-08-01', '杭州楼盘信息'),
+                                         (link, '2026-09-30', '杭州楼盘信息'),
+                                         (link, '2026-99-01', '杭州楼盘信息'),
+                                         ('javascript:alert(1)', '2026-09-23', '杭州楼盘信息'),
+                                         ('https://example.com/story', '2026-09-23', '杭州楼盘信息'),
+                                         (link, '2026-09-23', '杭州电影预售消息')):
+            content += row(invalid_link, date, title)
+        articles = collector.parse_housing_daily((content + '</ul>').encode(), source, self.now)
+        self.assertEqual(len(articles), 1)
+        self.assertEqual(articles[0]['title'], '9月23日，杭州新房2盘预售，3盘报名中')
+        self.assertEqual(articles[0]['publishedAt'], '2026-09-22T16:00:00Z')
+        self.assertEqual(articles[0]['url'], 'https:' + link)
+        self.assertEqual(articles[0]['sourceId'], source['id'])
+
+    def test_housing_history_survives_busy_archive_and_source_failures(self):
+        article = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        housing = dict(article, title='杭州新盘领出预售证', category='housing')
+        source = dict(self.source, category='housing')
+        allowed = {source['id']: source, 'sports': {'id': 'sports', 'category': 'sports'}}
+        busy = [dict(article, sourceId='sports', category='sports', title='比赛结果' + str(i),
+                     url='https://example.com/sport/' + str(i), publishedAt=collector.iso(self.now))
+                for i in range(6000)]
+        archive = collector.merge_articles([housing] + busy, [], self.now, allowed)
+        self.assertEqual(len(archive), 6000)
+        self.assertTrue(any(a['category'] == 'housing' for a in archive))
+        retained = collector.recent_housing_articles([housing] + busy, [], self.now, allowed)
+        self.assertEqual(retained, [housing])
+        self.assertEqual(collector.recent_housing_articles(retained, [], self.now, allowed), retained)
+        self.assertFalse(collector.recent_housing_articles(retained, [], self.now + timedelta(days=31), allowed))
+        self.assertFalse(collector.recent_housing_articles(retained, [], self.now, {}))
+
+    def test_model_launches_are_separate_from_ai_and_old_articles_are_migrated(self):
+        for title in ('OpenAI 发布 GPT-6.1 Sol', '智谱 GLM-5.3 模型上线',
+                      '阿里千问开源 Qwen-Image-2.1 图像模型', 'Introducing Claude Haiku 5.5',
+                      '谷歌推出 EmbeddingGemma 2', '智谱一口气开源6款模型'):
+            with self.subTest(title=title):
+                feed = self.feed().replace(b'AI &amp; \xe7\xa7\x91\xe6\x8a\x80 <script>alert(1)</script>', title.encode())
+                article = collector.parse_feed(feed, self.source, self.now)[0]
+                self.assertEqual(article['category'], 'models')
+                old = dict(article, category='ai')
+                self.assertEqual(collector.merge_articles([old], [], self.now, {'example'})[0]['category'], 'models')
+                for category in ('sports', 'entertainment'):
+                    self.assertEqual(collector.article_category(title, dict(self.source, category=category)), category)
+
+    def test_model_only_sources_reject_rumors_apps_and_unrelated_same_names(self):
+        source = dict(self.source, category='models')
+        for title in ('消息称 Gemini 4 即将发布', 'OpenAI 推出 ChatGPT 插件',
+                      '谷歌云发布 Gemini Agent 智能体', 'DeepSeek官方开源昇腾基础组件',
+                      '智谱计划开源代码库', '丰田推出新款 Sora 氢燃料电池巴士',
+                      'DeepSeek终于丢了开源第一王座', '如何使用 Qwen3',
+                      'Claude Fable 5 额度重新上线', 'OpenAI 投资新闻',
+                      '英伟达发布 DGX Station：本地运行 AI 模型',
+                      '辛顿提议 AI 模型推出前需通过审核',
+                      'Ecosia 押注中国开源 AI 模型，取代 Mistral Large',
+                      '派早报：Anthropic 发布 Claude Haiku 5.5 模型等'):
+            with self.subTest(title=title):
+                self.assertIsNone(collector.article_category(title, source))
+        self.assertTrue(collector.is_model_release('Gemini 4 Argon: our next era of frontier intelligence', 'deepmind'))
+        self.assertTrue(collector.is_model_release('Qwen-Image-2.1: Compact Image Creation - Qwen', 'gnews-qwen-models'))
+        self.assertFalse(collector.is_model_release('Qwen3.8: a review of existing models', 'example'))
+
+    def test_model_column_excludes_development_adaptation_and_open_source_commentary(self):
+        for title in ('曝 OpenAI 新一代 GPT-6.2 模型最快周五发布',
+                      'Anthropic 正开发开源系统：证明 AI 输出来自哪个模型',
+                      '阿里云自研超节点适配 Kimi K3.1，开源模型落地云端',
+                      '腾讯混元团队称 Hy4 跻身最强开源模型队列',
+                      '阿里：只有开源才能推动 AI 普及，千问开源模型已超 470 款',
+                      'IDC 预测：企业将在开源模型上运行多数工作负载',
+                      '腾讯混元发布 Hyra 2.0：为模型研发打造可复用工具'):
+            with self.subTest(title=title):
+                self.assertFalse(collector.is_model_release(title))
+        for title in ('腾讯开源混元 Hy4 大语言模型', 'Qwen3 模型正式开源',
+                      'DeepSeek V3.2 模型开源，权重可下载', '阿里开源大模型 Qwen3'):
+            with self.subTest(title=title):
+                self.assertTrue(collector.is_model_release(title))
+
+    def test_model_history_is_independent_of_the_busy_news_archive(self):
+        release = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        release.update(title='通义发布 Qwen3.8 模型', category='ai', publishedAt='2026-09-15T03:00:00Z')
+        busy = [dict(release, title='综合资讯', category='general', url=f'https://example.com/news/{i}',
+                     publishedAt='2026-09-23T03:00:00Z', sourceId='source' + str(i)) for i in range(6001)]
+        allowed = {a['sourceId'] for a in busy} | {'example'}
+        shared = collector.merge_articles([release], busy, self.now, allowed)
+        self.assertTrue(any(a['sourceId'] == 'example' for a in shared))
+        models = collector.recent_model_releases([release], busy, self.now, allowed)
+        self.assertEqual(len(models), 1)
+        self.assertEqual(models[0]['category'], 'models')
+        self.assertFalse(collector.recent_model_releases(models, [], self.now + timedelta(days=31), allowed))
+
+    def test_ai_tools_hardware_finance_and_model_releases_have_distinct_categories(self):
+        cases = [
+            ('阿里Qoder上线Fast模式', 'ai'),
+            ('国产AI工具推出新功能', 'ai'),
+            ('陶哲轩与OpenAI讨论数学研究', 'ai'),
+            ('Cursor发布编程助手更新', 'ai'),
+            ('英伟达发布AI显卡，配备新GPU', 'tech'),
+            ('46999元起，迷你AI工作站发售', 'tech'),
+            ('微软推出Edge155稳定版，增强AI标签整理', 'tech'),
+            ('AI巨头盈利增长，标普股价上涨', 'finance'),
+            ('特斯拉布局物理AI，成为投资标的', 'finance'),
+            ('OpenAI发布GPT-6.1模型', 'models'),
+            ('AirPods Max推出新颜色', 'tech'),
+            ('AION新车型发布', 'tech'),
+        ]
+        for title, expected in cases:
+            with self.subTest(title=title):
+                self.assertEqual(collector.article_category(title, self.source), expected)
+
+    def test_archive_reclassification_uses_current_source_rules_and_filters(self):
+        article = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        article.update(title='阿里Qoder上线Fast模式', category='tech')
+        allowed = {'example': self.source}
+        self.assertEqual(collector.merge_articles([article], [], self.now, allowed)[0]['category'], 'ai')
+        allowed = {'example': dict(self.source, category='entertainment', titleFilter='entertainment')}
+        for title in ('梦见公主是什么意思', '新任白宫新闻秘书曾在北京工作', '辅助驾驶的技术风险如何兜底'):
+            with self.subTest(title=title):
+                self.assertFalse(collector.merge_articles([dict(article, title=title, category='entertainment')], [], self.now, allowed))
+        for title in ('电影《梦见你》上映', '知名演员获得飞天奖', '诺贝尔文学奖揭晓', '歌手发布新专辑'):
+            self.assertEqual(collector.article_category(title, allowed['example']), 'entertainment')
+        sports = dict(self.source, category='sports')
+        for title in ('彩经前瞻：国米主场占优', '半全场分析：马德里竞技进球', '英超赔率预测'):
+            self.assertIsNone(collector.article_category(title, sports))
+        for title in ('足球赛果：国米2比1获胜', '球员因违规投注被禁赛，联赛公布调查结果'):
+            self.assertEqual(collector.article_category(title, sports), 'sports')
+
+    def test_domestic_sports_filter_keeps_chinese_interest_and_rechecks_history(self):
+        source = dict(self.source, category='sports', titleFilter='domestic-sports')
+        domestic = ('CBA新赛季阵容公布', 'ＣＢＡ新赛季赛程公布', '中超成都蓉城取得三连胜',
+                    '国足对阵日本队', '中国U18女篮亚洲杯获得季军', '郑钦文获WTA赛事冠军',
+                    '杨瀚森完成NBA季前赛首秀', '香港金牛夺得NBL冠军',
+                    '杭州马拉松报名启动', '青岛新赛季阵容实力稳中有升',
+                    '中国队卫冕羽毛球世青赛混合团体冠军', '中国足协发布处罚决定',
+                    '备战新赛季 - CBA联赛新变化 - 体育媒体')
+        foreign = ('NBA掘金击败湖人', '英超利物浦客场获胜', '葡萄牙足协主席向C罗示好',
+                   '日本国脚收获德甲处子球', '韩国国足公布名单', '澳大利亚NBL球队公布赛程',
+                   'F1新加坡站维斯塔潘夺冠', '卡尔·马龙的NBA职业生涯',
+                   '女神大赛四强出炉', '北京金融政策公布',
+                   '海外足球联赛揭幕 - 中国体育新闻网')
+        article = collector.parse_feed(self.feed(), self.source, self.now)[0]
+        for title in domestic:
+            with self.subTest(title=title):
+                self.assertEqual(collector.article_category(title, source), 'sports')
+                old = dict(article, title=title, category='sports')
+                self.assertEqual(len(collector.merge_articles([old], [], self.now, {'example': source})), 1)
+        for title in foreign:
+            with self.subTest(title=title):
+                self.assertIsNone(collector.article_category(title, source))
+                old = dict(article, title=title, category='sports')
+                self.assertFalse(collector.merge_articles([old], [], self.now, {'example': source}))
+        self.assertIsNone(collector.article_category('CBA竞彩投注推荐', source))
+        self.assertEqual(collector.article_category('CBA球员因违规投注被禁赛', source), 'sports')
+        self.assertEqual(collector.article_category('NBA掘金击败湖人', dict(source, titleFilter=None)), 'sports')
+
+    def test_rdf_feed_retains_publisher_date_link_and_excerpt(self):
+        feed = b'''<rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+            xmlns="http://purl.org/rss/1.0/" xmlns:dc="http://purl.org/dc/elements/1.1/">
+          <item rdf:about="https://example.com/world">
+            <title>World news &amp; analysis</title><link>https://example.com/world</link>
+            <description><![CDATA[<p>A short summary.</p>]]></description>
+            <dc:date>2026-09-22T14:29:00Z</dc:date>
+          </item></rdf:RDF>'''
+        items = collector.parse_feed(feed, dict(self.source, category='general'), self.now)
+        self.assertEqual(len(items), 1)
+        self.assertEqual(items[0]['title'], 'World news & analysis')
+        self.assertEqual(items[0]['url'], 'https://example.com/world')
+        self.assertEqual(items[0]['publishedAt'], '2026-09-22T14:29:00Z')
+        self.assertEqual(items[0]['excerpt'], 'A short summary.')
+        self.assertEqual(items[0]['category'], 'general')
+
+
+class BuildTests(unittest.TestCase):
+    def test_housing_packet_is_independent_deduplicated_and_small(self):
+        spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        articles = [{'id': 's' + str(i), 'category': 'sports', 'title': '比赛' + str(i),
+                     'publishedAt': '2026-10-10T04:00:00Z'} for i in range(200)]
+        housing = [{'id': 'h' + str(i), 'category': 'housing', 'title': '杭州楼盘' + str(i),
+                    'publishedAt': '2026-10-09T04:00:00Z'} for i in range(70)]
+        duplicate = dict(housing[0], id='copy', title=housing[0]['title'] + ' - 住在杭州网')
+        with tempfile.TemporaryDirectory() as tmp:
+            builder.build_news_pages({'articles': articles, 'housingArticles': [housing[0], duplicate] + housing[1:]}, Path(tmp))
+            latest = json.loads((Path(tmp) / 'data/latest.json').read_text())
+            self.assertEqual(latest['articles'], articles[:150])
+            self.assertEqual(latest['housingArticles'], housing[:60])
+
+    def test_brief_packet_includes_low_volume_categories_and_beijing_dates(self):
+        spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        busy = [{'id': 's' + str(i), 'category': 'sports', 'title': '比赛消息' + str(i),
+                 'sourceId': 'sports', 'publishedAt': '2026-10-10T04:00:00Z'} for i in range(170)]
+        rare = [{'id': c, 'category': c, 'title': c + '今日消息', 'sourceId': c,
+                 'publishedAt': '2026-10-09T16:01:00Z'} for c in ('general', 'finance', 'local', 'livelihood', 'tech', 'ai', 'entertainment', 'gaming', 'housing')]
+        model = {'id': 'model', 'category': 'models', 'title': '今日模型发布', 'sourceId': 'official',
+                 'publishedAt': '2026-10-09T16:00:00Z'}
+        yesterday = dict(model, id='yesterday', title='昨日模型发布', publishedAt='2026-10-09T15:59:00Z')
+        data = {'updatedAt': '2026-10-10T06:00:00Z', 'articles': busy + rare,
+                'modelReleases': [model, yesterday]}
+        with tempfile.TemporaryDirectory() as tmp:
+            builder.build_news_pages(data, Path(tmp))
+            latest = json.loads((Path(tmp) / 'data/latest.json').read_text())
+            self.assertEqual(latest['articles'], busy[:150])
+            self.assertEqual(latest['briefDays'], ['2026-10-10', '2026-10-09'])
+            self.assertEqual({a['category'] for a in latest['briefArticles']},
+                             {'general', 'finance', 'livelihood', 'tech', 'ai', 'models', 'entertainment', 'gaming', 'sports', 'housing'})
+            self.assertEqual(len([a for a in latest['briefArticles'] if a['category'] == 'sports']), 5)
+            self.assertEqual({a['id'] for a in latest['briefArticles'] if a['category'] == 'models'},
+                             {'model', 'yesterday'})
+            self.assertLessEqual(len(latest['briefArticles']), 100)
+    def test_gaming_snapshot_is_available_beyond_the_first_news_page(self):
+        spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        busy = [{'id': 's' + str(i), 'category': 'sports', 'title': '比赛' + str(i),
+                 'publishedAt': '2026-10-10T04:00:00Z'} for i in range(200)]
+        gaming = [{'id': 'g' + str(i), 'category': 'gaming', 'title': '新游' + str(i),
+                   'publishedAt': '2026-10-09T04:00:00Z'} for i in range(70)]
+        with tempfile.TemporaryDirectory() as tmp:
+            builder.build_news_pages({'articles': busy + gaming}, Path(tmp))
+            latest = json.loads((Path(tmp) / 'data/latest.json').read_text())
+            self.assertEqual(latest['articles'], busy[:150])
+            self.assertEqual(latest['gamingArticles'], gaming[:60])
+
+    def test_recent_model_releases_are_cached_separately_from_the_first_news_page(self):
+        spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        articles = [{'id': str(i), 'category': 'general', 'title': '综合' + str(i),
+                     'publishedAt': '2026-10-08T04:00:00Z'} for i in range(160)]
+        releases = [{'id': 'm' + str(i), 'category': 'models', 'title': '模型发布' + str(i),
+                     'publishedAt': '2026-10-07T04:00:00Z'} for i in range(70)]
+        duplicate = dict(releases[0], id='copy', title=releases[0]['title'] + ' - 聚合来源')
+        with tempfile.TemporaryDirectory() as tmp:
+            builder.build_news_pages({'articles': articles + [releases[0], duplicate] + releases[1:]}, Path(tmp))
+            latest = json.loads((Path(tmp) / 'data/latest.json').read_text())
+            self.assertEqual(latest['articles'], articles[:150])
+            self.assertEqual(latest['modelReleases'], releases[:60])
+            builder.build_news_pages({'articles': articles,
+                                      'modelReleases': [releases[0], duplicate] + releases[1:]}, Path(tmp))
+            latest = json.loads((Path(tmp) / 'data/latest.json').read_text())
+            self.assertEqual(latest['modelReleases'], releases[:60])
+            self.assertEqual(latest['archive']['total'], len(articles))
+
+    def test_small_news_pages_preserve_all_articles_and_stable_chunks(self):
+        spec = importlib.util.spec_from_file_location('builder', ROOT / 'scripts/build_news.py')
+        builder = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(builder)
+        articles = [{'id': str(i), 'publishedAt': '2026-10-08T04:00:00Z',
+                     'category': 'tech', 'sourceId': 'example',
+                     'title': '测试资讯' + str(i)} for i in range(701)]
+        data = {'updatedAt': '2026-10-08T05:00:00Z', 'articles': articles, 'sources': []}
+        with tempfile.TemporaryDirectory() as tmp:
+            output = Path(tmp)
+            builder.build_news_pages(data, output)
+            latest = json.loads((output / 'data/latest.json').read_text())
+            self.assertEqual(latest['articles'], articles[:150])
+            self.assertEqual(latest['archive']['total'], len(articles))
+            combined = list(latest['articles'])
+            for url in latest['archive']['pages']:
+                self.assertRegex(url, r'^/data/archive/[a-f0-9]{16}\.json$')
+                page = json.loads((output / url.lstrip('/')).read_text())
+                self.assertLessEqual(len(page['articles']), 150)
+                combined.extend(page['articles'])
+            self.assertEqual(combined, articles)
+            index = json.loads((output / latest['archive']['lookup'].lstrip('/')).read_text())
+            self.assertEqual(len(index['rows']), len(articles))
+            self.assertEqual(latest['archive']['categories'], {'tech': ['example']})
+            self.assertEqual(index['rows'][-1][2], '2026-10-08')
+            last_page = index['pages'][index['rows'][-1][4]]
+            self.assertIn(articles[-1], json.loads((output / last_page.lstrip('/')).read_text())['articles'])
+            data['updatedAt'] = '2026-10-08T06:00:00Z'
+            builder.build_news_pages(data, output)
+            self.assertEqual(json.loads((output / 'data/latest.json').read_text())['archive'],
+                             latest['archive'])
+            builder.build_news_pages({**data, 'articles': []}, output)
+            self.assertEqual(json.loads((output / 'data/latest.json').read_text())['archive']['pages'], [])
+
+    def test_build_news_only_removes_stale_blog_files(self):
+        data = ROOT / 'news/data/news.json'
+        guide_source = ROOT / 'news/guide/book.json'
+        original_guide = guide_source.read_bytes()
+        existed = data.exists()
+        original = data.read_bytes() if existed else None
+        try:
+            data.parent.mkdir(parents=True, exist_ok=True)
+            data.write_text(json.dumps({'articles': [], 'updatedAt': '2026-09-24T06:00:00Z'}))
+            with tempfile.TemporaryDirectory() as tmp:
+                output = Path(tmp) / 'out'
+                # Rebuilding an old output must remove previously published blog files.
+                stale_paths = ('blog/index.html', '2020/story/index.html', 'asset.css', 'atom.xml', 'CNAME')
+                for path in stale_paths:
+                    target = output / path
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text('old blog content')
+                subprocess.run([sys.executable, str(ROOT / 'scripts/build_news.py'), '--output', str(output)], check=True, capture_output=True)
+                self.assertIn('id="news-content"', (output / 'index.html').read_text())
+                for path in stale_paths:
+                    self.assertFalse((output / path).exists())
+                self.assertNotIn('/blog/', (output / 'index.html').read_text())
+                self.assertNotIn('/blog/', (output / 'assets/news/app.js').read_text())
+                self.assertEqual(re.findall(r'<loc>(.*?)</loc>', (output / 'sitemap.xml').read_text()),
+                                 ['https://news.example.com/', 'https://news.example.com/games/', 'https://news.example.com/guide/'])
+                self.assertEqual(json.loads((output / 'data/status.json').read_text()),
+                                 {'updatedAt': '2026-09-24T06:00:00Z', 'newsCheckedAt': '2026-09-24T06:00:00Z'})
+                manifest = json.loads((output / 'manifest.webmanifest').read_text())
+                self.assertEqual(manifest['display'], 'standalone')
+                self.assertEqual(manifest['start_url'], '/')
+                for size in (192, 512):
+                    icon = next(i for i in manifest['icons'] if i['sizes'] == f'{size}x{size}')
+                    png = (output / icon['src'].lstrip('/')).read_bytes()
+                    self.assertEqual(png[:8], b'\x89PNG\r\n\x1a\n')
+                    self.assertEqual(int.from_bytes(png[16:20], 'big'), size)
+                    self.assertEqual(int.from_bytes(png[20:24], 'big'), size)
+                worker = (output / 'sw.js').read_text()
+                self.assertNotIn('__BUILD_ID__', worker)
+                self.assertNotIn('__APP_BUILD_ID__', worker)
+                self.assertNotIn('__SHELL_FILES__', worker)
+                shell = json.loads(re.search(r'const SHELL = (\[.*?\]);', worker, re.S).group(1))
+                self.assertNotIn('/data/news.json', shell)
+                self.assertIn('/games/', shell)
+                self.assertIn('/guide/', shell)
+                self.assertIn('/homes/', shell)
+                homes = (output / 'homes/index.html').read_text()
+                self.assertIn('id="home-book"', homes)
+                self.assertEqual((output / 'live/index.html').read_text(), (output / 'index.html').read_text())
+                cache_name = re.search(r'const CACHE = "([^"]+)"', worker).group(1)
+                for path in ('index.html', 'games/index.html', 'guide/index.html', 'homes/index.html'):
+                    page = (output / path).read_text()
+                    self.assertIn(f'name="news-shell-cache" content="{cache_name}"', page)
+                    self.assertNotIn('__NEWS_SHELL_CACHE__', page)
+                    self.assertNotIn('id="pwa-update"', page)
+                    self.assertNotIn('id="apply-update"', page)
+                self.assertEqual((output / 'homes/live/index.html').read_text(), homes)
+                self.assertNotIn('__HOMES_SHELL__', worker)
+                homes_shell = json.loads(re.search(r'const HOMES_SHELL = (\[.*?\]);', worker, re.S).group(1))
+                self.assertIn('/homes/', homes_shell)
+                for filename in ('home-finder.js', 'homes-core.js', 'homes.css'):
+                    stem, ext = filename.rsplit('.', 1)
+                    asset = re.search(r'/assets/news/' + stem + r'\.[0-9a-f]{12}\.' + ext, homes).group(0)
+                    self.assertIn(asset, homes_shell)
+                self.assertIn('/data/home-candidates.json', homes)
+                self.assertNotIn('homes-api', homes)
+                self.assertNotIn('homes-sync', homes)
+                self.assertNotIn('id="saved-homes"', homes)
+                self.assertFalse((output / 'assets/news/homes.js').exists())
+                self.assertFalse((output / 'assets/news/homes-sync.js').exists())
+                self.assertNotIn('/data/home-candidates.json', shell)
+                candidate_source = ROOT / 'news/data/home-candidates.json'
+                candidate_original = candidate_source.read_bytes() if candidate_source.exists() else None
+                try:
+                    listing_data = json.loads((output / 'data/home-candidates.json').read_text())
+                    listing_data['updatedAt'] = '2026-11-04T08:01:00Z'
+                    listing_data['items'][0]['total'] = 321
+                    candidate_source.write_text(json.dumps(listing_data))
+                    subprocess.run([sys.executable, str(ROOT / 'scripts/build_news.py'), '--output', str(output)], check=True, capture_output=True)
+                    self.assertEqual((output / 'sw.js').read_text(), worker,
+                                     'automatic listing changes must not trigger an application update')
+                    self.assertEqual(json.loads((output / 'data/home-candidates.json').read_text())['items'][0]['total'], 321)
+                finally:
+                    if candidate_original is not None:
+                        candidate_source.write_bytes(candidate_original)
+                    else:
+                        candidate_source.unlink(missing_ok=True)
+                guide = (output / 'guide/index.html').read_text()
+                guide_data = re.search(r'/assets/news/guide-index\.[0-9a-f]{12}\.json', guide).group(0)
+                self.assertIn(guide_data, shell)
+                book = json.loads((output / 'guide/book.json').read_text())
+                index = json.loads((output / guide_data.lstrip('/')).read_text())
+                self.assertEqual(len(index['entries']), len(book['entries']))
+                self.assertTrue(all('body' not in entry for entry in index['entries']))
+                self.assertEqual(index['entries'], [{key: value for key, value in entry.items() if key != 'body'}
+                                                   for entry in book['entries']])
+                self.assertNotIn('guide-book.', ''.join(shell))
+                self.assertNotIn('AI 问答', guide)
+                self.assertNotIn('guide-endpoint', guide)
+                self.assertNotIn('__GUIDE_', guide)
+                self.assertIn('成本：', guide)
+                chapter_files = json.loads(re.search(r'const GUIDE_FILES = (\[.*?\]);', worker, re.S).group(1))
+                self.assertEqual(chapter_files, [chapter['file'] for chapter in index['chapters']])
+                self.assertTrue(all(file not in shell for file in chapter_files))
+                chapter = json.loads((output / index['chapters'][14]['file'].lstrip('/')).read_text())
+                self.assertEqual(chapter['revision'], index['revision'])
+                self.assertTrue(all('备注：' in entry['body'] for entry in chapter['entries']))
+                static = (output / 'guide/read/15/index.html').read_text()
+                self.assertIn('押金', static)
+                self.assertIn('备注：', static)
+                self.assertNotIn('<script', static)
+                for path in shell:
+                    self.assertTrue((output / (path.lstrip('/') + 'index.html' if path.endswith('/') else path.lstrip('/'))).is_file())
+                games = (output / 'games/index.html').read_text()
+                for name, extension in [('compat', 'js'), ('compat', 'css'), ('games', 'js'), ('games-core', 'js'), ('games', 'css'), ('table-games', 'js'), ('table-games-core', 'js'), ('table-games', 'css'), ('extra-games', 'js'), ('extra-games-core', 'js'), ('extra-games', 'css'), ('casual-games', 'js'), ('casual-games-core', 'js'), ('casual-games', 'css')]:
+                    match = re.search(r'/assets/news/' + name + r'\.[0-9a-f]{12}\.' + extension, games)
+                    self.assertIsNotNone(match)
+                    self.assertIn(match.group(0), shell)
+                # The document must not load an unversioned cached script or stylesheet.
+                homepage = (output / 'index.html').read_text()
+                self.assertIn('rel="canonical" href="https://news.example.com/"', homepage)
+                for filename in ('news.xml', 'sitemap.xml', 'robots.txt'):
+                    contents = (output / filename).read_text()
+                    self.assertIn('https://news.example.com/', contents)
+                    self.assertNotIn('https://zrbac.github.io', contents)
+                for name, extension in [('compat', 'js'), ('compat', 'css'), ('app', 'js'), ('pwa', 'js'), ('style', 'css'), ('favicon', 'svg')]:
+                    match = re.search(r'/assets/news/' + name + r'\.[0-9a-f]{12}\.' + extension, homepage)
+                    self.assertIsNotNone(match)
+                    self.assertEqual((output / match.group(0).lstrip('/')).read_bytes(), (ROOT / 'news/assets' / f'{name}.{extension}').read_bytes())
+                # Hourly news publications must not force a new application-shell update.
+                data.write_text(json.dumps({'articles': [], 'updatedAt': '2026-09-24T07:00:00Z'}))
+                subprocess.run([sys.executable, str(ROOT / 'scripts/build_news.py'), '--output', str(output)], check=True, capture_output=True)
+                self.assertEqual((output / 'sw.js').read_text(), worker)
+                app_version = re.search(r'const APP_VERSION = "([^"]+)"', worker).group(1)
+                # Publishing a changed book needs a coherent new offline edition,
+                # while news/game readers retain the same application version.
+                edition = json.loads(original_guide)
+                edition['revision'] = 'b' * 40
+                edition['updatedAt'] = '2026-10-13T00:00:00Z'
+                edition['entries'][0]['body'] += '\n正文与来源修订。'
+                guide_source.write_text(json.dumps(edition, ensure_ascii=False))
+                subprocess.run([sys.executable, str(ROOT / 'scripts/build_news.py'), '--output', str(output)], check=True, capture_output=True)
+                content_worker = (output / 'sw.js').read_text()
+                self.assertNotEqual(content_worker, worker)
+                self.assertEqual(re.search(r'const APP_VERSION = "([^"]+)"', content_worker).group(1), app_version)
+                guide_source.write_bytes(original_guide)
+                cloud_endpoint = 'https://api.example.com/api/news-refresh'
+                site = 'https://reader.example.org'
+                env = dict(os.environ, NEWS_REFRESH_ENDPOINT=cloud_endpoint, NEWS_SITE_URL=site)
+                command = [sys.executable, str(ROOT / 'scripts/build_news.py'), '--output', str(output)]
+                subprocess.run(command, check=True, capture_output=True, env=env)
+                self.assertIn(f'name="news-refresh-endpoint" content="{cloud_endpoint}"',
+                              re.sub(r'\s+', ' ', (output / 'index.html').read_text()))
+                for path in ('index.html', 'games/index.html', 'guide/index.html', 'homes/index.html',
+                             'guide/read/15/index.html', 'news.xml', 'sitemap.xml', 'robots.txt'):
+                    page = (output / path).read_text()
+                    self.assertIn(site + '/', page)
+                    self.assertNotIn('https://news.example.com', page)
+                    self.assertNotIn('__NEWS_SITE_', page)
+                self.assertIn('location.hostname === "reader.example.org"', (output / 'index.html').read_text())
+                self.assertNotEqual((output / 'sw.js').read_text(), worker)
+                self.assertNotEqual(re.search(r'const APP_VERSION = "([^"]+)"',
+                                              (output / 'sw.js').read_text()).group(1), app_version)
+                env['NEWS_REFRESH_ENDPOINT'] = 'https://user:secret@example.com/api/news-refresh'
+                self.assertNotEqual(subprocess.run(command, capture_output=True, env=env).returncode, 0)
+        finally:
+            guide_source.write_bytes(original_guide)
+            if existed:
+                data.write_bytes(original)
+            elif data.exists():
+                data.unlink()
+
+
+if __name__ == '__main__':
+    unittest.main()

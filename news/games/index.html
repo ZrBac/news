@@ -1,0 +1,433 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="news-shell-cache" content="__NEWS_SHELL_CACHE__" />
+    <script>
+      if (
+        location.protocol === "http:" &&
+        location.hostname === "__NEWS_SITE_HOST__"
+      ) {
+        location.replace(
+          "__NEWS_SITE_URL__" +
+            location.pathname +
+            location.search +
+            location.hash,
+        );
+      }
+    </script>
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1, viewport-fit=cover"
+    />
+    <meta name="theme-color" content="#ffffff" />
+    <meta
+      name="description"
+      content="打砖块、飞机大战、跳跃跑酷、蜘蛛纸牌、数独、卡牌地牢、轻量塔防、俄罗斯方块、跳一跳、消消乐、扫雷。为手机触屏设计，准备好后可离线游玩。"
+    />
+    <link rel="canonical" href="__NEWS_SITE_URL__/games/" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="icon" href="/assets/news/favicon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="/assets/news/icon-180.png" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <title>小游戏 · 资讯</title>
+    <link rel="stylesheet" href="/assets/news/games.css" />
+    <link rel="stylesheet" href="/assets/news/compat.css" />
+    <script src="/assets/news/compat.js" defer></script>
+    <script src="/assets/news/games-core.js" defer></script>
+    <link rel="stylesheet" href="/assets/news/table-games.css" />
+    <script src="/assets/news/table-games-core.js" defer></script>
+    <script src="/assets/news/table-games.js" defer></script>
+    <link rel="stylesheet" href="/assets/news/extra-games.css" />
+    <script src="/assets/news/extra-games-core.js" defer></script>
+    <script src="/assets/news/extra-games.js" defer></script>
+    <link rel="stylesheet" href="/assets/news/casual-games.css" />
+    <script src="/assets/news/casual-games-core.js" defer></script>
+    <script src="/assets/news/casual-games.js" defer></script>
+    <script src="/assets/news/games.js" defer></script>
+    <script src="/assets/news/pwa.js" defer></script>
+  </head>
+  <body>
+    <header>
+      <a href="/">← 返回资讯</a><span>小游戏</span
+      ><button id="install-app">安装到桌面</button>
+    </header>
+    <main>
+      <div id="offline-tools" class="offline-tools">
+        <p id="offline-status" class="connection" role="status">
+          正在准备离线使用…
+        </p>
+        <button id="prepare-offline">准备离线使用</button>
+        <span id="offline-hint" class="offline-hint"></span>
+        <a id="offline-secure-link" href="__NEWS_SITE_URL__/games/" hidden
+          >使用 HTTPS 打开小游戏</a
+        >
+      </div>
+      <p id="storage-notice" class="notice" hidden>
+        浏览器未允许保存成绩或进度，本次仍可正常游玩。
+      </p>
+      <section id="library" aria-labelledby="library-title">
+        <h1 id="library-title" tabindex="-1">玩一小会儿</h1>
+        <p class="intro">选一款，开始游戏。</p>
+        <div class="game-list">
+          <a class="game-card" href="#jump"
+            ><span class="cover jump-cover" aria-hidden="true"
+              ><i></i><b></b><em></em></span
+            ><span
+              ><strong>跳一跳</strong><small>按住蓄力，松手跳上下一座台。</small
+              ><em>长按跳跃 · 连续命中 · 自动存档</em></span
+            ><span aria-hidden="true">↗</span></a
+          >
+          <a class="game-card" href="#match"
+            ><span class="cover match-cover" aria-hidden="true"
+              ><i></i><i></i><i></i><i></i></span
+            ><span
+              ><strong>消消乐</strong><small>交换相邻方块，凑齐三个同色。</small
+              ><em>三连消除 · 连锁加分 · 关卡挑战</em></span
+            ><span aria-hidden="true">↗</span></a
+          >
+          <a class="game-card" href="#mines"
+            ><span class="cover mines-cover" aria-hidden="true"
+              ><i>1</i><i>旗</i><i></i><i>2</i></span
+            ><span
+              ><strong>扫雷</strong><small>看数字排除地雷，翻开安全格。</small
+              ><em>首点安全 · 长按插旗 · 三档难度</em></span
+            ><span aria-hidden="true">↗</span></a
+          >
+          <a class="game-card" href="#dungeon"
+            ><span class="cover dungeon-cover" aria-hidden="true"
+              ><b>牌</b><i>✦</i></span
+            ><span
+              ><strong>卡牌地牢</strong
+              ><small>攒一副好牌，闯过十二层地牢。</small
+              ><em>回合战斗 · 装备成长 · 自动存档</em></span
+            ><span aria-hidden="true">↗</span></a
+          >
+          <a class="game-card" href="#defense"
+            ><span class="cover defense-cover" aria-hidden="true"
+              ><b>塔</b><i>· · ·</i></span
+            ><span
+              ><strong>轻量塔防</strong><small>布置防线，守住十二波来敌。</small
+              ><em>三种防御塔 · 升级搭配 · 可暂停</em></span
+            ><span aria-hidden="true">↗</span></a
+          >
+          <a class="game-card" href="#blocks"
+            ><span class="cover blocks-cover" aria-hidden="true"
+              ><b>▟</b><i>▰</i></span
+            ><span
+              ><strong>俄罗斯方块</strong
+              ><small>转好方向，填满一行再消除。</small
+              ><em>落点提示 · 暂存 · 触屏按键</em></span
+            ><span aria-hidden="true">↗</span></a
+          >
+          <a class="game-card" href="#spider"
+            ><span class="cover spider-cover" aria-hidden="true"
+              ><b>K<span>♠</span></b
+              ><i>Q<span>♥</span></i></span
+            ><span
+              ><strong>蜘蛛纸牌</strong
+              ><small>理顺牌序，收齐八组 K 到 A。</small
+              ><em>单花色 / 双花色 · 撤销 · 自动存档</em></span
+            ><span aria-hidden="true">↗</span></a
+          >
+          <a class="game-card" href="#sudoku"
+            ><span class="cover sudoku-cover" aria-hidden="true"
+              ><b>1</b><b></b><b>9</b><b></b><b>5</b><b></b><b>7</b><b></b
+              ><b>3</b></span
+            ><span
+              ><strong>数独</strong><small>用逻辑填满九宫格，无需拼手速。</small
+              ><em>三档难度 · 笔记 · 提示 · 自动存档</em></span
+            ><span aria-hidden="true">↗</span></a
+          >
+          <a class="game-card" href="#breakout"
+            ><span class="cover brick-cover" aria-hidden="true"
+              ><i></i><i></i><i></i><i></i><b>●</b><em></em></span
+            ><span
+              ><strong>打砖块</strong><small>接住弹球，打穿五关砖墙。</small
+              ><em>拖动挡板 · 3 次机会</em></span
+            ><span aria-hidden="true">↗</span></a
+          >
+          <a class="game-card" href="#shooter"
+            ><span class="cover space-cover" aria-hidden="true"
+              ><i></i><b>▲</b><em>· ·</em></span
+            ><span
+              ><strong>飞机大战</strong
+              ><small>穿过敌机，把火力坚持到最后。</small
+              ><em>自动开火 · 拖动闪避</em></span
+            ><span aria-hidden="true">↗</span></a
+          >
+          <a class="game-card" href="#runner"
+            ><span class="cover run-cover" aria-hidden="true"
+              ><b></b><i></i><em></em></span
+            ><span
+              ><strong>跳跃跑酷</strong
+              ><small>越过障碍，跑得比上一局更远。</small
+              ><em>点击跳跃 · 支持二段跳</em></span
+            ><span aria-hidden="true">↗</span></a
+          >
+        </div>
+        <p class="footnote">
+          显示“已准备好，可离线玩”后，断网也能打开。没有广告，成绩和支持存档的游戏进度保存在这台设备上。
+        </p>
+      </section>
+      <section id="play" hidden aria-labelledby="game-title">
+        <div class="game-heading">
+          <a class="back" href="#" aria-label="返回游戏列表">← 返回</a>
+          <h1 id="game-title" tabindex="-1"></h1>
+          <button id="help-game">玩法</button>
+          <button id="pause-game" disabled>暂停</button>
+        </div>
+        <p id="instructions" class="intro"></p>
+        <div class="scorebar">
+          <span id="score">得分 0</span><span id="record">最高 0</span>
+        </div>
+        <div class="stage" id="stage">
+          <canvas
+            id="game-canvas"
+            width="720"
+            height="920"
+            tabindex="0"
+            role="img"
+            aria-label="游戏画面。可点击“玩法”查看操作方法。"
+            >浏览器需要支持 Canvas 才能运行游戏。</canvas
+          >
+          <div id="game-overlay" class="game-overlay">
+            <div>
+              <h2 id="overlay-title">准备好了吗？</h2>
+              <p id="overlay-note"></p>
+              <button id="start-game">开始游戏</button
+              ><button id="restart-game" hidden>重新开始</button>
+            </div>
+          </div>
+        </div>
+        <p
+          id="game-status"
+          class="game-status"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <p class="footnote play-note">
+          切换页面会自动暂停。电脑也可用方向键、空格和 P 键操作。
+        </p>
+      </section>
+      <section id="table-play" hidden aria-labelledby="table-title">
+        <div class="game-heading">
+          <a class="back" href="#" aria-label="返回游戏列表">← 返回</a>
+          <h1 id="table-title"></h1>
+          <button id="table-help">玩法</button
+          ><button id="table-new">新一局</button>
+        </div>
+        <div class="table-hud">
+          <span id="table-progress"></span><span id="table-difficulty"></span>
+        </div>
+        <div id="table-tools" class="table-tools">
+          <button id="table-undo" disabled>撤销</button
+          ><button id="table-hint">提示</button
+          ><button id="spider-deal">发牌</button
+          ><button id="spider-cancel" hidden>取消选牌</button
+          ><button id="sudoku-notes" aria-pressed="false" hidden>
+            笔记：关</button
+          ><button id="sudoku-erase" hidden>擦除</button>
+        </div>
+        <p
+          id="table-message"
+          class="table-message"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div id="table-result" class="table-result" hidden></div>
+        <div id="table-area" class="table-area">
+          <div id="spider-scroll" class="spider-scroll">
+            <div id="spider-board" class="spider-board"></div>
+          </div>
+          <div id="sudoku-wrap" class="sudoku-wrap" hidden>
+            <div
+              id="sudoku-board"
+              class="sudoku-board"
+              role="group"
+              aria-label="数独棋盘"
+            ></div>
+            <div
+              id="sudoku-pad"
+              class="sudoku-pad"
+              role="group"
+              aria-label="填入数字"
+            ></div>
+          </div>
+        </div>
+        <p id="table-save-status" class="table-save-status">
+          进度自动保存在本机
+        </p>
+      </section>
+      <section id="extra-play" hidden aria-labelledby="extra-title">
+        <div class="game-heading">
+          <a class="back" href="#" aria-label="返回游戏列表">← 返回</a>
+          <h1 id="extra-title"></h1>
+          <button id="extra-help">玩法</button
+          ><button id="extra-new">新一局</button>
+        </div>
+        <div id="extra-hud" class="extra-hud"></div>
+        <p
+          id="extra-message"
+          class="extra-message"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div id="dungeon-area" class="dungeon-area" hidden></div>
+        <div id="extra-arena" class="extra-arena" hidden>
+          <canvas id="extra-canvas" tabindex="0"></canvas>
+          <div id="blocks-side" class="blocks-side" hidden>
+            <span>下一个</span>
+            <div id="blocks-next"></div>
+            <span>暂存</span>
+            <div id="blocks-held"></div>
+            <small id="blocks-best"></small>
+          </div>
+          <div id="extra-overlay" class="extra-overlay" hidden>
+            <strong id="extra-overlay-title"></strong>
+            <p id="extra-overlay-text"></p>
+            <button id="extra-resume">开始游戏</button>
+          </div>
+        </div>
+        <div id="defense-tools" class="defense-tools" hidden>
+          <div class="tower-types">
+            <button data-tower="arrow">箭塔 · 45</button
+            ><button data-tower="cannon">炮塔 · 75</button
+            ><button data-tower="frost">冰塔 · 60</button>
+          </div>
+          <div class="defense-actions">
+            <button id="defense-upgrade" disabled>升级</button
+            ><button id="defense-sell" disabled>出售</button
+            ><button id="defense-wave">开始第 1 波</button>
+          </div>
+        </div>
+        <div id="blocks-controls" class="blocks-controls" hidden>
+          <button data-block="left" aria-label="左移">←</button
+          ><button data-block="rotate" aria-label="旋转">旋转</button
+          ><button data-block="right" aria-label="右移">→</button
+          ><button data-block="hold">暂存</button
+          ><button data-block="down">下移</button
+          ><button data-block="drop">落到底</button>
+        </div>
+        <div id="extra-actions" class="extra-actions">
+          <button id="extra-pause">暂停</button
+          ><button id="defense-speed">速度 ×1</button
+          ><button id="dungeon-deck">查看牌组</button
+          ><button id="dungeon-end">结束回合</button>
+        </div>
+        <p id="extra-save" class="extra-save">进度自动保存在本机</p>
+      </section>
+      <section id="casual-play" hidden aria-labelledby="casual-title">
+        <div class="game-heading">
+          <a class="back" href="#" aria-label="返回游戏列表">← 返回</a>
+          <h1 id="casual-title"></h1>
+          <button id="casual-help">玩法</button
+          ><button id="casual-pause">暂停</button
+          ><button id="casual-new">新一局</button>
+        </div>
+        <div id="casual-hud" class="casual-hud"></div>
+        <p
+          id="casual-message"
+          class="casual-message"
+          role="status"
+          aria-live="polite"
+        ></p>
+        <div id="casual-jump-area" class="casual-jump-area" hidden>
+          <canvas
+            id="casual-canvas"
+            tabindex="0"
+            aria-label="跳一跳画面，长按蓄力，松手跳跃；电脑长按空格。"
+          ></canvas>
+          <div id="casual-overlay" class="casual-overlay">
+            <strong id="casual-overlay-title"></strong>
+            <p id="casual-overlay-note"></p>
+            <button id="casual-resume">开始游戏</button>
+          </div>
+        </div>
+        <div id="casual-board-area" class="casual-board-area" hidden>
+          <div id="casual-grid" class="casual-grid" role="group"></div>
+          <div id="casual-result" class="casual-result" hidden>
+            <strong id="casual-result-title"></strong>
+            <p id="casual-result-note"></p>
+            <button id="casual-result-action">再来一局</button>
+          </div>
+        </div>
+        <div id="jump-tools" hidden>
+          <div
+            id="jump-meter"
+            role="progressbar"
+            aria-label="蓄力"
+            aria-valuemin="0"
+            aria-valuemax="100"
+            aria-valuenow="0"
+          >
+            <span id="jump-meter-fill"></span>
+          </div>
+          <button id="jump-charge">按住蓄力，松手跳跃</button>
+        </div>
+        <div id="match-tools" class="casual-tools" hidden>
+          <button id="match-hint">提示</button
+          ><button id="match-shuffle">重排 · 2 步</button>
+        </div>
+        <div id="mine-tools" class="casual-tools" hidden>
+          <button id="mine-mode" aria-pressed="false">翻开模式</button>
+        </div>
+        <p id="casual-save" class="casual-save">进度自动保存在本机</p>
+      </section>
+      <noscript
+        ><p>
+          游戏需要开启 JavaScript。首次联网准备完成后可离线使用。
+        </p></noscript
+      >
+    </main>
+    <footer>随时停下，下次再来。</footer>
+    <dialog id="table-new-dialog" aria-labelledby="table-new-title">
+      <h2 id="table-new-title">开始新一局</h2>
+      <p>重新发牌或换题会替换当前进度。</p>
+      <label for="table-level">难度</label
+      ><select id="table-level"></select>
+      <div class="table-dialog-actions">
+        <button id="table-new-cancel">继续当前局</button
+        ><button id="table-new-confirm">开始新一局</button>
+      </div>
+    </dialog>
+    <dialog id="extra-new-dialog" aria-labelledby="extra-new-title">
+      <h2 id="extra-new-title">开始新一局</h2>
+      <p>当前这一局会被替换，已保存的最高分会保留。</p>
+      <div class="table-dialog-actions">
+        <button id="extra-new-cancel">继续当前局</button
+        ><button id="extra-new-confirm">开始新一局</button>
+      </div>
+    </dialog>
+    <dialog id="casual-new-dialog" aria-labelledby="casual-new-title">
+      <h2 id="casual-new-title">开始新一局</h2>
+      <p>当前进度会被替换。</p>
+      <label id="casual-level-wrap" for="casual-level" hidden
+        >扫雷难度<select id="casual-level">
+          <option value="easy">入门 · 8×8 · 10 雷</option>
+          <option value="normal">标准 · 9×9 · 14 雷</option>
+          <option value="hard">挑战 · 9×12 · 22 雷</option>
+        </select></label
+      >
+      <div class="table-dialog-actions">
+        <button id="casual-new-cancel">继续当前局</button
+        ><button id="casual-new-confirm">开始新一局</button>
+      </div>
+    </dialog>
+    <dialog id="help-dialog" aria-labelledby="help-title">
+      <div class="dialog-heading">
+        <h2 id="help-title">玩法</h2>
+        <button id="close-help" aria-label="关闭玩法">×</button>
+      </div>
+      <p id="help-text"></p>
+      <p>切换页面会自动暂停。电脑按 P 或 Escape 暂停，回来后点“继续游戏”。</p>
+    </dialog>
+    <dialog id="info-dialog" aria-labelledby="dialog-title">
+      <div class="dialog-heading">
+        <h2 id="dialog-title">安装到桌面</h2>
+        <button id="close-dialog" aria-label="关闭">×</button>
+      </div>
+      <div id="dialog-content"></div>
+    </dialog>
+  </body>
+</html>

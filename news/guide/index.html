@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="news-shell-cache" content="__NEWS_SHELL_CACHE__" />
+    <meta name="viewport" content="width=device-width,initial-scale=1" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" />
+    <script>
+      try {
+        const theme =
+          localStorage.getItem("zrbac-news-theme") === "dark"
+            ? "dark"
+            : "light";
+        document.documentElement.dataset.theme = theme;
+        document.querySelector('meta[name="theme-color"]').content =
+          theme === "dark" ? "#181818" : "#ffffff";
+        const size = JSON.parse(
+          localStorage.getItem("zrbac-reading-preferences-v1") || "{}",
+        )?.size;
+        if (["large", "larger"].includes(size))
+          document.documentElement.dataset.readingSize = size;
+      } catch {}
+    </script>
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="资讯" />
+    <meta
+      name="description"
+      content="阅读、搜索和收藏《高性价比人生指南》，按正文查找生活决策依据。"
+    />
+    <meta name="guide-book" content="/assets/news/guide-index.json" />
+    <link rel="canonical" href="__NEWS_SITE_URL__/guide/" />
+    <link rel="manifest" href="/manifest.webmanifest" />
+    <link rel="apple-touch-icon" href="/assets/news/icon-180.png" />
+    <link rel="icon" type="image/svg+xml" href="/assets/news/favicon.svg" />
+    <link rel="stylesheet" href="/assets/news/style.css" />
+    <link rel="stylesheet" href="/assets/news/compat.css" />
+    <link rel="stylesheet" href="/assets/news/guide.css" />
+    <script src="/assets/news/compat.js" defer></script>
+    <script src="/assets/news/personal.js" defer></script>
+    <script src="/assets/news/guide-core.js" defer></script>
+    <script src="/assets/news/guide.js" defer></script>
+    <script src="/assets/news/pwa.js" defer></script>
+    <title>生活指南 · 资讯</title>
+  </head>
+  <body>
+    <a href="#guide-title" class="skip-link">跳到生活指南</a>
+    <header class="header">
+      <div class="header-inner">
+        <a class="brand" href="/"><span class="brand-name">资讯</span></a>
+        <div class="header-actions">
+          <a href="/" class="games-link">返回资讯</a>
+          <a href="/games/" class="games-link">小游戏</a>
+          <button
+            id="theme-toggle"
+            class="icon-button"
+            aria-label="切换深色模式"
+          >
+            ◐
+          </button>
+        </div>
+      </div>
+    </header>
+    <main id="life-guide" class="guide-page">
+      <div class="guide-heading">
+        <h1 id="guide-title" tabindex="-1">生活指南</h1>
+        <p>想省钱、处理工作和生活里的事，先找找书里怎么说。</p>
+      </div>
+      <nav class="guide-tabs" aria-label="指南功能">
+        <a href="#read" data-mode="read" aria-current="page">阅读</a>
+        <a href="#saved" data-mode="saved"
+          >收藏 <span id="guide-saved-count">0</span></a
+        >
+      </nav>
+      <section id="reader" aria-label="阅读指南">
+        <details class="guide-directory">
+          <summary>按章节阅读</summary>
+          <nav aria-label="指南章节">__GUIDE_DIRECTORY__</nav>
+        </details>
+        <form id="guide-search-form" class="guide-search" role="search">
+          <label class="sr-only" for="guide-query">搜索正文</label>
+          <input
+            id="guide-query"
+            type="search"
+            placeholder="搜索正文，如：租房押金、离职补偿"
+            maxlength="200"
+          />
+          <button type="submit">搜索</button>
+        </form>
+        <div class="guide-filters">
+          <label
+            >章节<select id="guide-chapter">
+              <option value="">全部章节</option>
+            </select></label
+          >
+          <label
+            >证据<select id="guide-grade">
+              <option value="">全部等级</option>
+              <option value="A">A · 有数字与出处</option>
+              <option value="B">B · 有研究支持</option>
+              <option value="C">C · 经验或通用做法</option>
+            </select></label
+          >
+        </div>
+        <details class="reading-options">
+          <summary>阅读设置与收藏备份</summary>
+          <div class="reading-controls">
+            <label
+              >字号
+              <select id="reading-size">
+                <option value="normal">标准</option>
+                <option value="large">较大</option>
+                <option value="larger">大号</option>
+              </select></label
+            >
+            <button id="export-bookmarks" class="text-button">导出收藏</button>
+            <button id="import-bookmarks" class="text-button">导入收藏</button>
+            <input
+              id="bookmarks-file"
+              type="file"
+              accept="application/json,.json"
+              hidden
+            />
+          </div>
+          <p id="reading-status" class="reading-status" role="status"></p>
+        </details>
+        <p id="guide-result-count" class="guide-muted" role="status">
+          __GUIDE_INITIAL_STATUS__
+        </p>
+        <p
+          id="guide-download-status"
+          class="guide-muted"
+          role="status"
+          hidden
+        ></p>
+        <button id="guide-retry" class="guide-retry" hidden>
+          重新加载目录
+        </button>
+        <details id="chapter-intro" class="chapter-intro" hidden>
+          <summary>本章说明</summary>
+          <div></div>
+        </details>
+        <div id="guide-results">__GUIDE_INITIAL_ENTRIES__</div>
+        <button id="guide-more" class="guide-more" hidden>查看更多</button>
+      </section>
+      <div id="offline-tools" class="guide-offline">
+        <span id="offline-status" role="status">正在检查离线资源…</span>
+        <button id="prepare-offline">准备离线使用</button>
+        <small id="offline-hint"></small>
+        <a id="offline-secure-link" href="__NEWS_SITE_URL__/guide/" hidden
+          >用 Safari 打开安全页面</a
+        >
+      </div>
+      <p id="guide-error" role="alert" hidden></p>
+      <noscript
+        >可以通过“按章节阅读”查看全部正文。搜索和收藏需要开启
+        JavaScript。也可以<a
+          href="https://github.com/eternity4719/HowToLiveBetter"
+          >阅读原项目</a
+        >。</noscript
+      >
+      <footer class="guide-attribution">
+        <p>
+          内容来自
+          <a
+            href="https://github.com/eternity4719/HowToLiveBetter"
+            target="_blank"
+            rel="noopener"
+            >eternity4719《高性价比人生指南》</a
+          >，采用
+          <a
+            href="https://creativecommons.org/licenses/by/4.0/"
+            target="_blank"
+            rel="noopener"
+            >CC BY 4.0</a
+          >。本站调整了排版与检索方式，条目正文保留原文。
+        </p>
+        <p id="guide-edition">版本信息加载中。</p>
+        <p>
+          证据等级和性价比档沿用作者标注，性价比是作者的判断。正文提供通用参考，政策金额和日期请核对原始来源。
+        </p>
+      </footer>
+    </main>
+    <button id="install-app" class="guide-install">安装到桌面</button>
+    <dialog id="info-dialog" aria-labelledby="dialog-title">
+      <div class="dialog-heading">
+        <h2 id="dialog-title">安装到桌面</h2>
+        <button id="close-dialog" aria-label="关闭">×</button>
+      </div>
+      <div id="dialog-content"></div>
+    </dialog>
+    <script id="guide-bootstrap" type="application/json">
+      __GUIDE_BOOTSTRAP__
+    </script>
+  </body>
+</html>

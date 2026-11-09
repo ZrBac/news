@@ -1,0 +1,439 @@
+.spider-cover {
+  background: #d9e8dc;
+}
+.spider-cover b,
+.spider-cover i {
+  position: absolute;
+  width: 34px;
+  height: 49px;
+  background: #fff;
+  border: 1px solid #c6d4c9;
+  border-radius: 4px;
+  left: 11px;
+  top: 11px;
+  padding: 2px 5px;
+  font:
+    600 17px/1.1 Georgia,
+    serif;
+  color: #253448;
+  transform: rotate(-9deg);
+}
+.spider-cover i {
+  left: 33px;
+  top: 21px;
+  color: #b54740;
+  transform: rotate(9deg);
+}
+.spider-cover span {
+  display: block;
+}
+.sudoku-cover {
+  background: #e7e0d1;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 8px;
+  gap: 2px;
+}
+.sudoku-cover b {
+  background: #fffaf0;
+  text-align: center;
+  font: 600 16px/1.2 system-ui;
+  color: #71634b;
+}
+#table-play {
+  position: fixed;
+  inset: 0;
+  height: 100vh;
+  height: var(--table-height, 100vh);
+  padding: env(safe-area-inset-top) env(safe-area-inset-right)
+    env(safe-area-inset-bottom) env(safe-area-inset-left);
+  display: flex;
+  flex-direction: column;
+  background: #214c40;
+  color: #f0f5f1;
+}
+#table-play[data-game="sudoku"] {
+  background: var(--paper);
+  color: var(--ink);
+}
+#table-play .game-heading {
+  flex: none;
+}
+#table-play .game-heading h1 {
+  font-size: 17px;
+}
+#table-play[data-game="sudoku"] .game-heading {
+  background: #14232d;
+  color: #eef3f4;
+}
+.table-hud {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 2px 14px 9px;
+  font-size: 12px;
+  flex: none;
+  opacity: 0.85;
+}
+.table-tools {
+  display: flex;
+  gap: 7px;
+  padding: 0 10px 7px;
+  flex: none;
+  flex-wrap: wrap;
+}
+.table-tools button {
+  min-height: 42px;
+  font-size: 13px;
+  padding: 7px 11px;
+  background: #ffffffed;
+  color: #24382e;
+  border-color: #ffffff50;
+}
+#table-play[data-game="sudoku"] .table-tools button {
+  background: var(--surface);
+  color: var(--ink);
+  border-color: var(--line);
+}
+#sudoku-notes[aria-pressed="true"] {
+  color: var(--accent) !important;
+  border-color: var(--accent) !important;
+}
+.table-message {
+  flex: none;
+  min-height: 35px;
+  font-size: 12px;
+  margin: 0;
+  padding: 0 12px 6px;
+  line-height: 1.4;
+}
+.table-area {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+.table-save-status {
+  flex: none;
+  font-size: 11px;
+  opacity: 0.7;
+  text-align: center;
+  margin: 5px 10px;
+}
+.spider-scroll {
+  height: 100%;
+  overflow: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 3px clamp(4px, 1vw, 8px) 12px;
+}
+.spider-board {
+  display: grid;
+  grid-template-columns: repeat(10, minmax(0, 1fr));
+  gap: clamp(2px, 0.6vw, 6px);
+  width: 100%;
+  min-width: 0;
+  min-height: 100%;
+}
+.spider-column {
+  position: relative;
+  min-height: 150px;
+}
+.pile-drop {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 100%;
+  border: 1px dashed #ffffff45;
+  border-radius: 6px;
+  background: transparent;
+  padding: 0;
+  color: #ffffff65;
+  text-align: center;
+  font-size: 12px;
+}
+.pile-drop span {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 5px;
+}
+.spider-column.can-drop .pile-drop {
+  border: 2px solid #e8cb7d;
+  background: #e8cb7d14;
+}
+.spider-card {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 76px;
+  min-height: 0;
+  text-align: left;
+  border: 1px solid #b6c7be;
+  border-radius: 5px;
+  background: #fffdf7;
+  color: #263441;
+  padding: 3px 4px;
+  font:
+    600 17px/1.1 Georgia,
+    serif;
+  box-shadow: 0 1px 2px #0002;
+  touch-action: pan-y;
+}
+.spider-card.red {
+  color: #b0403b;
+}
+.spider-card .card-corner {
+  position: absolute;
+  top: 3px;
+  left: 5px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.spider-card .card-center {
+  position: absolute;
+  bottom: 8px;
+  right: 7px;
+  font-size: 27px;
+}
+.spider-card.facedown {
+  background: repeating-linear-gradient(
+    45deg,
+    #769a8c,
+    #769a8c 3px,
+    #6c8f81 3px,
+    #6c8f81 6px
+  );
+  border-color: #aec7bb;
+  pointer-events: none;
+}
+.spider-card.selected {
+  background: #fff2c8;
+  border: 2px solid #e5b84e;
+  box-shadow: 0 0 0 1px #e5b84e;
+}
+.spider-card:focus-visible,
+.pile-drop:focus-visible {
+  outline: 3px solid #efd58f;
+  outline-offset: 0;
+}
+/* Keep all ten columns visible; stack the corner marks on narrow cards. */
+@media (max-width: 600px) {
+  .spider-card {
+    padding: 3px 2px;
+    font-size: 16px;
+  }
+  .spider-card .card-corner {
+    left: 3px;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0;
+  }
+  .spider-card .card-suit {
+    font-size: 11px;
+    line-height: 1;
+  }
+  .spider-card .card-center {
+    font-size: 22px;
+    right: 3px;
+    bottom: 6px;
+  }
+}
+.sudoku-wrap {
+  height: 100%;
+  overflow: auto;
+  padding: 2px 7px 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+.sudoku-board {
+  flex: none;
+  width: min(100%, 440px);
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  border: 2px solid var(--ink);
+}
+.sudoku-cell {
+  aspect-ratio: 1;
+  min-width: 0;
+  min-height: 0;
+  border: 0;
+  border-right: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+  border-radius: 0;
+  background: var(--paper);
+  padding: 0;
+  font-size: clamp(18px, 5vw, 27px);
+  font-weight: 450;
+  color: #427491;
+}
+.sudoku-cell.given {
+  font-weight: 650;
+  color: var(--ink);
+}
+.sudoku-cell.related {
+  background: var(--surface);
+}
+.sudoku-cell.same {
+  background: #e0ebf0;
+  color: #244959;
+}
+.sudoku-cell.selected {
+  background: #cde1e9;
+  box-shadow: inset 0 0 0 2px #3f7489;
+  color: #233b45;
+}
+.sudoku-cell.conflict {
+  color: #b6322c;
+  background: #f9e0dc;
+}
+.sudoku-cell.box-right {
+  border-right: 2px solid var(--ink);
+}
+.sudoku-cell.box-bottom {
+  border-bottom: 2px solid var(--ink);
+}
+.sudoku-cell:nth-child(9n) {
+  border-right: 0;
+}
+.sudoku-cell:nth-child(n + 73) {
+  border-bottom: 0;
+}
+.sudoku-cell:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -3px;
+}
+.cell-notes {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  font-size: clamp(8px, 2.5vw, 11px);
+  height: 100%;
+  align-items: center;
+  color: var(--muted);
+  line-height: 1;
+}
+.sudoku-pad {
+  flex: none;
+  display: grid;
+  grid-template-columns: repeat(9, minmax(0, 1fr));
+  gap: 3px;
+  width: min(100%, 440px);
+}
+.sudoku-pad button {
+  min-width: 0;
+  padding: 7px 0;
+  font-size: 23px;
+  min-height: 48px;
+  background: var(--surface);
+}
+.table-result {
+  background: #fff3cb;
+  color: #655025;
+  margin: 0 10px 8px;
+  padding: 8px 12px;
+  font-size: 14px;
+  flex: none;
+}
+#table-new-dialog select {
+  display: block;
+  width: 100%;
+  font: inherit;
+  padding: 10px;
+  margin: 8px 0 20px;
+  color: var(--ink);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 5px;
+}
+.table-dialog-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+@media (min-width: 1100px) and (min-height: 600px) {
+  #table-play {
+    max-width: 1100px;
+    margin: auto;
+  }
+}
+@media (orientation: landscape) and (max-height: 550px) {
+  #table-play[data-game="sudoku"] .sudoku-wrap {
+    flex-direction: row;
+    align-items: flex-start;
+    justify-content: center;
+  }
+  .sudoku-board {
+    width: 300px;
+  }
+  .sudoku-pad {
+    width: 150px;
+    grid-template-columns: repeat(3, 1fr);
+    position: sticky;
+    top: 0;
+  }
+  .table-hud {
+    padding-bottom: 3px;
+  }
+  .table-tools {
+    padding-bottom: 3px;
+  }
+  .table-message {
+    min-height: 25px;
+  }
+}
+/* Leave the entire Sudoku board visible when the phone is held sideways. */
+@media (orientation: landscape) and (max-height: 550px) {
+  #table-play[data-game="sudoku"] {
+    display: grid;
+    grid-template-columns: clamp(150px, 25vw, 220px) minmax(0, 1fr);
+    grid-template-rows: 50px auto auto 1fr auto 22px;
+    grid-template-areas: "heading heading" "hud area" "tools area" "message area" "result area" "save save";
+  }
+  #table-play[data-game="sudoku"] .game-heading {
+    grid-area: heading;
+  }
+  #table-play[data-game="sudoku"] .table-hud {
+    grid-area: hud;
+    gap: 8px;
+    font-size: 11px;
+    padding-top: 5px;
+  }
+  #table-play[data-game="sudoku"] .table-tools {
+    grid-area: tools;
+    gap: 5px;
+  }
+  #table-play[data-game="sudoku"] .table-message {
+    grid-area: message;
+    overflow: auto;
+    min-height: 0;
+    padding-top: 5px;
+  }
+  #table-play[data-game="sudoku"] .table-result {
+    grid-area: result;
+  }
+  #table-play[data-game="sudoku"] .table-save-status {
+    grid-area: save;
+    margin: 0;
+  }
+  #table-play[data-game="sudoku"] .table-area {
+    grid-area: area;
+  }
+  #table-play[data-game="sudoku"] .sudoku-board {
+    width: min(
+      300px,
+      calc(
+        var(--table-height, 100vh) - 92px - env(safe-area-inset-top) -
+          env(safe-area-inset-bottom)
+      ),
+      calc(100% - 130px)
+    );
+  }
+  #table-play[data-game="sudoku"] .sudoku-pad {
+    width: 120px;
+  }
+  #table-play[data-game="sudoku"] .sudoku-cell {
+    font-size: clamp(17px, 3.2vh, 23px);
+  }
+}

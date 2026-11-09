@@ -1,0 +1,193 @@
+name: Update and publish news
+
+on:
+  push:
+    branches: [main]
+    paths: ["news/**", "scripts/**", "tests/**", ".github/workflows/news.yml"]
+  workflow_dispatch:
+    inputs:
+      news_mode:
+        description: News refresh (auto follows Beijing 09-21 every two hours)
+        type: choice
+        options: [auto, force, skip]
+        default: auto
+      refresh_outings:
+        description: Recheck weekend activities and places now
+        type: boolean
+        default: false
+
+concurrency:
+  group: news-pages
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      NEWS_SITE_URL: ${{ secrets.NEWS_SITE_URL }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Test feed parsing and archive preservation
+        env:
+          NEWS_SITE_URL: https://news.example.com
+        run: python -m unittest discover -s tests -v
+      - name: Validate browser script
+        run: |
+          node --check news/assets/compat.js
+          node --check news/assets/app.js
+          node --check news/assets/archive.js
+          node --check news/assets/personal.js
+          node --check news/assets/exchange-core.js
+          node --check news/assets/editorial.js
+          node --check news/assets/tonight.js
+          node --check news/assets/outing-now.js
+          node --check news/assets/outings-profile.js
+          node --check news/assets/outings-library.js
+          node --test tests/exchange-core.cjs
+          node --test tests/tonight-journal.cjs
+          node --check news/assets/pwa.js
+          node --check news/assets/homes-core.js
+          node --check news/assets/home-finder.js
+          node --test tests/homes-core.cjs
+          node --check news/assets/guide.js
+          node --test tests/guide-core.cjs
+          node --check news/sw.js
+          node --check news/assets/games.js
+          node --check news/assets/games-core.js
+          node --check news/assets/table-games.js
+          node --check news/assets/table-games-core.js
+          node --check news/assets/extra-games.js
+          node --check news/assets/extra-games-core.js
+          node --check news/assets/casual-games.js
+          node --check news/assets/casual-games-core.js
+          node --test tests/casual-games-core.cjs tests/extra-games-core.cjs tests/games-core.cjs tests/table-games-core.cjs tests/sw-compat.cjs
+      - name: Restore the last validated snapshot
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/news-snapshot/last-good.json
+          key: news-snapshot-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: news-snapshot-v1-
+      - name: Read the previous publication once
+        run: |
+          python -c "import sys; sys.path.insert(0, 'scripts'); from site_config import site_origin; site_origin()"
+          python scripts/previous_snapshot.py --url "$NEWS_SITE_URL/data/news.json"
+      - name: Decide whether news is due, otherwise reuse its last snapshot
+        id: news-schedule
+        env:
+          NEWS_MODE: ${{ inputs.refresh_outings && 'skip' || inputs.news_mode || 'auto' }}
+        run: python scripts/news_schedule.py --previous-file .cache/news-snapshot/previous.json --mode "$NEWS_MODE"
+      - name: Collect news and retain the previous archive
+        if: steps.news-schedule.outputs.collect == 'true'
+        run: python scripts/collect_news.py --previous-file .cache/news-snapshot/previous.json
+      - name: Prepare Hangzhou outings and twice-daily searches
+        run: python scripts/collect_weekend.py --previous-file .cache/news-snapshot/previous.json ${{ inputs.refresh_outings && '--force-search' || '' }}
+      - name: Refresh hiking, camping, cycling and indoor place news
+        run: python scripts/collect_places.py --previous-file .cache/news-snapshot/previous.json ${{ inputs.refresh_outings && '--force-search' || '' }}
+      - name: Update Hangzhou transaction price reports
+        run: python scripts/collect_housing_prices.py --previous-file .cache/news-snapshot/previous.json
+      - name: Update foreign currency to CNY reference rates
+        run: python scripts/collect_exchange_rates.py --previous-file .cache/news-snapshot/previous.json
+      - name: Restore public home listing observations
+        uses: actions/cache/restore@v4
+        with:
+          path: news/data/home-candidates.json
+          key: home-candidates-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: home-candidates-v1-
+      - name: Check public home listings twice a day
+        id: home-candidates
+        continue-on-error: true
+        timeout-minutes: 6
+        run: python scripts/collect_home_candidates.py --previous-url "$NEWS_SITE_URL/data/home-candidates.json"
+      - name: Save public listing history
+        if: always() && steps.home-candidates.outcome != 'skipped'
+        uses: actions/cache/save@v4
+        with:
+          path: news/data/home-candidates.json
+          key: home-candidates-v1-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Restore editorial results and usage ledger
+        id: ai-cache
+        uses: actions/cache/restore@v4
+        with:
+          path: .cache/news-ai
+          key: news-ai-v1-${{ github.run_id }}-${{ github.run_attempt }}
+          restore-keys: news-ai-v1-
+      - name: Prepare news summaries, evening plans and weekend picks
+        id: ai-editor
+        continue-on-error: true
+        timeout-minutes: 23
+        env:
+          OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        run: python scripts/ai_editor.py --previous-file .cache/news-snapshot/previous.json ${{ inputs.refresh_outings && '--force-outings' || '' }} ${{ steps.news-schedule.outputs.collect != 'true' && '--skip-news' || '' }}
+      - name: Save editorial usage even if a later build fails
+        if: always() && steps.ai-editor.outcome != 'skipped'
+        uses: actions/cache/save@v4
+        with:
+          path: .cache/news-ai
+          key: news-ai-v1-${{ github.run_id }}-${{ github.run_attempt }}
+      - name: Sync life guide with its upstream revision
+        run: python scripts/sync_life_guide.py
+      - name: Build news portal
+        env:
+          NEWS_REFRESH_ENDPOINT: ${{ vars.NEWS_REFRESH_ENDPOINT }}
+        run: python scripts/build_news.py
+      - uses: actions/setup-node@v6
+        if: github.event_name == 'push'
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: tests/browser/package-lock.json
+      - name: Install browser checks
+        if: github.event_name == 'push'
+        run: |
+          # The Azure mirror can stall for minutes on browser font packages.
+          # Keep the complete dependency installation, using Ubuntu's main mirror.
+          sudo python3 - <<'PY'
+          from pathlib import Path
+          files = [Path('/etc/apt/sources.list'), Path('/etc/apt/apt-mirrors.txt'), *Path('/etc/apt/sources.list.d').glob('*.sources'), *Path('/etc/apt/sources.list.d').glob('*.list')]
+          for path in files:
+              if path.is_file():
+                  original = path.read_text()
+                  updated = original.replace('http://azure.archive.ubuntu.com/ubuntu', 'https://archive.ubuntu.com/ubuntu').replace('https://azure.archive.ubuntu.com/ubuntu', 'https://archive.ubuntu.com/ubuntu')
+                  if updated != original:
+                      path.write_text(updated)
+          Path('/etc/apt/apt.conf.d/99news-network').write_text('Acquire::http::Timeout "30";\nAcquire::https::Timeout "30";\nAcquire::Retries "2";\n')
+          PY
+          npm ci --prefix tests/browser
+          tests/browser/node_modules/.bin/playwright install --with-deps chromium
+      - name: Check mobile reading and offline recovery before publishing
+        if: github.event_name == 'push'
+        timeout-minutes: 12
+        env:
+          PLAYWRIGHT_MODULE: ${{ github.workspace }}/tests/browser/node_modules/playwright
+        run: node tests/check-mobile.cjs
+      - name: Retain the validated data for recovery
+        run: cp _site/data/news.json .cache/news-snapshot/last-good.json
+      - uses: actions/cache/save@v4
+        with:
+          path: .cache/news-snapshot/last-good.json
+          key: news-snapshot-v1-${{ github.run_id }}-${{ github.run_attempt }}
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+    env:
+      NEWS_SITE_URL: ${{ secrets.NEWS_SITE_URL }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

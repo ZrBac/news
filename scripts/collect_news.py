@@ -1,0 +1,937 @@
+#!/usr/bin/env python3
+"""Collect public RSS metadata. Standard library only; never execute feed content."""
+import argparse
+import concurrent.futures
+import gzip
+import hashlib
+import html
+import io
+import json
+import re
+import sys
+import time
+import unicodedata
+import urllib.parse
+import urllib.error
+import urllib.request
+import xml.etree.ElementTree as ET
+from datetime import datetime, timedelta, timezone
+from email.utils import parsedate_to_datetime
+from html.parser import HTMLParser
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'scripts'))
+from news_schedule import collection_gap
+
+UTC = timezone.utc
+BEIJING = timezone(timedelta(hours=8))
+QUALITY_WINDOW_DAYS = 7
+NEWS_CATEGORIES = ('general', 'finance', 'local', 'livelihood', 'tech', 'ai', 'models',
+                   'entertainment', 'gaming', 'sports', 'housing')
+ARCHIVE_LIMIT = 6000
+AI_PATTERN = re.compile(
+    r'(?<![a-z0-9])(?:AI|AGI|LLMs?|GPT[a-z0-9_.-]*|ChatGPT|OpenAI|Anthropic|'
+    r'Claude|Gemini|Copilot|DeepSeek[a-z0-9_.-]*|Qwen[a-z0-9_.-]*|Llama|Codex|'
+    r'GLM[a-z0-9_.-]*|Kimi|MiniMax|Grok|Qoder|Cursor|Windsurf|Kiro|'
+    r'RAG|MCP|agents?)(?![a-z0-9])|人工智能|大模型|语言模型|生成式|机器学习|'
+    r'智能体|通义|千问|智谱|豆包|具身智能', re.I)
+FINANCE_TOPIC = re.compile(
+    r'财经|经济|金融|股价|股票|股市|投资标的|标普|纳斯达克|证券|盈利|业绩|财报|营收|净利润|'
+    r'银行|央行|货币|财政|利率|降息|加息|债券|国债|期货|基金|私募|公募|人民币|外汇|黄金|金价|油价|'
+    r'通胀|物价|融资|上市公司|挂牌上市|进出口|出口额|进口额|贸易额|关税|资产管理|资产证券|不良资产|国联民生|'
+    r'(?<![a-z0-9])(?:GDP|CPI|PPI|LPR|IPO|ETF|A股|港股|美股|earnings|revenue|'
+    r'stocks?|bonds?|inflation|interest rates?)(?![a-z0-9])', re.I)
+FINANCE_PROMOTION = re.compile(r'开户送|开户.*领红包|稳赚|荐股群|加群.*(?:股票|荐股)')
+FINANCE_DISCIPLINE = re.compile(r'诈骗|骗局|警惕|查处|被罚|违规|揭露')
+HARDWARE_TOPIC = re.compile(r'芯片|显卡|处理器|服务器|主板|内存|固态硬盘|显示器|电源|工作站|迷你电脑|'
+                            r'(?<![a-z0-9])(?:GPU|CPU|NPU|SSD|RTX|DGX)(?![a-z0-9])', re.I)
+SYSTEM_PRODUCT = re.compile(r'(?<![a-z0-9])(?:Edge|Chrome|Firefox|Windows|Android|HarmonyOS|'
+                            r'iOS|macOS|Linux)(?![a-z])|安卓|鸿蒙|浏览器|操作系统', re.I)
+SYSTEM_UPDATE = re.compile(r'稳定版|测试版|更新|升级|发布|推出|正式版')
+ENTERTAINMENT_TOPIC = re.compile(
+    r'电影|影视|影坛|电视剧|剧集|网剧|短剧|舞台剧|话剧|歌剧|音乐剧|综艺|票房|演员|导演|'
+    r'编剧|艺人|明星|歌手|音乐|乐队|新歌|专辑|演唱会|演出|剧院|艺术节|戏剧|芭蕾|舞蹈|'
+    r'脱口秀|娱乐圈|颁奖|飞天奖|金鸡奖|百花奖|戛纳|奥斯卡|格莱美|文艺|文娱|'
+    r'小说|作家|文学|出版|鲁奖|舞台|博物馆|越剧|京剧|诺贝尔文学奖|'
+    r'\b(?:film|movie|actor|actress|cinema|music|album|singer|concert|theater|theatre|TV)\b', re.I)
+ENTERTAINMENT_NOISE = re.compile(r'^梦见|周公解梦|解梦|星座运势|生肖运势|算命|八字命理')
+SPORTS_PROMOTION = re.compile(r'彩经|竞彩|足彩|赔率|盘口|投注|半全场|亚盘|让球|胜负彩|投注技巧')
+SPORTS_DISCIPLINE = re.compile(r'违规|禁赛|被罚|赌球案|赌博案|投注案|刑事|涉嫌.*(?:赌博|投注)')
+DOMESTIC_SPORTS_LEAGUE = re.compile(
+    r'(?<![a-z0-9])(?:CBA|WCBA)(?![a-z0-9])|中超|中甲|中乙|足协杯|中国足协|中国篮协|'
+    r'国乒|国羽|全运会|省运会|乒超|羽超|排超|中国网球公开赛|全国.*(?:联赛|锦标赛|冠军赛)', re.I)
+CHINESE_SPORTS_PEOPLE = re.compile(
+    r'杨瀚森|崔永熙|周琦|赵继伟|张镇麟|郭艾伦|徐杰|胡明轩|孙铭徽|王哲林|丁彦雨航|'
+    r'韩旭|李月汝|武磊|王霜|韦世豪|张玉宁|孙颖莎|王楚钦|樊振东|陈梦|王曼昱|'
+    r'林诗栋|梁靖崑|林高远|陈幸同|郑钦文|张之臻|王欣瑜|商竣程|吴易昺|苏炳添|'
+    r'潘展乐|张雨霏|汪顺|全红婵|陈芋汐|石宇奇|陈雨菲|陈清晨|贾一凡|梁伟铿|王昶')
+CHINESE_SPORTS_TEAM = re.compile(r'中国.*(?:队|选手|运动员|球员|足球|篮球|排球|男足|女足|男篮|女篮|男排|女排|体育|网球|羽毛球|乒乓球|联赛)|国内.*(?:联赛|赛事|体育)|中国足协|中国篮协')
+DOMESTIC_SPORTS_LOCATION = re.compile(
+    r'北京|上海|天津|重庆|杭州|浙江|江苏|南京|广东|广州|深圳|东莞|佛山|福建|辽宁|吉林|'
+    r'黑龙江|山东|青岛|四川|成都|湖北|湖南|河南|河北|安徽|合肥|山西|陕西|西安|广西|'
+    r'云南|贵州|江西|南昌|海南|新疆|内蒙古|宁夏|甘肃|青海|西藏|香港|澳门|台湾')
+SPORTS_EVENT_TOPIC = re.compile(r'马拉松|网球|足球|篮球|男篮|女篮|男排|女排|乒乓|羽毛球|泳|'
+                                r'跳水|田径|举重|体操|滑雪|滑冰|锦标赛|冠军赛|体育|联赛|球员|赛季|阵容|'
+                                r'亚冠|亚运|全运|(?<![a-z0-9])NBL(?![a-z0-9])', re.I)
+
+
+def is_domestic_sports(title):
+    title = unicodedata.normalize('NFKC', title.rsplit(' - ', 1)[0])
+    if (DOMESTIC_SPORTS_LEAGUE.search(title) or CHINESE_SPORTS_PEOPLE.search(title)
+            or CHINESE_SPORTS_TEAM.search(title)):
+        return True
+    # A foreign association/international title is not domestic just because
+    # Google appends a Chinese publisher name. Chinese athletes abroad qualify.
+    national = re.sub(r'(?:日本|韩国|朝鲜|美国|英国|英格兰|德国|法国|西班牙|葡萄牙|巴西|阿根廷|澳大利亚)'
+                      r'(?:国足|国青|国少)', '', title)
+    return bool(re.search(r'(?<![外英美法德韩日])(?:国足(?!球)|国青|国少)', national)
+                or (DOMESTIC_SPORTS_LOCATION.search(title) and SPORTS_EVENT_TOPIC.search(title)))
+
+MODEL_NAME = re.compile(
+    r'GPT[-\s]?\d|gpt-oss|\bo[134](?:\b|-)|Claude\s+(?:Opus|Sonnet|Haiku|Fable|Mythos|\d)|'
+    r'Gemini\s*\d|(?:Embedding)?Gemma|DeepSeek|Qwen[-\w.]*|Llama\s*\d|Grok[-\s]*\d|'
+    r'Mistral[-\s]*(?:Large|Small|Medium|Nemo)|GLM[-\s]?\d|Kimi|MiniMax|'
+    r'Sora|Veo[-\s]*\d|Imagen[-\s]*\d|Seedream|Seedance|Hunyuan|Wan[-\s]*\d|'
+    r'通义|智谱|豆包|混元|文心|千问', re.I)
+MODEL_TOPIC = re.compile(r'模型|\b(?:models?|LLMs?)\b', re.I)
+MODEL_VERSION = re.compile(r'GPT[-\s]?\d|gpt-oss|\bo[134](?:\b|-)|'
+                           r'Claude\s+(?:Opus|Sonnet|Haiku|Fable|Mythos)\s*\d|Gemini\s*\d|'
+                           r'(?:Embedding)?Gemma|DeepSeek[-\s]?(?:V|R|Math|Coder|OCR)\d|'
+                           r'Qwen[-\w.]*\d|Llama\s*\d|Grok[-\s]*\d|GLM[-\s]?\d|'
+                           r'Kimi[-\s]?K\d|MiniMax[-\s]?M\d|Mistral[-\s]*(?:Large|Small|Medium)|'
+                           r'Seedream|Seedance|Veo[-\s]*\d|Imagen[-\s]*\d', re.I)
+MODEL_RELEASE = re.compile(r'发布|推出|上线|升级|开放|正式商用|亮相|'
+                           r'\b(?:introducing|announc\w*|launch\w*|releas\w*|unveil\w*|debut\w*|'
+                           r'upgrad\w*|available|open[- ](?:source|weight))\b', re.I)
+MODEL_RUMOR = re.compile(r'即将|或将|有望|预计|传闻|据传|消息称|爆料|泄露|曝光|不等|提议|计划|'
+                         r'^曝|正(?:在)?(?:开发|研发)|最快.{0,12}(?:发布|上线)|预测|将于|'
+                         r'\b(?:rumou?rs?|leaked?|reportedly|upcoming|expected)\b', re.I)
+MODEL_PRODUCT = re.compile(r'智能体|\bagent\b|插件|画布|登陆|登录|客户端|应用商店|'
+                           r'Claude Code|ChatGPT|\b(?:canvas|extension|app)\b', re.I)
+MODEL_OTHER_NEWS = re.compile(r'巴士|汽车|氢燃料|基础组件|芯片软件|代码库|开源.*王座|额度|对话服务|'
+                              r'早报|午报|新品一览|审批机制|适配|工作负载|模型研发|'
+                              r'(?:发布|推出).{0,40}(?:研发工具|开发工具|可复用工具)|\b(?:DGX|RTX|GPU)\b', re.I)
+MODEL_OPEN_RELEASE = re.compile(
+    r'(?:宣布|正式|全面|首次|全量|现已|今日|今天)开源|'
+    r'开源(?:了|其)?\s*(?:[1-9]\d*|[一二三四五六七八九十两]+)\s*(?:款|个|种).{0,12}模型|'
+    r'开源(?:了|其)?(?:\s|大语言模型|多模态模型|大模型|模型)*(?:' + MODEL_NAME.pattern + r')|'
+    r'(?:模型|' + MODEL_VERSION.pattern + r').{0,20}开源(?:[，。!！]|$)', re.I)
+OFFICIAL_MODEL_SOURCES = {'openai-models', 'gnews-anthropic-models', 'gnews-qwen-models', 'deepmind'}
+
+
+def is_model_release(title, source_id=''):
+    title = title.rsplit(' - ', 1)[0]
+    if MODEL_RUMOR.search(title) or MODEL_OTHER_NEWS.search(title):
+        return False
+    named = MODEL_NAME.search(title)
+    topic = MODEL_TOPIC.search(title)
+    if not named and not (topic and AI_PATTERN.search(title)):
+        return False
+    if not topic and not MODEL_VERSION.search(title):
+        return False
+    # A branded app or agent receiving a feature is not a model launch.
+    if MODEL_PRODUCT.search(title):
+        return False
+    if re.search(r'押注|采用|评测|如何|教程', title) and not re.search(r'发布|推出|上线|升级|开放|亮相', title):
+        return False
+    if MODEL_RELEASE.search(title) or MODEL_OPEN_RELEASE.search(title):
+        return True
+    # Official model posts often use “Qwen-X: ...” or “Gemini X: ...”.
+    return bool(source_id in OFFICIAL_MODEL_SOURCES and named and named.start() <= 5
+                and (':' in title or '：' in title))
+
+
+def article_category(title, source):
+    original_title = title
+    title = title.rsplit(' - ', 1)[0]
+    category = source['category']
+    # A public holiday notice remains public-service news even in a tech feed.
+    if (category in ('general', 'finance', 'livelihood', 'tech', 'ai')
+            and source['id'] not in INTERNATIONAL_SOURCES and is_holiday_notice(title)):
+        return 'livelihood'
+    if source.get('titleFilter') == 'hangzhou-camping':
+        # Some local camping guides use a scenic headline; verify their body in collect_weekend.
+        direct = re.search(r'露营|营地|野营', title) and is_hangzhou_local(original_title)
+        candidate = (HANGZHOU_LOCATION.search(title) and re.search(r'周末|出游|攻略|旷野|野趣|牧场', title)
+                     and not LOCAL_EXCLUDED.search(title) and not LOCAL_NOISE.search(title))
+        return 'local' if direct or candidate else None
+    if is_hangzhou_local(original_title):
+        return 'local'
+    if category == 'entertainment':
+        if ENTERTAINMENT_NOISE.search(title):
+            return None
+        if source.get('titleFilter') == 'entertainment' and not ENTERTAINMENT_TOPIC.search(title):
+            return None
+        return category
+    if category == 'gaming':
+        return category
+    if category == 'sports':
+        if SPORTS_PROMOTION.search(title) and not SPORTS_DISCIPLINE.search(title):
+            return None
+        if source.get('titleFilter') == 'domestic-sports' and not is_domestic_sports(original_title):
+            return None
+        return category
+    if category == 'housing':
+        return category if is_hangzhou_housing(title) else None
+    if is_model_release(title, source['id']):
+        return 'models'
+    if category == 'models':
+        return None
+    if category in ('general', 'finance', 'local', 'livelihood') and source['id'] not in INTERNATIONAL_SOURCES:
+        # Weekend activities stay separate from housing and public-service news.
+        if source.get('titleFilter') == 'public-rumors' and not is_public_rumor(original_title):
+            return None
+        if is_hangzhou_housing(original_title):
+            return 'housing'
+        if is_hangzhou_local(original_title):
+            return 'local'
+        if source.get('titleFilter') == 'public-rumors':
+            return 'livelihood'
+        if is_livelihood(original_title):
+            return 'livelihood'
+        if category in ('local', 'livelihood'):
+            return None
+    if category == 'finance' and FINANCE_PROMOTION.search(title) and not FINANCE_DISCIPLINE.search(title):
+        return None
+    if FINANCE_TOPIC.search(title):
+        return 'finance'
+    if category == 'finance' and source.get('titleFilter') == 'finance':
+        return None
+    if source.get('format') == 'cctv-json' and category == 'general' and is_domestic_sports(title):
+        return 'sports'
+    if HARDWARE_TOPIC.search(title) or (SYSTEM_PRODUCT.search(title) and SYSTEM_UPDATE.search(title)):
+        return 'tech'
+    if AI_PATTERN.search(title):
+        return 'ai'
+    # Specialized AI feeds remain useful when the headline omits “AI”.
+    if category == 'ai':
+        return category
+    if category == 'tech' and GAMING_TOPIC.search(title):
+        return 'gaming'
+    return category
+
+GAMING_TOPIC = re.compile(r'游戏|电玩|电竞|\b(?:Steam|Xbox|PlayStation|PS5|PS6)\b|任天堂|育碧|卡普空|塞尔达|黑神话|宝可梦|怪物猎人', re.I)
+
+HOUSING_LOCATION = re.compile(r'杭州|余杭|萧山|临平|钱塘|拱墅|临安|富阳|滨江区|上城区|西湖区|建德|淳安|桐庐')
+HOUSING_TOPIC = re.compile(r'楼市|房地产|房产|住房|住宅|二手房|新房|购房|买房|卖房|房价|房贷|公积金|土拍|宅地|涉宅|预售|网签|土地出让|地块成交|楼盘|新盘|户型|示范区|样板房|现房|交房')
+HOUSING_NOISE = re.compile(r'票房|电影|演唱会|门票|股市|股指|美股|港股|股债|彩票')
+
+
+def is_hangzhou_housing(title):
+    # Google News appends the publisher name; “杭州网” is not story location evidence.
+    title = title.rsplit(' - ', 1)[0]
+    return bool(HOUSING_LOCATION.search(title) and HOUSING_TOPIC.search(title) and not HOUSING_NOISE.search(title))
+
+
+HANGZHOU_LOCATION = re.compile(r'杭州|杭城|余杭|萧山|临平|钱塘|拱墅|临安|富阳|滨江区|上城区|西湖区|建德|淳安|桐庐|良渚|西溪|龙坞|千岛湖|湘湖|铜鉴湖|径山|莫干山|安吉|德清|海宁|绍兴|桐乡|湖州|乌镇|南浔|西湖(?:边|景区|公园)|浙江省博物馆|浙江美术馆|中国丝绸博物馆|中国茶叶博物馆|中国动漫博物馆|天目里|武林广场')
+LOCAL_SERVICE_TOPIC = re.compile(
+    r'市集|集市|夜市|早市|庙会|生活节|美食节|咖啡节|啤酒节|文创节|游园会|'
+    r'展览|特展|新展|看展|艺术展|摄影展|书画展|博物馆.*(?:展|开放日)|漫展|文博会|宠物展|花展|车展|书展|茶博会|'
+    r'演出|音乐会|音乐节|戏剧|话剧|脱口秀|露天电影|放映|电影节|'
+    r'露营|营地|徒步|登山|骑行|绿道.*(?:攻略|路线|游玩)|赏秋|赏桂|赏花|晒秋|银杏|红叶|花海|观鸟|采摘|温泉|'
+    r'亲子.{0,12}(?:活动|游玩|体验|乐园|路线|研学|演出|手作|运动)|遛娃|手作|手工|工作坊|非遗体验|社教活动|读书会|阅读会|公益讲座|科普活动|体验课|研学|沙龙|开放日|游线|书店.*(?:活动|讲座)|'
+    r'灯光秀|音乐喷泉|烟花|灯会|夜游|City\s*Walk|城市漫游|秋游|周末.*(?:活动|攻略|去哪)|'
+    r'(?:活动|游玩)(?:汇总|预告|指南|清单|攻略)|'
+    r'运动体验|赛事.*(?:报名|观赛|门票)|飞盘|桨板|皮划艇|攀岩|公园.*(?:开放|开园|游玩|攻略)', re.I)
+_OUTING_RULES = json.loads((Path(__file__).resolve().parents[1] / 'news/outing-rules.json').read_text())
+LOCAL_EXCLUDED = re.compile(_OUTING_RULES['excluded'])
+LOCAL_NOISE = re.compile(_OUTING_RULES['noise'], re.I)
+LIVELIHOOD_TOPIC = re.compile(
+    r'社保|社会保险|社会保障|养老金?|医保|医疗保险|报销|生育津贴|育儿|托育|补贴|低保|救助|'
+    r'就业|失业|招聘|招工|最低工资|劳动者|劳动权益|权益保障|消费者|消费维权|消费提醒|消费提示|'
+    r'食品安全|食安|产品召回|退费|退款|以旧换新|国补|入学|招生政策|学费|助学|学生资助|'
+    r'春秋假|节假日|放假安排|高考报名|教育惩戒|教育收费|义务教育|民生实事|便民服务|公共服务|接诉即办|12345')
+LIVELIHOOD_NOISE = re.compile(r'民生银行|国联民生|证券|股价|股票|股市|财报|控股股东|外交|反制措施|论坛|博览会|主题党日|党支部')
+FOREIGN_SERVICE_LOCATION = re.compile(r'美国|日本|韩国|英国|英格兰|德国|法国|加拿大|澳大利亚|新加坡|印度|俄罗斯')
+PUBLIC_RUMOR_TOPIC = re.compile(r'辟谣|谣言|网传|不实|假的|真相|诈骗|虚假')
+PUBLIC_RUMOR_NOISE = re.compile(r'宣传活动|宣传周|知识竞赛|共筑清朗|培训|流动课堂|辟谣号|扎实开展')
+INTERNATIONAL_SOURCES = {'chinanews-world', 'dw', 'rfi'}
+
+HOLIDAY_NOTICE = re.compile(r'节假日.{0,12}(?:安排|通知)|放假安排')
+NOTICE_SPECULATION = re.compile(r'预测|猜测|网传|疑似|或将|预计|尚未|未(?:公布|发布)|辟谣|不实|回顾|往年|攻略')
+PUBLIC_NEWS_DOMAINS = ('gov.cn', 'news.cn', 'xinhuanet.com', 'cctv.com', 'chinanews.com.cn')
+
+
+def is_holiday_notice(title):
+    title = unicodedata.normalize('NFKC', title.rsplit(' - ', 1)[0])
+    return bool(HOLIDAY_NOTICE.search(title) and not NOTICE_SPECULATION.search(title)
+                and not FOREIGN_SERVICE_LOCATION.search(title))
+
+
+def holiday_event(article):
+    """Recognize the annual national notice, not school or individual holidays."""
+    title = article.get('title', '')
+    text = unicodedata.normalize('NFKC', title + ' ' + article.get('excerpt', ''))
+    host = urllib.parse.urlsplit(safe_url(article.get('originalUrl') or article.get('url')) or '').hostname or ''
+    if (not is_holiday_notice(title) or not any(host == d or host.endswith('.' + d)
+            for d in (*PUBLIC_NEWS_DOMAINS, 'ithome.com'))
+            or not re.search(r'国务院|全年放假|部分节假日', text)
+            or re.search(r'学校|小学|中学|大学|幼儿园|寒假|暑假|寒暑假', title)):
+        return ''
+    year = re.search(r'(20\d{2})\s*年\s*(?:部分节假日|全年放假|放假安排)', text)
+    return 'notice-holidays-' + year[1] if year else ''
+
+
+def public_notice(article):
+    """Narrow fallback for confirmed, broadly applicable service announcements."""
+    host = urllib.parse.urlsplit(safe_url(article.get('originalUrl') or article.get('url')) or '').hostname or ''
+    if not any(host == d or host.endswith('.' + d) for d in PUBLIC_NEWS_DOMAINS):
+        return False
+    title = article.get('title', '')
+    if NOTICE_SPECULATION.search(title):
+        return False
+    if holiday_event(article):
+        return True
+    return bool(re.search(r'国务院|教育部|国家医保局|人力资源社会保障部|中央气象台', title)
+                and re.search(r'发布|启动|调整|出台|实施|生效|预警', title)
+                and re.search(r'高考报名|医保|养老金|最低工资|台风|暴雨|暴雪', title))
+
+
+def brief_rank(article, records=None):
+    if public_notice(article):
+        return 3
+    meta = (records.get(article['id'], {}) if records is not None else article.get('editorial', {}))
+    if meta.get('isBackground') is True:
+        return -1
+    priority = meta.get('priority')
+    return priority if type(priority) is int and 0 <= priority <= 3 else 1
+
+
+def brief_candidates(articles, records=None, limit=5):
+    """Preserve important events before applying source diversity or recency."""
+    ranked = sorted(articles, key=lambda a: (brief_rank(a, records), a['publishedAt']), reverse=True)
+    selected, others, counts, seen = [], [], {}, set()
+    for article in ranked:
+        meta = records.get(article['id'], {}) if records is not None else article.get('editorial', {})
+        key = holiday_event(article) or meta.get('eventId') or re.sub(r'\W', '', article['title'].rsplit(' - ', 1)[0]).casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        source = article.get('sourceId', '')
+        if len(selected) < limit and (brief_rank(article, records) >= 3 or counts.get(source, 0) < 2):
+            selected.append(article)
+            counts[source] = counts.get(source, 0) + 1
+        else:
+            others.append(article)
+    return selected + others[:max(0, limit - len(selected))]
+
+
+def is_hangzhou_local(title):
+    title = unicodedata.normalize('NFKC', title.rsplit(' - ', 1)[0])
+    return bool(len(title) <= 100 and HANGZHOU_LOCATION.search(title) and LOCAL_SERVICE_TOPIC.search(title)
+                and not LOCAL_EXCLUDED.search(title) and not LOCAL_NOISE.search(title) and not is_hangzhou_housing(title))
+
+
+def is_livelihood(title):
+    title = unicodedata.normalize('NFKC', title.rsplit(' - ', 1)[0])
+    if (LIVELIHOOD_NOISE.search(title) or
+            (FOREIGN_SERVICE_LOCATION.search(title) and not re.search(r'我国|中国|国内|全国', title))):
+        return False
+    return bool(LIVELIHOOD_TOPIC.search(title))
+
+
+def is_public_rumor(title):
+    title = title.rsplit(' - ', 1)[0]
+    return bool(PUBLIC_RUMOR_TOPIC.search(title) and not PUBLIC_RUMOR_NOISE.search(title))
+
+
+class PlainText(HTMLParser):
+    def __init__(self):
+        super().__init__()
+        self.parts = []
+        self.skip = 0
+
+    def handle_starttag(self, tag, attrs):
+        if tag in ('script', 'style'):
+            self.skip += 1
+        if tag in ('p', 'br', 'div', 'li'):
+            self.parts.append(' ')
+
+    def handle_endtag(self, tag):
+        if tag in ('script', 'style'):
+            self.skip = max(0, self.skip - 1)
+
+    def handle_data(self, data):
+        if not self.skip:
+            self.parts.append(data)
+
+
+def plain(value):
+    parser = PlainText()
+    parser.feed(html.unescape(value or ''))
+    return re.sub(r'\s+', ' ', ''.join(parser.parts)).strip()
+
+
+def parse_date(value):
+    if not value:
+        return None
+    try:
+        dt = parsedate_to_datetime(value)
+    except (ValueError, TypeError, OverflowError):
+        try:
+            dt = datetime.fromisoformat(value.strip().replace('Z', '+00:00'))
+        except (ValueError, TypeError):
+            return None
+    # An undated/timezone-less story must not masquerade as a current story.
+    return dt.astimezone(UTC) if dt.tzinfo is not None else None
+
+
+def iso(dt):
+    return dt.astimezone(UTC).isoformat(timespec='seconds').replace('+00:00', 'Z')
+
+
+def safe_url(value):
+    try:
+        url = urllib.parse.urlsplit((value or '').strip())
+        if url.scheme not in ('https', 'http') or not url.hostname or url.username or url.password:
+            return None
+        query = [(k, v) for k, v in urllib.parse.parse_qsl(url.query, keep_blank_values=True)
+                 if not k.lower().startswith('utm_') and k.lower() not in ('fbclid', 'gclid')]
+        return urllib.parse.urlunsplit((url.scheme, url.netloc, url.path, urllib.parse.urlencode(query), ''))
+    except ValueError:
+        return None
+
+
+GOOGLE_ARTICLE = re.compile(r'https://news\.google\.com/(?:rss/)?articles/([A-Za-z0-9_-]+)(?:\?[^#]*)?$')
+
+
+def publisher_url(value):
+    if not isinstance(value, str):
+        return None
+    url = safe_url(value)
+    if url and urllib.parse.urlsplit(url).hostname not in ('news.google.com', 'consent.google.com'):
+        return url
+    return None
+
+
+def google_original_url(url, timeout=6):
+    """Resolve Google's public article redirect without changing the RSS identity."""
+    match = GOOGLE_ARTICLE.fullmatch(url)
+    if not match:
+        return None
+    headers = {'User-Agent': 'ZrBacNews/1.0'}
+    with urllib.request.urlopen(urllib.request.Request(url, headers=headers), timeout=timeout) as response:
+        page = response.read(1_000_001)
+    if len(page) > 1_000_000:
+        raise ValueError('Article redirect page exceeds size limit')
+    text = page.decode('utf-8')
+    timestamp = re.search(r'data-n-a-ts="(\d+)"', text)
+    signature = re.search(r'data-n-a-sg="([^"]+)"', text)
+    if not timestamp or not signature:
+        return None
+    # Google's redirect protocol may change. Failure always keeps the RSS link
+    # and must not make a healthy news source unavailable.
+    context = [['en-US', 'US', ['FINANCE_TOP_INDICES', 'WEB_TEST_1_0_0'], None, None,
+                1, 1, 'US:en', None, 180, None, None, None, None, None, 0, None, None,
+                [1608992183, 723341000]], 'en-US', 'US', 1, [2, 3, 4, 8], 1, 0,
+               '655000234', 0, 0, None, 0]
+    message = ['garturlreq', context, match[1], int(timestamp[1]), html.unescape(signature[1])]
+    body = urllib.parse.urlencode({'f.req': json.dumps(
+        [[['Fbv4je', json.dumps(message, separators=(',', ':')), None, 'generic']]],
+        separators=(',', ':'))}).encode()
+    request = urllib.request.Request('https://news.google.com/_/DotsSplashUi/data/batchexecute?rpcids=Fbv4je',
+                                     data=body, headers={**headers, 'Content-Type': 'application/x-www-form-urlencoded;charset=UTF-8'})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        result = response.read(1_000_001)
+    if len(result) > 1_000_000:
+        raise ValueError('Article redirect response exceeds size limit')
+    for line in result.decode('utf-8').splitlines():
+        if not line.startswith('['):
+            continue
+        try:
+            rows = json.loads(line)
+            for row in rows:
+                if isinstance(row, list) and len(row) > 2 and row[:2] == ['wrb.fr', 'Fbv4je']:
+                    decoded = json.loads(row[2])
+                    if isinstance(decoded, list) and len(decoded) > 1 and decoded[0] == 'garturlres':
+                        return publisher_url(decoded[1]) if isinstance(decoded[1], str) else None
+        except (ValueError, TypeError):
+            continue
+    return None
+
+
+def resolve_original_links(articles, previous, limit=100, budget=35):
+    """Reuse verified links and resolve only a bounded batch of the newest stories."""
+    known = {a['url']: publisher_url(a.get('originalUrl')) for a in previous + articles
+             if isinstance(a, dict) and GOOGLE_ARTICLE.fullmatch(str(a.get('url', '')))
+             and publisher_url(a.get('originalUrl'))}
+    urls = list(dict.fromkeys(a['url'] for a in sorted(articles, key=lambda a: a['publishedAt'], reverse=True)
+                             if GOOGLE_ARTICLE.fullmatch(a['url']) and a['url'] not in known))[:limit]
+    deadline = time.monotonic() + budget
+    def resolve(url):
+        if time.monotonic() >= deadline:
+            return url, None
+        try:
+            return url, publisher_url(google_original_url(url, min(6, max(1, deadline - time.monotonic()))))
+        except Exception:
+            return url, None
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        for url, original in pool.map(resolve, urls):
+            if original:
+                known[url] = original
+    for article in articles:
+        if article['url'] in known:
+            article['originalUrl'] = known[article['url']]
+    return sum(bool(a.get('originalUrl')) for a in articles)
+
+
+def fetch(url, max_bytes=5_000_000):
+    request = urllib.request.Request(url, headers={'User-Agent': 'ZrBacNews/1.0', 'Accept': 'application/rss+xml, application/xml, application/json, text/xml;q=0.9, */*;q=0.5'})
+    with urllib.request.urlopen(request, timeout=25) as response:
+        data = response.read(max_bytes + 1)
+        encoding = response.headers.get('Content-Encoding', '').strip().lower()
+    if len(data) > max_bytes:
+        raise ValueError('Response exceeds size limit')
+    # urllib does not decode compressed HTTP responses. Some feeds send gzip
+    # even without Accept-Encoding, and proxies occasionally omit the header.
+    if encoding in ('gzip', 'x-gzip') or data.startswith(b'\x1f\x8b'):
+        with gzip.GzipFile(fileobj=io.BytesIO(data)) as compressed:
+            data = compressed.read(max_bytes + 1)
+        if len(data) > max_bytes:
+            raise ValueError('Decompressed response exceeds size limit')
+    return data
+
+
+def parse_feed(data, source, now):
+    root = ET.fromstring(data)
+    articles = []
+    rss1 = '{http://purl.org/rss/1.0/}'
+    if not ((root.tag == 'rss' and root.find('channel') is not None)
+            or root.tag == '{http://www.w3.org/1999/02/22-rdf-syntax-ns#}RDF'):
+        raise ValueError('Response is not a supported RSS document')
+    # RSS 1.0/RDF uses namespaced fields (for example DW); RSS 2.0 does not.
+    items = root.findall('.//item') + root.findall(f'.//{rss1}item')
+    for item in items[:120]:
+        def field(name):
+            return item.findtext(name) or item.findtext(rss1 + name) or ''
+        title = plain(field('title'))[:240]
+        url = safe_url(field('link'))
+        date = parse_date(item.findtext('pubDate') or item.findtext('{http://purl.org/dc/elements/1.1/}date'))
+        if not title or not url or not date or date > now + timedelta(minutes=10) or date < now - timedelta(days=30):
+            continue
+        if source['category'] == 'housing' and not is_hangzhou_housing(title):
+            continue
+        category = article_category(title, source)
+        if not category:
+            continue
+        # Keep only a short publisher-provided excerpt; do not republish feed bodies.
+        excerpt = plain(field('description'))
+        excerpt = re.sub(r'^(?:IT之家|爱范儿)\s*\d+\s*月\s*\d+\s*日(?:消息|讯)[，,：:\s]*', '', excerpt)
+        excerpt = excerpt[:89].rstrip() + '…' if len(excerpt) > 90 else excerpt
+        articles.append({
+            'id': hashlib.sha256(url.encode()).hexdigest()[:16], 'title': title,
+            'url': url, 'sourceId': source['id'], 'category': category,
+            'publishedAt': iso(date), 'excerpt': excerpt,
+        })
+    return articles
+
+
+def parse_cctv(data, source, now):
+    # The public news list is JSONP. Decode its JSON only; never evaluate JS.
+    match = re.fullmatch(r'\s*news\((\{.*\})\)\s*;?\s*', data.decode('utf-8-sig'), re.S)
+    if not match:
+        raise ValueError('Invalid CCTV news list')
+    rows = json.loads(match[1]).get('data', {}).get('list')
+    if not isinstance(rows, list):
+        raise ValueError('Missing CCTV news list')
+    articles = []
+    for row in rows[:120]:
+        if not isinstance(row, dict):
+            continue
+        title = plain(str(row.get('title') or ''))[:240]
+        url = safe_url(row.get('url'))
+        published = row.get('focus_date')
+        if not isinstance(published, str) or not re.fullmatch(r'\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}', published):
+            continue
+        date = parse_date(published.replace(' ', 'T') + '+08:00')
+        host = urllib.parse.urlsplit(url or '').hostname or ''
+        if (not title or not url or not (host == 'cctv.com' or host.endswith('.cctv.com'))
+                or not date or not now - timedelta(days=30) <= date <= now + timedelta(minutes=10)):
+            continue
+        category = article_category(title, source)
+        if not category:
+            continue
+        excerpt = plain(str(row.get('brief') or ''))
+        articles.append({'id': hashlib.sha256(url.encode()).hexdigest()[:16], 'title': title,
+            'url': url, 'sourceId': source['id'], 'category': category, 'publishedAt': iso(date),
+            'excerpt': excerpt[:89].rstrip() + '…' if len(excerpt) > 90 else excerpt})
+    return articles
+
+
+class HousingDailyList(HTMLParser):
+    """Read the publisher's dated news rows, excluding navigation and sidebars."""
+    def __init__(self):
+        super().__init__()
+        self.items = []
+        self.current = None
+        self.depth = 0
+        self.capture = None
+
+    def handle_starttag(self, tag, attrs):
+        attrs = dict(attrs)
+        if tag == 'li':
+            if self.current is not None:
+                self.depth += 1
+            elif 'news_item' in attrs.get('class', '').split():
+                self.current = {'url': '', 'title': [], 'date': []}
+                self.depth = 1
+        if self.current is None:
+            return
+        if tag == 'a' and not self.current['url']:
+            self.current['url'] = attrs.get('href', '')
+        if tag == 'h2':
+            self.capture = 'title'
+        if tag == 'span' and 'time' in attrs.get('class', '').split():
+            self.capture = 'date'
+
+    def handle_data(self, data):
+        if self.current is not None and self.capture:
+            self.current[self.capture].append(data)
+
+    def handle_endtag(self, tag):
+        if self.current is None:
+            return
+        if (tag == 'h2' and self.capture == 'title') or (tag == 'span' and self.capture == 'date'):
+            self.capture = None
+        if tag == 'li':
+            self.depth -= 1
+            if self.depth == 0:
+                self.items.append(self.current)
+                self.current = None
+                self.capture = None
+
+
+def parse_housing_daily(data, source, now):
+    parser = HousingDailyList()
+    parser.feed(data.decode('utf-8'))
+    articles = []
+    for item in parser.items[:120]:
+        url = safe_url(urllib.parse.urljoin(source['url'], item['url']))
+        title = plain(''.join(item['title']))[:240]
+        date = re.search(r'\d{4}-\d{2}-\d{2}', ''.join(item['date']))
+        date = parse_date(date[0] + 'T00:00:00+08:00') if date else None
+        # Only accept the source's own daily-bulletin pages and explicit dates.
+        if not url or not re.fullmatch(r'https://zzhz\.zjol\.com\.cn/hz/bb/\d{6}/t\d{8}_\d+\.shtml', url):
+            continue
+        if not title or not date or not now - timedelta(days=30) <= date <= now + timedelta(minutes=10):
+            continue
+        if article_category(title, source) != 'housing':
+            continue
+        articles.append({'id': hashlib.sha256(url.encode()).hexdigest()[:16],
+                         'title': title, 'url': url, 'sourceId': source['id'],
+                         'category': 'housing', 'publishedAt': iso(date), 'excerpt': ''})
+    return articles
+
+
+def collect(source, now):
+    status = {k: source[k] for k in ('id', 'name', 'home', 'category', 'color')}
+    status['checkedAt'] = iso(now)
+    started = time.monotonic()
+    try:
+        parser = {'housing-daily-list': parse_housing_daily, 'cctv-json': parse_cctv}.get(source.get('format'), parse_feed)
+        articles = parser(fetch(source['url']), source, now)
+        if not articles and source.get('format') in ('housing-daily-list', 'cctv-json'):
+            raise ValueError('No dated articles from the last 30 days')
+        status.update(status='ok', fetchedCount=len(articles), latestAt=max((a['publishedAt'] for a in articles), default=None),
+                      durationMs=round((time.monotonic() - started) * 1000))
+        return articles, status
+    except Exception as exc:
+        print(f"Source {source['id']} unavailable: {exc}", file=sys.stderr)
+        status.update(status='unavailable', fetchedCount=0, durationMs=round((time.monotonic() - started) * 1000))
+        return [], status
+
+
+def merge_articles(previous, incoming, now, allowed_sources):
+    by_url = {}
+    for article in previous + incoming:
+        if not isinstance(article, dict):
+            continue
+        url = safe_url(article.get('url'))
+        date = parse_date(article.get('publishedAt'))
+        if not url or not date or not now - timedelta(days=30) <= date <= now + timedelta(minutes=10):
+            continue
+        if article.get('sourceId') not in allowed_sources or article.get('category') not in NEWS_CATEGORIES:
+            continue
+        if article.get('category') == 'housing' and not is_hangzhou_housing(str(article.get('title', ''))):
+            continue
+        clean = {key: str(article.get(key, '')) for key in ('title', 'sourceId', 'category', 'publishedAt', 'excerpt')}
+        clean.update(url=url, id=hashlib.sha256(url.encode()).hexdigest()[:16], title=plain(clean['title'])[:240], excerpt=plain(clean['excerpt'])[:90])
+        original = publisher_url(article.get('originalUrl'))
+        if GOOGLE_ARTICLE.fullmatch(url) and original:
+            clean['originalUrl'] = original
+        # Reapply current source rules to the archive as well as new stories.
+        source = allowed_sources[clean['sourceId']] if isinstance(allowed_sources, dict) else {
+            'id': clean['sourceId'], 'category': clean['category']}
+        clean['category'] = article_category(clean['title'], source)
+        if not clean['category']:
+            continue
+        if clean['title']:
+            by_url[url] = clean
+    # Exact duplicate titles from the same publisher are revisions, not new stories.
+    seen = set()
+    result = []
+    for article in sorted(by_url.values(), key=lambda a: a['publishedAt'], reverse=True):
+        key = (article['sourceId'], re.sub(r'\W', '', article['title']).casefold())
+        if key not in seen:
+            seen.add(key)
+            result.append(article)
+    if len(result) <= ARCHIVE_LIMIT:
+        return result
+    # Reserve part of the archive for every category and distribute that reserve
+    # among its sources. Unused places go to the newest remaining stories.
+    protected = set()
+    for category in NEWS_CATEGORIES:
+        pool = [article for article in result if article['category'] == category]
+        if not pool:
+            continue
+        budget = min(ARCHIVE_LIMIT // len(NEWS_CATEGORIES), len(pool))
+        share = max(1, budget // len({article['sourceId'] for article in pool}))
+        chosen, counts = [], {}
+        for article in pool:
+            source = article['sourceId']
+            if counts.get(source, 0) < share and len(chosen) < budget:
+                chosen.append(article)
+                counts[source] = counts.get(source, 0) + 1
+        selected = {article['id'] for article in chosen}
+        for article in pool:
+            if len(selected) >= budget:
+                break
+            selected.add(article['id'])
+        protected.update(selected)
+    selected = set(protected)
+    for article in result:
+        if len(selected) >= ARCHIVE_LIMIT:
+            break
+        selected.add(article['id'])
+    return [article for article in result if article['id'] in selected]
+
+
+def recent_model_releases(previous, incoming, now, allowed_sources):
+    def candidates(articles):
+        return [a for a in articles if isinstance(a, dict)
+                and a.get('category') in ('general', 'finance', 'tech', 'ai', 'models')
+                and is_model_release(str(a.get('title', '')), a.get('sourceId', ''))]
+    # Separate retention keeps less-frequent model announcements from being
+    # pushed out by the shared 6,000-story archive. The builder removes copies.
+    return merge_articles(candidates(previous), candidates(incoming), now, allowed_sources)[:120]
+
+
+def recent_housing_articles(previous, incoming, now, allowed_sources):
+    def candidates(articles):
+        return [a for a in articles if isinstance(a, dict) and a.get('category') == 'housing']
+    return merge_articles(candidates(previous), candidates(incoming), now, allowed_sources)[:120]
+
+
+def quality_title_key(article):
+    """Match same-day headlines, preserving version numbers and decimal points."""
+    title = str(article.get('title', ''))
+    if urllib.parse.urlsplit(article.get('url', '')).hostname == 'news.google.com':
+        title = title.rsplit(' - ', 1)[0]
+    title = re.sub(r'[\s“”‘’"\'「」『』《》〈〉，,。！!？?：:；;、（）()【】\[\]]', '', title).casefold()
+    return hashlib.sha256(title.encode()).hexdigest()[:16]
+
+
+def validate_quality_state(state):
+    if (not isinstance(state, dict) or state.get('schema') != 1
+            or not parse_date(state.get('startedAt')) or not parse_date(state.get('updatedAt'))
+            or not isinstance(state.get('sources'), dict)):
+        raise ValueError('Invalid previous source-quality history')
+    for source in state['sources'].values():
+        if (not isinstance(source, dict) or not isinstance(source.get('identity'), str)
+                or not parse_date(source.get('startedAt'))
+                or not isinstance(source.get('seen'), list) or not isinstance(source.get('daily'), list)
+                or not isinstance(source.get('failureStreak'), int) or source['failureStreak'] < 0):
+            raise ValueError('Invalid previous source-quality source')
+        for field in ('lastCheckedAt', 'lastNewAt', 'noNewSince'):
+            if source.get(field) is not None and not parse_date(source[field]):
+                raise ValueError('Invalid previous source-quality timestamp')
+        for row in source['seen']:
+            if (not isinstance(row, list) or len(row) != 4
+                    or not all(isinstance(value, str) and re.fullmatch(r'[a-f0-9]{16}', value) for value in row[:2])
+                    or not parse_date(row[2] + 'T00:00:00+08:00')
+                    or (row[3] is not None and not parse_date(str(row[3]) + 'T00:00:00+08:00'))):
+                raise ValueError('Invalid previous source-quality article')
+        for day in source['daily']:
+            if (not isinstance(day, dict) or not parse_date(str(day.get('date', '')) + 'T00:00:00+08:00')
+                    or not all(type(day.get(key)) is int and day[key] >= 0
+                               for key in ('checks', 'successes', 'newCount'))
+                    or day['successes'] > day['checks']):
+                raise ValueError('Invalid previous source-quality day')
+    return state
+
+
+def update_source_quality(previous_state, sources, statuses, incoming, baseline, now):
+    """Persist observations independently of the shared 6,000-story archive."""
+    if previous_state is not None:
+        validate_quality_state(previous_state)
+        if parse_date(previous_state['updatedAt']) > now:
+            raise ValueError('Source-quality history is newer than this collection')
+    stamp = iso(now)
+    today = now.astimezone(BEIJING).date()
+    first_day = (today - timedelta(days=QUALITY_WINDOW_DAYS - 1)).isoformat()
+    oldest = (today - timedelta(days=30)).isoformat()
+    state = {'schema': 1, 'startedAt': (previous_state or {}).get('startedAt', stamp),
+             'updatedAt': stamp, 'sources': {}}
+    status_by_id = {item['id']: item for item in statuses}
+    incoming_by_source, baseline_by_source = {}, {}
+    for collection, grouped in ((incoming, incoming_by_source), (baseline, baseline_by_source)):
+        for article in collection:
+            if isinstance(article, dict):
+                grouped.setdefault(article.get('sourceId'), []).append(article)
+
+    def record(article, observed):
+        url, published = safe_url(article.get('url')), parse_date(article.get('publishedAt'))
+        if not url or not published or not article.get('title') or not now - timedelta(days=30) <= published <= now + timedelta(minutes=10):
+            return None
+        return [hashlib.sha256(url.encode()).hexdigest()[:16], quality_title_key(article),
+                published.astimezone(BEIJING).date().isoformat(), observed]
+
+    for source in sources:
+        source_id = source['id']
+        identity = hashlib.sha256(json.dumps({key: source.get(key) for key in
+            ('url', 'format', 'category', 'titleFilter')}, sort_keys=True).encode()).hexdigest()[:16]
+        old = (previous_state or {}).get('sources', {}).get(source_id)
+        fresh = not old or old['identity'] != identity
+        if fresh:
+            old = {'identity': identity, 'startedAt': stamp, 'seen': [], 'daily': [],
+                   'failureStreak': 0, 'lastCheckedAt': None, 'lastNewAt': None, 'noNewSince': None}
+        current = {**old, 'seen': [list(row) for row in old['seen']
+                                  if row[2] >= oldest or (row[3] and row[3] >= first_day)],
+                   'daily': [dict(day) for day in old['daily'] if day['date'] >= oldest]}
+        seen = {row[0]: row for row in current['seen']}
+        titles = {(row[1], row[2]) for row in current['seen']}
+        # The first successful feed is a baseline, including older stories that
+        # the public archive may already have evicted. Never invent past totals.
+        initializing = fresh or not current.get('lastCheckedAt')
+        if initializing:
+            for article in baseline_by_source.get(source_id, []):
+                row = record(article, None)
+                if row:
+                    seen[row[0]] = row
+                    titles.add((row[1], row[2]))
+        new_count = 0
+        for article in incoming_by_source.get(source_id, []):
+            row = record(article, today.isoformat())
+            if not row or row[0] in seen:
+                continue
+            if initializing or (row[1], row[2]) in titles:
+                row[3] = None
+            else:
+                new_count += 1
+            seen[row[0]] = row
+            titles.add((row[1], row[2]))
+        current['seen'] = list(seen.values())
+        day = next((day for day in current['daily'] if day['date'] == today.isoformat()), None)
+        if day is None:
+            day = {'date': today.isoformat(), 'checks': 0, 'successes': 0, 'newCount': 0}
+            current['daily'].append(day)
+        status = status_by_id[source_id]
+        day['checks'] += 1
+        if status['status'] == 'ok':
+            day['successes'] += 1
+            day['newCount'] += new_count
+            # An outage or a gap in collection breaks a continuous successful
+            # observation period; it is not evidence that a publisher stopped.
+            previous_check = parse_date(current.get('lastCheckedAt'))
+            if new_count:
+                current['lastNewAt'] = stamp
+                current['noNewSince'] = stamp
+            elif (not current.get('noNewSince') or current['failureStreak']
+                  or not previous_check or collection_gap(previous_check, now)):
+                current['noNewSince'] = stamp
+            current['failureStreak'] = 0
+            current['lastCheckedAt'] = stamp
+        else:
+            current['failureStreak'] += 1
+            current['noNewSince'] = None
+        status['newCount'] = new_count
+        state['sources'][source_id] = current
+
+    title_sources = {}
+    for source_id, source in state['sources'].items():
+        for row in source['seen']:
+            title_sources.setdefault((row[1], row[2]), set()).add(source_id)
+    public = {'schema': 1, 'startedAt': state['startedAt'], 'updatedAt': stamp,
+              'windowDays': QUALITY_WINDOW_DAYS, 'sources': []}
+    for source in sources:
+        source_id, status = source['id'], status_by_id[source['id']]
+        tracked = state['sources'][source_id]
+        duplicates = {}
+        for row in tracked['seen']:
+            if row[3] and row[3] >= first_day and len(title_sources[(row[1], row[2])]) > 1:
+                duplicates[row[3]] = duplicates.get(row[3], 0) + 1
+        days = [{**day, 'duplicateCount': duplicates.get(day['date'], 0)} for day in tracked['daily']
+                if day['date'] >= first_day]
+        new_count = sum(day['newCount'] for day in days)
+        duplicate_count = sum(day['duplicateCount'] for day in days)
+        no_new_since = parse_date(tracked.get('noNewSince'))
+        public['sources'].append({'id': source_id, 'startedAt': tracked['startedAt'],
+            'newCount': new_count, 'duplicateCount': duplicate_count,
+            'duplicateRate': round(duplicate_count / new_count, 4) if new_count else None,
+            'checks': sum(day['checks'] for day in days), 'successes': sum(day['successes'] for day in days),
+            'observedDays': len(days), 'failureStreak': tracked['failureStreak'],
+            'noNewDays': int((now - no_new_since).total_seconds() // 86400) if no_new_since else None,
+            'lastNewAt': tracked.get('lastNewAt'), 'daily': days})
+    return state, public
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--output', type=Path, default=ROOT / 'news/data/news.json')
+    parser.add_argument('--previous-url')
+    parser.add_argument('--previous-file', type=Path)
+    args = parser.parse_args()
+    sources = json.loads((ROOT / 'news/sources.json').read_text())
+    previous, previous_models, previous_housing, quality_states = [], [], [], []
+    if args.output.exists():
+        old = json.loads(args.output.read_text())
+        previous = old.get('articles', [])
+        previous_models = old.get('modelReleases', [])
+        previous_housing = old.get('housingArticles', [])
+        if old.get('sourceQualityState') is not None:
+            quality_states.append(validate_quality_state(old['sourceQualityState']))
+    if args.previous_url or args.previous_file:
+        try:
+            old = json.loads(args.previous_file.read_text() if args.previous_file else fetch(args.previous_url, 30_000_000))
+            previous += old.get('articles', [])
+            previous_models += old.get('modelReleases', [])
+            previous_housing += old.get('housingArticles', [])
+            if old.get('sourceQualityState') is not None:
+                quality_states.append(validate_quality_state(old['sourceQualityState']))
+        except urllib.error.HTTPError as exc:
+            if exc.code != 404:
+                raise SystemExit(f'Cannot safely read previous archive; aborting to preserve history: {exc}')
+            print('No previous archive (first deployment).', file=sys.stderr)
+        except Exception as exc:
+            raise SystemExit(f'Cannot safely read previous archive; aborting to preserve history: {exc}')
+    now = datetime.now(UTC)
+    incoming, statuses = [], []
+    with concurrent.futures.ThreadPoolExecutor(max_workers=6) as pool:
+        for articles, status in pool.map(lambda source: collect(source, now), sources):
+            incoming.extend(articles)
+            statuses.append(status)
+    allowed_sources = {s['id']: s for s in sources}
+    articles = merge_articles(previous, incoming, now, allowed_sources)
+    models = recent_model_releases(previous + previous_models, incoming, now, allowed_sources)
+    housing = recent_housing_articles(articles + previous_housing, incoming, now, allowed_sources)
+    if not incoming:
+        raise SystemExit('All feeds unavailable. Keep the last successful deployment; do not publish an empty site.')
+    resolved = resolve_original_links(articles + models + housing, previous + previous_models + previous_housing)
+    print(f'Publisher links available for {resolved} retained story records; unresolved stories keep their feed links.')
+    old_quality = max(quality_states, key=lambda state: state['updatedAt']) if quality_states else None
+    quality_state, quality = update_source_quality(old_quality, sources, statuses, incoming,
+                                                   articles + models + housing, now)
+    for status in statuses:
+        print('SOURCE_METRIC ' + json.dumps({k: status[k] for k in
+              ('id', 'checkedAt', 'status', 'fetchedCount', 'newCount', 'durationMs')}))
+    result = {'version': 1, 'updatedAt': iso(now), 'newsCheckedAt': iso(now), 'retentionDays': 30, 'sources': statuses,
+              'articles': articles, 'modelReleases': models, 'housingArticles': housing,
+              'sourceQualityState': quality_state, 'sourceQuality': quality}
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    args.output.write_text(json.dumps(result, ensure_ascii=False, separators=(',', ':')) + '\n')
+    print(f'Collected {len(incoming)} items; retained {len(articles)} unique items; {sum(s["status"] == "ok" for s in statuses)}/{len(sources)} sources available.')
+
+
+if __name__ == '__main__':
+    main()

@@ -1,0 +1,390 @@
+#!/usr/bin/env python3
+"""Build the standalone static news portal and its PWA assets."""
+import argparse
+import hashlib
+import json
+import os
+import re
+import shutil
+import sys
+from html import escape as html_escape
+from datetime import datetime, timedelta, timezone
+from email.utils import format_datetime
+from pathlib import Path
+from urllib.parse import urlsplit
+from xml.sax.saxutils import escape
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'scripts'))
+import collect_news as news
+from site_config import site_origin, site_url
+
+
+def build_places(template):
+    """Keep place references readable in the HTML and in the offline shell."""
+    places = json.loads((ROOT / 'news/places.json').read_text())['places']
+    for group in ('hiking', 'cycling', 'rainy', 'camping'):
+        selected = [p for p in places if p['group'] == group]
+        cards = []
+        for place in selected:
+            esc = html_escape
+            camping = group == 'camping'
+            paragraphs = ['<p>' + (f'<strong>{esc(p["label"])}</strong>' if p['label'] else '')
+                          + esc(p['text']) + '</p>' for p in place['paragraphs']]
+            links = ''.join(f'<a href="{esc(link["url"], quote=True)}" target="_blank" rel="noopener noreferrer"'
+                            + (f' aria-label="在高德地图查询{esc(place["name"], quote=True)}"' if 'uri.amap.com/' in link['url'] else '')
+                            + f'>{esc(link["label"])} ↗</a>' for link in place['links'])
+            update = (f'<p class="place-reviewed">基础资料查阅 {esc(place["reviewedOn"])}</p>'
+                      '<div class="place-updates" data-place-updates>近期消息等待首次检索。</div>') if place['aliases'] or group == 'rainy' else ''
+            detail_label = ('停车、用炉与近期消息' if camping else
+                            '地点条件与近期消息' if group == 'rainy' else '路线、条件与近期消息' if place['aliases'] else '地点详情与来源')
+            cards.append(f'<li class="{"camping-place " if camping else ""}place-card"'
+                         f' data-place-id="{esc(place["id"], quote=True)}" data-place-types="{esc(place["types"], quote=True)}"'
+                         f' data-search="{esc(place["keywords"], quote=True)}">'
+                         f'<span class="{"camping-area " if camping else ""}place-area">{esc(place["area"])}</span>'
+                         f'<h3>{esc(place["name"])}</h3>{paragraphs[0] if paragraphs else ""}'
+                         f'<details class="place-details"><summary>{detail_label}</summary>'
+                         + ''.join(paragraphs[1:])
+                         + f'<div class="{"camping-links " if camping else ""}place-links">{links}</div>{update}</details></li>')
+        listing = (f'<ul id="{group}-list" class="{"camping-grid " if group == "camping" else ""}place-grid">'
+                   + ''.join(cards) + '</ul>'
+                   + f'<button class="place-more" data-place-more aria-controls="{group}-list" hidden></button>')
+        template = template.replace(f'__{group.upper()}_PLACES__', listing)
+        template = template.replace(f'__{group.upper()}_COUNT__', str(len(selected)))
+    return template
+
+
+def build_guide_reader(output):
+    """Render a usable first page and split remaining bodies into small chapters."""
+    book = json.loads((output / 'guide/book.json').read_text())
+    chapters = [{**chapter, 'file': f'/guide/chapters/{chapter["id"]}.{book["revision"][:12]}.json'}
+                for chapter in book['chapters']]
+    index = {**book, 'chapters': chapters,
+             'entries': [{key: value for key, value in entry.items() if key != 'body'}
+                         for entry in book['entries']]}
+    (output / 'assets/news/guide-index.json').write_text(
+        json.dumps(index, ensure_ascii=False, separators=(',', ':')) + '\n')
+    folder = output / 'guide/chapters'
+    folder.mkdir(parents=True, exist_ok=True)
+    for chapter in chapters:
+        body = {'schema': 1, 'revision': book['revision'],
+                'entries': [entry for entry in book['entries'] if entry['chapter'] == chapter['id']]}
+        (output / chapter['file'].lstrip('/')).write_text(
+            json.dumps(body, ensure_ascii=False, separators=(',', ':')) + '\n')
+    first = book['entries'][:12]
+    bootstrap = {**book, 'chapters': chapters, 'entries': first, 'totalEntries': len(book['entries'])}
+    template = (output / 'guide/index.html').read_text()
+    directory = ''.join(f'<a href="/guide/read/{chapter["id"]}/" data-read-chapter="{chapter["id"]}">'
+                        f'{chapter["id"]}. {html_escape(chapter["title"])}</a>' for chapter in chapters)
+    def card(entry, controls=False):
+        chapter = next(chapter for chapter in chapters if chapter['id'] == entry['chapter'])
+        save = f'<button class="entry-save" data-save="{entry["id"]}" aria-pressed="false">收藏</button>' if controls else ''
+        return (f'<article class="guide-entry" data-entry="{entry["id"]}">'
+                f'<p class="entry-meta">第 {chapter["id"]} 章 · {html_escape(chapter["title"])} · 第 {entry["number"]} 条 · 证据 {html_escape(entry["grade"] or "未标注")}</p>'
+                f'<div class="entry-head"><h2>{html_escape(entry["title"])}</h2>{save}</div>'
+                f'<p class="entry-summary">{html_escape(entry["summary"])}</p>'
+                f'<details><summary>正文、来源与适用条件</summary><div class="entry-body" data-loaded="true">'
+                f'<div class="entry-plain">{html_escape(entry["body"])}</div></div>'
+                f'<a class="entry-original" href="{html_escape(entry["url"], quote=True)}" target="_blank" rel="noopener noreferrer">查看原项目本章</a>'
+                '</details></article>')
+    template = template.replace('__GUIDE_DIRECTORY__', directory)
+    template = template.replace('__GUIDE_INITIAL_STATUS__', '首屏正文已可阅读，正在加载完整目录…')
+    template = template.replace('__GUIDE_INITIAL_ENTRIES__', ''.join(card(entry, True) for entry in first))
+    template = template.replace('__GUIDE_BOOTSTRAP__', json.dumps(bootstrap, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c'))
+    (output / 'guide/index.html').write_text(template)
+    static_paths = []
+    for chapter in chapters:
+        page_path = f'/guide/read/{chapter["id"]}/'
+        static_paths.append(page_path)
+        page = ('<!doctype html><html lang="zh-CN"><head><meta charset="utf-8">'
+                '<meta name="viewport" content="width=device-width,initial-scale=1">'
+                f'<title>{html_escape(chapter["title"])} · 生活指南</title>'
+                f'<link rel="canonical" href="{site_url(page_path)}">'
+                '<link rel="stylesheet" href="/assets/news/style.css">'
+                '<link rel="stylesheet" href="/assets/news/guide.css"></head><body>'
+                '<header class="header"><div class="header-inner"><a class="brand" href="/"><span class="brand-name">资讯</span></a>'
+                '<div class="header-actions"><a class="games-link" href="/guide/">返回指南</a></div></div></header>'
+                f'<main class="guide-page"><div class="guide-heading"><h1>第 {chapter["id"]} 章 · {html_escape(chapter["title"])}</h1></div>'
+                f'<div class="entry-body entry-plain">{html_escape(chapter["intro"])}</div>'
+                + ''.join(card(entry) for entry in book['entries'] if entry['chapter'] == chapter['id'])
+                + '<footer class="guide-attribution">内容来自 <a href="https://github.com/eternity4719/HowToLiveBetter">eternity4719《高性价比人生指南》</a>，'
+                '<a href="https://creativecommons.org/licenses/by/4.0/">CC BY 4.0</a>。本站调整了排版，正文保留原文。'
+                f'<p>正文版本：{book["revision"][:8]} · <a href="/guide/">返回指南</a></p></footer></main></body></html>')
+        folder = output / page_path.lstrip('/')
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / 'index.html').write_text(page)
+    return chapters, static_paths
+
+
+def build_news_pages(data, output):
+    """Keep the full export for collectors; readers fetch a small initial page."""
+    size = 150
+    # Publish only the small deterministic fallback score; the AI's validated
+    # priority is already in editorial. Normal category lists stay chronological.
+    def annotate(article):
+        if news.public_notice(article):
+            article = {**article, 'briefPriority': 3}
+        event = news.holiday_event(article)
+        return {**article, 'briefEvent': event} if event else article
+    data = {**data, **{key: [annotate(a) for a in data[key]] for key in
+                      ('articles', 'modelReleases', 'housingArticles') if key in data}}
+    articles = data['articles']
+    folder = output / 'data/archive'
+    folder.mkdir(parents=True, exist_ok=True)
+    pages = []
+    for offset in range(size, len(articles), size):
+        body = json.dumps({'articles': articles[offset:offset + size]}, ensure_ascii=False,
+                          separators=(',', ':')).encode()
+        name = hashlib.sha256(body).hexdigest()[:16] + '.json'
+        (folder / name).write_bytes(body)
+        pages.append('/data/archive/' + name)
+    # The legacy export stays chronological. New readers use a compact lookup
+    # and category chunks, fetching only the pages containing matching stories.
+    lookup_pages, rows, categories, locations, shards = [], [], {}, {}, []
+    def row(article, page):
+        day = datetime.fromisoformat(article['publishedAt'].replace('Z', '+00:00')).astimezone(
+            timezone(timedelta(hours=8))).date().isoformat()
+        source = article.get('sourceId', '')
+        categories.setdefault(article['category'], set()).add(source)
+        return [source, article['category'], day,
+                (article['title'] + ' ' + article.get('excerpt', '')).lower(), page]
+    rows.extend(row(article, -1) for article in articles[:size])
+    for category in dict.fromkeys(article['category'] for article in articles):
+        pool = [article for article in articles[size:] if article['category'] == category]
+        for offset in range(0, len(pool), 100):
+            batch = pool[offset:offset + 100]
+            body = json.dumps({'articles': batch}, ensure_ascii=False, separators=(',', ':')).encode()
+            name = hashlib.sha256(body).hexdigest()[:16] + '.json'
+            (folder / name).write_bytes(body)
+            page = len(lookup_pages)
+            lookup_pages.append('/data/archive/' + name)
+            shards.append({'path': lookup_pages[-1], 'category': category,
+                           'sources': sorted({article.get('sourceId', '') for article in batch}),
+                           'days': sorted({row(article, page)[2] for article in batch}),
+                           'newest': batch[0]['publishedAt']})
+            for article in batch:
+                locations[article['id']] = page
+    rows.extend(row(article, locations[article['id']]) for article in articles[size:])
+    def write_lookup(selected):
+        lookup = json.dumps({'schema': 1, 'pages': lookup_pages, 'rows': selected},
+                            ensure_ascii=False, separators=(',', ':')).encode()
+        path = '/data/archive/index.' + hashlib.sha256(lookup).hexdigest()[:16] + '.json'
+        (output / path.lstrip('/')).write_bytes(lookup)
+        return path
+    lookup_path = write_lookup(rows)
+    indexes = {category: write_lookup([row for row in rows if row[1] == category])
+               for category in categories}
+    # Model releases are less frequent than general news. Include a compact
+    # reading list so opening this section never scans the news archive.
+    releases, seen = [], set()
+    for article in data.get('modelReleases', articles):
+        if article.get('category') != 'models':
+            continue
+        title = article['title'].rsplit(' - ', 1)[0]
+        key = re.sub(r'\W', '', title).casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        releases.append(article)
+        if len(releases) == 60:
+            break
+    housing, seen = [], set()
+    for article in data.get('housingArticles', articles):
+        if article.get('category') != 'housing':
+            continue
+        key = re.sub(r'\W', '', article['title'].rsplit(' - ', 1)[0]).casefold()
+        if key in seen:
+            continue
+        seen.add(key)
+        housing.append(article)
+        if len(housing) == 60:
+            break
+    # Retain important events even after they leave the latest 150. Source and
+    # category diversity must not push an older public announcement out of view.
+    brief_days, brief_articles = [], []
+    if data.get('updatedAt'):
+        today = datetime.fromisoformat(data['updatedAt'].replace('Z', '+00:00')).astimezone(
+            timezone(timedelta(hours=8))).date()
+        brief_days = [(today - timedelta(days=n)).isoformat() for n in range(2)]
+        candidates = sorted(articles + releases + housing, key=lambda a: a['publishedAt'], reverse=True)
+        for day in brief_days:
+            for category in ('general', 'finance', 'livelihood', 'tech', 'ai', 'models',
+                             'entertainment', 'gaming', 'sports', 'housing'):
+                pool = []
+                for article in candidates:
+                    if article.get('category') != category:
+                        continue
+                    published = datetime.fromisoformat(article['publishedAt'].replace('Z', '+00:00')).astimezone(
+                        timezone(timedelta(hours=8))).date().isoformat()
+                    if published == day:
+                        pool.append(article)
+                brief_articles.extend(news.brief_candidates(pool))
+    gaming = [article for article in articles if article.get('category') == 'gaming'][:60]
+    latest = {**data, 'articles': articles[:size], 'modelReleases': releases, 'gamingArticles': gaming,
+              'housingArticles': housing,
+              'briefArticles': brief_articles, 'briefDays': brief_days,
+              'archive': {'pages': pages, 'loaded': 0, 'total': len(articles),
+                          'lookup': lookup_path,
+                          'indexes': indexes, 'shards': shards,
+                          'categories': {key: sorted(value) for key, value in categories.items()},
+                          'oldest': articles[-1]['publishedAt'] if articles else None}}
+    # Observation history is only for the collector. Open the small public
+    # summary on demand so source statistics do not slow down the news list.
+    latest.pop('sourceQualityState', None)
+    quality = latest.pop('sourceQuality', None)
+    if quality:
+        body = json.dumps(quality, ensure_ascii=False, separators=(',', ':')).encode()
+        path = '/data/source-quality.' + hashlib.sha256(body).hexdigest()[:16] + '.json'
+        (output / path.lstrip('/')).write_bytes(body)
+        latest['sourceQuality'] = {'schema': 1, 'path': path,
+                                  'startedAt': quality['startedAt'], 'updatedAt': quality['updatedAt']}
+    (output / 'data/latest.json').write_text(
+        json.dumps(latest, ensure_ascii=False, separators=(',', ':')) + '\n')
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument('--output', type=Path, default=ROOT / '_site')
+    args = p.parse_args()
+    origin = site_origin()
+    refresh_endpoint = os.environ.get('NEWS_REFRESH_ENDPOINT', '').strip() or 'https://news-refresh.944052796.workers.dev/api/news-refresh'
+    endpoint = urlsplit(refresh_endpoint)
+    if (endpoint.scheme != 'https' or not endpoint.hostname or endpoint.username or endpoint.password
+            or endpoint.query or endpoint.fragment or endpoint.path != '/api/news-refresh'):
+        raise SystemExit('NEWS_REFRESH_ENDPOINT must be an HTTPS /api/news-refresh URL without credentials or query parameters')
+    output = args.output.resolve()
+    if output == ROOT or output in ROOT.parents:
+        raise SystemExit('Unsafe output directory')
+    if output.exists():
+        shutil.rmtree(output)
+    output.mkdir(parents=True)
+    shutil.copy2(ROOT / 'news/index.html', output / 'index.html')
+    shutil.copytree(ROOT / 'news/games', output / 'games')
+    shutil.copytree(ROOT / 'news/guide', output / 'guide')
+    shutil.copytree(ROOT / 'news/homes', output / 'homes')
+    shutil.copytree(ROOT / 'news/assets', output / 'assets/news', dirs_exist_ok=True)
+    catalog = json.loads((ROOT / 'news/tonight.json').read_text())
+    (output / 'assets/news/tonight-data.js').write_text(
+        'window.NewsTonightCatalog=' + json.dumps(catalog, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c') + ';\n')
+    place_data = json.loads((ROOT / 'news/places.json').read_text())
+    place_data['rules'] = json.loads((ROOT / 'news/outing-rules.json').read_text())
+    (output / 'assets/news/outings-data.js').write_text('window.NewsPlaces=' + json.dumps(place_data, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c') + ';\n')
+    chapters, static_paths = build_guide_reader(output)
+    # Keep the previous edition available to older installed readers until they update.
+    old_book = (ROOT / 'news/guide/book.json').read_bytes()
+    digest = hashlib.sha256(old_book).hexdigest()[:12]
+    (output / f'assets/news/guide-book.{digest}.json').write_bytes(old_book)
+    # New HTML always requests the matching assets, even with cached older releases.
+    homepage = build_places((output / 'index.html').read_text())
+    skeleton = ('<div class="article-placeholder skeleton" aria-hidden="true"><div class="article-body">'
+                '<span class="skeleton-line short"></span><span class="skeleton-line title"></span>'
+                '<span class="skeleton-line title"></span><span class="skeleton-line"></span>'
+                '<span class="skeleton-line short"></span></div></div>')
+    homepage = homepage.replace('__NEWS_SKELETON__', skeleton * 12)
+    homepage = homepage.replace('content="https://news-refresh.944052796.workers.dev/api/news-refresh"',
+                                f'content="{html_escape(refresh_endpoint, quote=True)}"')
+    pages = {'/': homepage, '/games/': (output / 'games/index.html').read_text(),
+             '/guide/': (output / 'guide/index.html').read_text(),
+             '/homes/': (output / 'homes/index.html').read_text()}
+    pages.update({path: (output / path.lstrip('/') / 'index.html').read_text() for path in static_paths})
+    pages = {path: page.replace('__NEWS_SITE_URL__', origin).replace('__NEWS_SITE_HOST__', urlsplit(origin).hostname)
+             for path, page in pages.items()}
+    shell_files = ['/', '/games/', '/guide/', '/homes/', '/manifest.webmanifest', '/assets/news/icon-180.png',
+                   '/assets/news/icon-192.png', '/assets/news/icon-512.png']
+    for filename in ('compat.js', 'compat.css', 'archive.js', 'personal.js', 'exchange-core.js', 'outings-data.js', 'outings-library.js', 'outings-profile.js', 'editorial.js', 'tonight-data.js', 'tonight-journal.js', 'tonight.js', 'outing-now.js', 'app.js', 'pwa.js', 'style.css', 'favicon.svg', 'games.css', 'games-core.js', 'games.js', 'table-games.css', 'table-games-core.js', 'table-games.js', 'extra-games.css', 'extra-games-core.js', 'extra-games.js', 'casual-games.css', 'casual-games-core.js', 'casual-games.js', 'guide-core.js', 'guide.js', 'guide.css', 'guide-index.json', 'homes-core.js', 'home-finder.js', 'homes.css'):
+        asset = output / 'assets/news' / filename
+        digest = hashlib.sha256(asset.read_bytes()).hexdigest()[:12]
+        versioned = asset.with_name(f'{asset.stem}.{digest}{asset.suffix}')
+        shutil.copy2(asset, versioned)
+        for path in pages:
+            pages[path] = pages[path].replace(f'"/assets/news/{filename}"', f'"/assets/news/{versioned.name}"')
+        shell_files.append(f'/assets/news/{versioned.name}')
+    for path, page in pages.items():
+        (output / path.lstrip('/') / 'index.html').write_text(page)
+    shutil.copy2(ROOT / 'news/manifest.webmanifest', output / 'manifest.webmanifest')
+    worker = (ROOT / 'news/sw.js').read_text()
+    shell_digest = hashlib.sha256(pages['/'].encode() + worker.encode())
+    # The guide's upstream content can change many times between UI releases.
+    # Keep a separate UI version so those publications do not notify news readers.
+    app_digest = hashlib.sha256(pages['/'].encode() + worker.encode()
+                                + (ROOT / 'news/guide/index.html').read_bytes())
+    for path in shell_files[1:]:
+        asset = output / path.lstrip('/')
+        body = (asset / 'index.html' if path.endswith('/') else asset).read_bytes()
+        shell_digest.update(body)
+        if path != '/guide/' and not re.search(r'/guide-index\.[a-f0-9]{12}\.json$', path):
+            app_digest.update(body)
+    build_id = shell_digest.hexdigest()[:16]
+    worker = worker.replace('__BUILD_ID__', build_id)
+    worker = worker.replace('__APP_BUILD_ID__', app_digest.hexdigest()[:16])
+    # Bind each open document to its coherent offline edition, without making
+    # content-only updates part of the UI digest or forcing a document reload.
+    for path in pages:
+        pages[path] = pages[path].replace('__NEWS_SHELL_CACHE__', 'news-shell-' + build_id)
+        (output / path.lstrip('/') / 'index.html').write_text(pages[path])
+    # These routes also work through older cache-first workers, without clearing
+    # browser data or asking readers to use the retired update button.
+    for alias, page in (('live', '/'), ('homes/live', '/homes/')):
+        folder = output / alias
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / 'index.html').write_text(pages[page])
+    news_shell = list(dict.fromkeys(['/', '/manifest.webmanifest',
+        '/assets/news/icon-180.png', '/assets/news/icon-192.png', '/assets/news/icon-512.png',
+        *re.findall(r'/assets/news/[\w.-]+\.[a-f0-9]{12}\.(?:json|js|css|svg)\b', pages['/'])]))
+    game_shell = list(dict.fromkeys([*news_shell, '/games/',
+        *re.findall(r'/assets/news/[\w.-]+\.[a-f0-9]{12}\.(?:json|js|css|svg)\b', pages['/games/'])]))
+    guide_shell = list(dict.fromkeys(['/', '/guide/', '/manifest.webmanifest',
+        '/assets/news/icon-180.png', '/assets/news/icon-192.png', '/assets/news/icon-512.png',
+        *re.findall(r'/assets/news/[\w.-]+\.[a-f0-9]{12}\.(?:json|js|css|svg)\b', pages['/'] + pages['/guide/'])]))
+    homes_shell = list(dict.fromkeys([*news_shell, '/homes/',
+        *re.findall(r'/assets/news/[\w.-]+\.[a-f0-9]{12}\.(?:json|js|css|svg)\b', pages['/homes/'])]))
+    worker = worker.replace('__SHELL_FILES__', json.dumps(shell_files))
+    worker = worker.replace('__NEWS_SHELL__', json.dumps(news_shell))
+    worker = worker.replace('__GAMES_SHELL__', json.dumps(game_shell))
+    worker = worker.replace('__GUIDE_SHELL__', json.dumps(guide_shell))
+    worker = worker.replace('__HOMES_SHELL__', json.dumps(homes_shell))
+    worker = worker.replace('__GUIDE_FILES__', json.dumps([chapter['file'] for chapter in chapters]))
+    worker = worker.replace('__GUIDE_REVISION__', json.dumps(json.loads(old_book)['revision']))
+    (output / 'sw.js').write_text(worker)
+    shutil.copytree(ROOT / 'news/data', output / 'data', dirs_exist_ok=True)
+    # Listing publications are data changes, not a new PWA version.
+    from collect_home_candidates import public_snapshot
+    candidates = ROOT / 'news/data/home-candidates.json'
+    if not candidates.is_file():
+        candidates = ROOT / 'news/home-candidates.json'
+    (output / 'data/home-candidates.json').write_text(
+        json.dumps(public_snapshot(json.loads(candidates.read_text())), ensure_ascii=False, separators=(',', ':')) + '\n')
+    (output / '.nojekyll').touch()
+    data = json.loads((output / 'data/news.json').read_text())
+    price_file = ROOT / 'news/data/housing.json'
+    data['housingPrices'] = (json.loads(price_file.read_text()) if price_file.exists() else
+                             data.get('housingPrices') or json.loads((ROOT / 'news/housing-prices.json').read_text()))
+    # Remove retired sections from older cached price data.
+    prices = data['housingPrices']
+    prices.pop('samples', None)
+    prices.pop('watchlist', None)
+    prices.pop('xihuHotspots', None)
+    (output / 'data/housing.json').write_text(json.dumps(prices, ensure_ascii=False, separators=(',', ':')) + '\n')
+    exchange_file = ROOT / 'news/data/exchange.json'
+    data['exchangeRates'] = (json.loads(exchange_file.read_text()) if exchange_file.exists() else
+                            data.get('exchangeRates') or json.loads((ROOT / 'news/exchange-rates.json').read_text()))
+    (output / 'data/news.json').write_text(json.dumps(data, ensure_ascii=False, separators=(',', ':')) + '\n')
+    build_news_pages(data, output)
+    from outing_now import build as build_outing_now
+    build_outing_now(data, ROOT, output)
+    # A tiny health file avoids downloading and parsing the entire archive in Workers.
+    updated_at = data['updatedAt']
+    if datetime.fromisoformat(updated_at.replace('Z', '+00:00')).tzinfo is None:
+        raise SystemExit('News timestamp must include a timezone')
+    (output / 'data/status.json').write_text(json.dumps({
+        'updatedAt': updated_at, 'newsCheckedAt': data.get('newsCheckedAt', updated_at)}) + '\n')
+    items = ''.join(f'<item><title>{escape(a["title"])}</title><link>{escape(a["url"])}</link><guid>{escape(a["url"])}</guid><pubDate>{format_datetime(datetime.fromisoformat(a["publishedAt"].replace("Z", "+00:00")))}</pubDate><description>{escape(a["excerpt"])}</description></item>' for a in data['articles'][:50])
+    (output / 'news.xml').write_text('<?xml version="1.0" encoding="UTF-8"?><rss version="2.0"><channel><title>资讯</title><link>' + site_url('/') + '</link><description>综合热点与 AI 科技资讯。摘要来自原始资讯源。</description>' + items + '</channel></rss>')
+    urls = [site_url(path) for path in ('/', '/games/', '/guide/')]
+    (output / 'sitemap.xml').write_text('<?xml version="1.0" encoding="UTF-8"?><urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">' + ''.join(f'<url><loc>{escape(u)}</loc></url>' for u in urls) + '</urlset>')
+    (output / 'robots.txt').write_text('User-agent: *\nAllow: /\nSitemap: ' + site_url('/sitemap.xml') + '\n')
+    print(f'Built {output}; {len(data["articles"])} news items.')
+
+
+if __name__ == '__main__':
+    main()

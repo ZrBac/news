@@ -1,0 +1,46 @@
+{
+  "sources": [
+    {
+      "name": "天目里活动",
+      "url": "https://www.ooeli.com/",
+      "domain": "ooeli.com",
+      "topics": "市集、戏剧、放映、限定体验"
+    },
+    {
+      "name": "浙江演艺集团",
+      "url": "https://www.zjyyjt.com.cn/",
+      "domain": "zjyyjt.com.cn",
+      "topics": "杭州剧院及其他剧场的话剧、戏剧演出"
+    },
+    {
+      "name": "杭州国际博览中心",
+      "url": "https://www.hiechangzhou.com/index.php/expo/history.html",
+      "domain": "hiechangzhou.com",
+      "topics": "面向公众的展会、生活方式展览"
+    },
+    {
+      "name": "杭州大会展中心",
+      "url": "https://www.hzgcec.com/",
+      "domain": "hzgcec.com",
+      "topics": "面向公众的近期展会与体验活动"
+    },
+    {
+      "name": "杭州图书馆活动",
+      "url": "https://www.zjhzlib.cn/",
+      "domain": "zjhzlib.cn",
+      "topics": "当月成人工作坊、非遗手作、放映、分享会；排除少儿与亲子活动"
+    },
+    {
+      "name": "开心麻花官方票务",
+      "url": "https://www.kaixinguopiao.com/",
+      "domain": "kaixinguopiao.com",
+      "topics": "杭州互动喜剧、沉浸式戏剧，核对当地场次日期"
+    },
+    {
+      "name": "天目里展览与公共活动",
+      "url": "https://www.byartmatters.com/",
+      "domain": "byartmatters.com",
+      "topics": "近期展览与成人公共活动，按官网日期核验"
+    }
+  ]
+}

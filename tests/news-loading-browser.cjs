@@ -1,0 +1,184 @@
+// Verify first-paint behavior while requests remain deliberately unresolved.
+const { chromium, devices } = require(
+  process.env.PLAYWRIGHT_MODULE || "playwright",
+);
+const assert = require("node:assert/strict");
+const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
+(async () => {
+  const browser = await chromium.launch({ args: ["--no-sandbox"] });
+  try {
+    const context = await browser.newContext({ ...devices["iPhone 13"] });
+    await context.addInitScript(require("./legacy-safari.cjs"));
+    await context.addInitScript(() =>
+      Object.defineProperty(navigator, "standalone", { value: true }),
+    );
+    const page = await context.newPage();
+    const errors = [];
+    page.on("pageerror", (e) => errors.push(e.message));
+    const original = await (
+      await page.request.get(base + "/data/latest.json")
+    ).json();
+    await context.addInitScript(stamp => {
+      Date.now = () => Date.parse(stamp) + 60000;
+    }, original.updatedAt);
+    // The cached-paint checks below switch between these categories. Their
+    // articles must be in this fixture's small snapshot, regardless of today's
+    // source mix or whether older stories live only in an archive chunk.
+    const fixtures = ["sports","tech","finance"].map(category => ({
+      id:"loading-"+category, category, sourceId:original.sources.find(s=>s.category===category).id,
+      title:"未来"+category+"加载测试", url:"https://example.com/loading-"+category,
+      publishedAt:original.updatedAt, excerpt:"用于检查缓存内容在网络响应前显示。",
+    }));
+    original.articles = fixtures.concat(original.articles);
+    original.briefArticles = fixtures.concat(original.briefArticles || []);
+    let resolveNews;
+    const newsGate = new Promise((resolve) => {
+      resolveNews = resolve;
+    });
+    await page.route("**/data/latest.json*", async (route) => {
+      await newsGate;
+      await route.fulfill({ json: original });
+    });
+    await page.goto(base, { waitUntil: "domcontentloaded" });
+    assert.equal(await page.locator(".skeleton").count(), 12);
+    const initialListTop = await page
+      .locator("#articles")
+      .evaluate((el) => el.getBoundingClientRect().top);
+    assert(
+      (await page
+        .locator(".footer")
+        .evaluate((el) => el.getBoundingClientRect().top)) > 844,
+    );
+    assert.equal(
+      await page.locator("#offline-tools, #offline-status").count(),
+      0,
+    );
+    assert.equal(
+      await page.evaluate(
+        async () => (await navigator.serviceWorker.getRegistrations()).length,
+      ),
+      0,
+      "offline installation must wait for the initial news download",
+    );
+    resolveNews();
+    await page.locator(".article").first().waitFor();
+    const loadedListTop = await page
+      .locator("#articles")
+      .evaluate((el) => el.getBoundingClientRect().top);
+    assert(
+      Math.abs(initialListTop - loadedListTop) < 2,
+      "news controls must reserve their first-load space",
+    );
+    await page.evaluate(() => navigator.serviceWorker.ready);
+    await page.waitForFunction(() => !!navigator.serviceWorker.controller);
+    const firstCache = await page.evaluate(async () => {
+      const name = (await caches.keys()).find((name) =>
+        name.startsWith("news-shell-"),
+      );
+      return (await (await caches.open(name)).keys()).map(
+        (request) => new URL(request.url).pathname,
+      );
+    });
+    assert(
+      !firstCache.some(
+        (path) =>
+          path === "/guide/" ||
+          path === "/games/" ||
+          /guide-index|games-core/.test(path),
+      ),
+      "news-only visitors must not pre-download guide or game resources",
+    );
+    await page.unroute("**/data/latest.json*");
+    let fullDownloads = 0;
+    page.on("request", (r) => {
+      if (new URL(r.url()).pathname === "/data/latest.json") fullDownloads++;
+    });
+    let releaseStatus;
+    const statusGate = new Promise((resolve) => {
+      releaseStatus = resolve;
+    });
+    await page.route("**/data/status.json", async (route) => {
+      await statusGate;
+      await route.fulfill({ json: { updatedAt: original.updatedAt } });
+    });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.locator(".article").first().waitFor();
+    assert.match(await page.locator("#load-notice").innerText(), /后台检查/);
+    await page.locator('[data-filter="sports"]').first().click();
+    releaseStatus();
+    await page.evaluate(() => window.newsInitialLoad);
+    assert.equal(
+      fullDownloads,
+      0,
+      "unchanged news only needs the tiny status file",
+    );
+    assert.equal(await page.locator("#section-title").innerText(), "体育");
+    assert(await page.locator("#load-notice").isHidden());
+    await page.unroute("**/data/status.json");
+    const updated = structuredClone(original);
+    updated.updatedAt = new Date(
+      Date.parse(original.updatedAt) + 3600000,
+    ).toISOString();
+    await page.route("**/data/status.json", (route) =>
+      route.fulfill({ json: { updatedAt: updated.updatedAt } }),
+    );
+    let releaseUpdate;
+    const updateGate = new Promise((resolve) => {
+      releaseUpdate = resolve;
+    });
+    await page.route("**/data/latest.json*", async (route) => {
+      await updateGate;
+      await route.fulfill({ json: updated });
+    });
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.locator(".article").first().waitFor();
+    await page.locator('[data-filter="tech"]').first().click();
+    await page.fill("#search", "未来");
+    releaseUpdate();
+    await page.evaluate(() => window.newsInitialLoad);
+    assert.equal(await page.inputValue("#search"), "未来");
+    assert.equal(await page.locator("#section-title").innerText(), "科技动态");
+    assert.equal(
+      await page.evaluate(
+        () => JSON.parse(localStorage.getItem("zrbac-news-cache-v1")).updatedAt,
+      ),
+      updated.updatedAt,
+    );
+    await page.unroute("**/data/latest.json*");
+    await page.unroute("**/data/status.json");
+    let homeDocumentReads = 0;
+    page.on("request", (request) => {
+      if (request.isNavigationRequest() && request.frame() === page.mainFrame())
+        homeDocumentReads++;
+    });
+    await page.locator(".brand").click();
+    await page.locator('[data-filter="finance"]').click();
+    assert.equal(
+      homeDocumentReads,
+      0,
+      "returning home keeps the loaded page ready for the next click",
+    );
+    assert.equal(await page.locator("#section-title").innerText(), "财经");
+    await context.setOffline(true);
+    await page.reload({ waitUntil: "domcontentloaded" });
+    await page.locator(".article").first().waitFor();
+    assert.equal(
+      await page.locator("#offline-tools, #offline-status").count(),
+      0,
+    );
+    assert.match(
+      await page.locator("#load-notice").innerText(),
+      /上次成功获取/,
+    );
+    assert.deepEqual(errors, []);
+    console.log(
+      "PASS: news before PWA install, cached articles before network response, unchanged news avoids full download, background update preserves filters, standalone news has no game prompt, offline news opens.",
+    );
+    await context.close();
+  } finally {
+    await browser.close();
+  }
+})().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});

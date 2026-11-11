@@ -37,25 +37,49 @@
     } catch (_) { return null; }
   }
   function group(articles, titleKey) {
-    const groups = new Map(), titles = new Map(), result = [];
-    for (const article of articles) {
+    const owners = new Map(), parents = articles.map((_, i) => i);
+    const root = (index) => {
+      while (parents[index] !== index) {
+        parents[index] = parents[parents[index]];
+        index = parents[index];
+      }
+      return index;
+    };
+    // A topic shared across publishers also joins separate cached AI groups.
+    // Resolve all links before rendering so a bridging report cannot leave
+    // two cards for the same event depending on input order.
+    articles.forEach((article, index) => {
       const e = metadata(article);
       const key = /^notice-holidays-20\d{2}$/.test(article.briefEvent || "")
         ? article.briefEvent : article.outingGroup || (e ? e.eventId : titleKey(article));
-      const title = titleKey(article);
-      const existing = groups.get(key) || titles.get(title);
-      if (existing) {
-        existing.reports.push(article);
-        groups.set(key, existing);
-        titles.set(title, existing);
-      } else {
-        const item = { ...article, reports: [...(article.reports || [])] };
-        groups.set(key, item);
-        titles.set(title, item);
-        result.push(item);
+      const keys = ['group:' + key, 'title:' + titleKey(article)];
+      for (const signal of Array.isArray(article.trend) ? article.trend : []) {
+        if (!signal || !['baidu', 'weibo', 'thepaper', 'cls-hot'].includes(signal.platform) ||
+            !validDate(signal.asOf) || !Number.isInteger(signal.rank) || signal.rank < 1 || signal.rank > 30) continue;
+        const identity = /^[a-f0-9]{16}$/.test(signal.topicId || '') ? signal.topicId : signal.rank;
+        keys.push(`trend:${signal.platform}:${signal.asOf}:${identity}`);
       }
-    }
-    return result;
+      for (const identity of keys) {
+        if (owners.has(identity)) {
+          const a = root(index), b = root(owners.get(identity));
+          parents[Math.max(a, b)] = Math.min(a, b);
+        } else owners.set(identity, index);
+      }
+    });
+    const groups = new Map();
+    articles.forEach((article, index) => {
+      const key = root(index);
+      if (!groups.has(key)) groups.set(key, {...article, reports: []});
+      const item = groups.get(key);
+      const seen = new Set([item.id, ...item.reports.map(a => a.id)]);
+      for (const report of [article, ...(article.reports || [])]) {
+        if (!seen.has(report.id)) {
+          item.reports.push(report);
+          seen.add(report.id);
+        }
+      }
+    });
+    return [...groups.values()];
   }
   function forecast(trip, pick) {
     const region = trip.weather && trip.weather.regions && trip.weather.regions[pick.region];

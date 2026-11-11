@@ -55,7 +55,13 @@ def fetch(url):
         'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
         'Accept': 'application/json, application/rss+xml, */*',
         'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8', 'Cache-Control': 'no-cache'})
-    with urllib.request.urlopen(request, timeout=12) as response:
+    opener = urllib.request.urlopen
+    if allowed_url(url, ('thepaper.cn', 'cls.cn')):
+        # Publisher pages are public articles; redirects must stay on these
+        # publishers, just as the existing source-body reader requires.
+        from news_details import ArticleRedirect
+        opener = urllib.request.build_opener(ArticleRedirect(('thepaper.cn', 'cls.cn'))).open
+    with opener(request, timeout=12) as response:
         body = response.read(2_000_001)
         encoding = response.headers.get('Content-Encoding', '').lower().strip()
     if len(body) > 2_000_000:
@@ -203,6 +209,42 @@ def category(title):
     return news.article_category(title, {'id': SOURCE['id'], 'category': initial})
 
 
+def publisher_report(topic, body, now):
+    """Read a hot-linked publisher article's own title, date and excerpt."""
+    import collect_news as news
+    target = urllib.parse.urlsplit(topic['url'])
+    paper = bool(re.fullmatch(r'(?:www\.)?thepaper\.cn', target.hostname or ''))
+    pattern = r'/newsDetail_forward_(\d+)' if paper else r'/detail/(\d+)'
+    match = re.fullmatch(pattern, target.path)
+    if not match or not allowed_url(topic['url'], ('thepaper.cn', 'cls.cn')):
+        return []
+    html = body.decode('utf-8', 'replace')
+    script = re.search(r'<script\b[^>]*\bid=["\x27]__NEXT_DATA__["\x27][^>]*>(.*?)</script>', html, re.S | re.I)
+    if not script:
+        raise ValueError('Publisher article data unavailable')
+    props = json.loads(script[1])['props']['pageProps']
+    item = props['detailData']['contentDetail'] if paper else props['articleDetail']
+    identifier = item.get('contId' if paper else 'id')
+    title = news.plain(item.get('name' if paper else 'title'))[:220]
+    timestamp = item.get('publishTime' if paper else 'ctime')
+    if str(identifier) != match[1] or not title or type(timestamp) not in (int, float):
+        raise ValueError('Publisher article identity or date unavailable')
+    published = datetime.fromtimestamp(timestamp / (1000 if paper else 1), UTC)
+    # Never substitute modified time or the hot-list observation time for the
+    # actual publication date, even if that would make the item eligible.
+    if not now - timedelta(hours=48) <= published <= now + timedelta(minutes=10):
+        return []
+    if not matches({'title': topic['title'], 'url': ''}, {'title': title}):
+        raise ValueError('Publisher headline does not match hot topic')
+    section = category(title)
+    if not section or section == 'local':
+        return []
+    return [{'id': hashlib.sha256(topic['url'].encode()).hexdigest()[:16],
+             'title': title + (' - 澎湃新闻' if paper else ' - 财联社'),
+             'url': topic['url'], 'sourceId': SOURCE['id'], 'category': section,
+             'publishedAt': stamp(published), 'excerpt': news.plain(item.get('content', ''))[:90]}]
+
+
 def search_reports(topic, body, now):
     """A hot topic itself has no publication date and never becomes an article."""
     import collect_news as news
@@ -244,28 +286,39 @@ def collect(previous, articles, now, get=fetch):
     queues = []
     for platform in config['platforms']:
         observed = boards[platform['id']]
-        queues.append(observed.get('items', [])[:10] if fresh(observed, now) else [])
+        queues.append(observed.get('items', [])[:20] if fresh(observed, now) else [])
     topics, selected = [], []
     # Round-robin sources so one entertainment-heavy list cannot consume all
     # discovery queries. The same unchanged topic is searched at most every 6 h.
-    for rank in range(10):
+    limit = max(1, min(12, config['maxSearches']))
+    for rank in range(20):
         for queue in queues:
             if rank >= len(queue):
                 continue
             topic = queue[rank]
-            key = hashlib.sha256(title_key(topic['title']).encode()).hexdigest()[:16]
+            # A prior unsuccessful search must not prevent the first direct
+            # publisher read after upgrading this discovery path.
+            direct = allowed_url(topic['url'], ('thepaper.cn', 'cls.cn'))
+            key = hashlib.sha256((('publisher:' if direct else '') + title_key(topic['title'])).encode()).hexdigest()[:16]
             last = date(searches.get(key, {}).get('checkedAt'))
             cooldown = 1 if searches.get(key, {}).get('status') == 'unavailable' else 6
             if (last and now - last < timedelta(hours=cooldown)) or any(matches(topic, a) for a in recent + selected):
                 continue
             selected.append(topic)
             topics.append((key, topic))
-            if len(topics) >= min(6, config['maxSearches']):
+            if len(topics) >= limit:
                 break
-        if len(topics) >= min(6, config['maxSearches']):
+        if len(topics) >= limit:
             break
     def search(pair):
         key, topic = pair
+        if allowed_url(topic['url'], ('thepaper.cn', 'cls.cn')):
+            try:
+                found = publisher_report(topic, get(topic['url']), now)
+                if found:
+                    return key, found, 'ok'
+            except Exception:
+                pass  # A missing publisher page can still have a dated report.
         query = re.sub(r'[^\w\u4e00-\u9fff\s]', ' ', topic['title'])[:150] + ' when:2d'
         url = 'https://news.google.com/rss/search?' + urllib.parse.urlencode(
             {'q': query, 'hl': 'zh-CN', 'gl': 'CN', 'ceid': 'CN:zh-Hans'})
@@ -286,7 +339,7 @@ def collect(previous, articles, now, get=fetch):
     status.update(checkedAt=stamp(now), status='ok' if any(fresh(b, now) for b in boards.values()) and not errors else 'unavailable',
                   fetchedCount=len(incoming), latestAt=max((a['publishedAt'] for a in incoming), default=None),
                   durationMs=round((time.monotonic() - started) * 1000))
-    print(f'Hot lists: {sum(fresh(b, now) for b in boards.values())}/4 fresh; {len(topics)} searches; {len(incoming)} dated reports.')
+    print(f'Hot lists: {sum(fresh(b, now) for b in boards.values())}/4 fresh; {len(topics)} topic lookups; {len(incoming)} dated reports.')
     return state, incoming, status
 
 
@@ -306,6 +359,7 @@ def annotate(articles, state, now):
             continue
         for item in board.get('items', []):
             signals.append((item, {'platform': platform['id'], 'name': platform['name'],
+                                  'topicId': item['id'],
                                   'rank': item['rank'], 'previousRank': item.get('previousRank'),
                                   'new': bool(item.get('new')), 'asOf': board['observedAt'], 'stale': not is_fresh}))
     output = []
@@ -321,6 +375,18 @@ def annotate(articles, state, now):
                 clean['trend'] = list(by_platform.values())
         output.append(clean)
     return output, {'schema': 1, 'platforms': public}
+
+
+def topic_keys(article):
+    """An observed topic is shared evidence even when AI groups disagree."""
+    keys = set()
+    for signal in article.get('trend', []):
+        if (isinstance(signal, dict) and signal.get('platform') in ('baidu', 'weibo', 'thepaper', 'cls-hot')
+                and date(signal.get('asOf')) and type(signal.get('rank')) is int and 1 <= signal['rank'] <= 30):
+            identity = signal.get('topicId', '')
+            identity = identity if isinstance(identity, str) and re.fullmatch(r'[a-f0-9]{16}', identity) else str(signal['rank'])
+            keys.add('trend:' + signal['platform'] + ':' + signal['asOf'] + ':' + identity)
+    return keys
 
 
 def score(article):

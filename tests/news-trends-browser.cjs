@@ -49,6 +49,51 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     await page.screenshot({path: "/tmp/news-trends-mobile.png"});
     await page.locator('[data-filter="all"]').click();
     assert.equal(await page.locator(".trend-label").count(), 0, "ordinary lists retain chronological reading");
+    const meta = digit => ({eventId: 'event-' + digit.repeat(24), summary: '同一颁奖结果的来源事实摘要。', updatedAt: now, priority: 2});
+    const award = story('award-main', 'general', {editorial: meta('a'),
+      trend: [signal({platform: 'thepaper', topicId: '1'.repeat(16)})]});
+    const awardCopy = story('award-copy', 'entertainment', {editorial: meta('b'), trend: award.trend});
+    const bridge = story('award-related', 'entertainment', {editorial: meta('b')});
+    const transitive = await page.evaluate(rows => window.NewsEditorial.group(rows, a => a.title), [award, bridge, awardCopy]);
+    assert.equal(transitive.length, 1, 'a late bridging report merges two earlier groups');
+    assert.equal(transitive[0].reports.length, 2);
+    const richer = JSON.parse(JSON.stringify(data));
+    richer.articles = categories.map(c => story(c, c)).concat([
+      story('major', 'general', {briefPriority: 3}), award, awardCopy, bridge,
+      story('roundup', 'finance', {briefPriority: 0, trend: [signal({platform: 'cls-hot', rank: 1})]}),
+      story('finance-hot', 'finance', {trend: [signal({platform: 'cls-hot', rank: 3})]}),
+      story('ent-hot', 'entertainment', {trend: [signal({platform: 'weibo', rank: 4})]}),
+      story('tech-hot', 'tech', {trend: [signal({rank: 5})]}),
+      story('yesterday-hot', 'sports', {publishedAt: new Date(Date.now() - 24 * 3600000).toISOString(), trend: [signal({rank: 6})]}),
+      story('sixth-hot', 'general', {trend: [signal({platform: 'weibo', rank: 7})]}),
+      story('too-old-hot', 'housing', {publishedAt: new Date(Date.now() - 50 * 3600000).toISOString(), trend: [signal({rank: 1})]}),
+    ]);
+    const supplemental = richer.articles.find(a => a.id === 'yesterday-hot');
+    richer.articles = richer.articles.filter(a => a !== supplemental);
+    richer.briefArticles = Array.from({length: 100}, (_, i) => story('older-' + i, 'general',
+      {publishedAt: new Date(Date.now() - 50 * 3600000).toISOString()})).concat(supplemental);
+    await page.route('**/data/latest.json*', route => route.fulfill({json: richer}));
+    await page.evaluate(() => localStorage.removeItem('zrbac-news-cache-v1'));
+    await page.goto(base + '/#brief');
+    await page.reload({waitUntil: 'domcontentloaded'});
+    await page.evaluate(() => window.newsInitialLoad);
+    await page.waitForFunction(() => document.querySelector('[data-article-id="yesterday-hot"]'));
+    assert.equal(await page.locator('.article').count(), 10);
+    assert.equal(await page.locator('.trend-label').count(), 5, 'five different hot events can appear');
+    assert.equal(await page.locator('[data-article-id="award-copy"], [data-article-id="award-related"]').count(), 0);
+    assert.equal(await page.locator('[data-article-id="award-main"] .article-reports a').count(), 2);
+    await page.locator('[data-article-id="award-main"] .article-reports summary').click();
+    await page.locator('[data-save="award-main"]').click();
+    assert(await page.locator('[data-article-id="award-main"] .article-reports').evaluate(n => n.open), 'saving or a background render keeps other reports expanded');
+    assert.equal(await page.locator('[data-article-id="too-old-hot"]').count(), 0);
+    assert.equal(await page.locator('[data-article-id="roundup"]').count(), 0, 'digest of several headlines does not compete with individual reports');
+    assert.match(await page.locator('[data-article-id="yesterday-hot"] time').getAttribute('datetime'), /^\d{4}-/);
+    assert(new Set(await page.locator('.category-label').allTextContents()).size >= 5);
+    await page.locator('[data-filter="all"]').click();
+    // A manually selected publication date still behaves literally in normal lists.
+    await page.locator('#date-trigger').click();
+    await page.fill('#date-filter', today);
+    assert.equal(await page.locator('[data-article-id="yesterday-hot"]').count(), 0);
     for (const article of data.articles) {
       if (article.trend) article.trend[0].asOf = new Date(Date.now() - 5 * 3600000).toISOString();
     }

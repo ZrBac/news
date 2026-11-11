@@ -139,6 +139,66 @@ class TrendTests(unittest.TestCase):
         allowed = {trends.SOURCE['id']: trends.SOURCE}
         self.assertEqual(news.merge_articles(reports, [], self.now, allowed)[0]['category'], reports[0]['category'])
 
+    def publisher_page(self, platform, title=None, **fields):
+        if platform == 'thepaper':
+            item = {'contId': 12345, 'name': title or self.titles[0],
+                    'publishTime': (self.now - timedelta(hours=16)).timestamp() * 1000, 'content': '<p>来源原文</p>', **fields}
+            props = {'detailData': {'contentDetail': item}}
+        else:
+            item = {'id': 12345, 'title': title or self.titles[0],
+                    'ctime': (self.now - timedelta(hours=16)).timestamp(), 'content': '<p>来源原文</p>', **fields}
+            props = {'articleDetail': item}
+        return ('<script id="__NEXT_DATA__" type="application/json">' +
+                json.dumps({'props': {'pageProps': props}}) + '</script>').encode()
+
+    def test_direct_publisher_reads_use_the_article_date_and_identity(self):
+        for platform, url in (('thepaper', 'https://www.thepaper.cn/newsDetail_forward_12345'),
+                              ('cls-hot', 'https://www.cls.cn/detail/12345')):
+            topic = {'title': self.titles[0], 'url': url}
+            rows = trends.publisher_report(topic, self.publisher_page(platform), self.now)
+            self.assertEqual(len(rows), 1)
+            self.assertEqual(rows[0]['url'], url)
+            self.assertEqual(rows[0]['publishedAt'], trends.stamp(self.now - timedelta(hours=16)))
+            with self.assertRaises(ValueError):
+                trends.publisher_report(topic, self.publisher_page(platform, title='毫无关联的体育比赛消息'), self.now)
+            with self.assertRaises(ValueError):
+                trends.publisher_report(topic, self.publisher_page(platform, contId=98765, id=98765), self.now)
+            for hours in (-72, 2):
+                timestamp = (self.now + timedelta(hours=hours)).timestamp()
+                fields = {'publishTime': timestamp * 1000, 'ctime': timestamp, 'updateTime': self.now.timestamp() * 1000}
+                self.assertEqual(trends.publisher_report(topic, self.publisher_page(platform, **fields), self.now), [])
+        self.assertEqual(trends.publisher_report({'title': self.titles[0], 'url': 'https://cls.cn.evil.example/detail/12345'}, b'', self.now), [])
+
+    def test_same_hot_topic_collapses_different_ai_groups_and_survives_candidate_limits(self):
+        signal = {'platform': 'thepaper', 'name': '澎湃热榜', 'topicId': '1' * 16,
+                  'rank': 2, 'asOf': trends.stamp(self.now), 'stale': False}
+        first = dict(self.article('梁家辉、高叶分获金鸡奖最佳男、女主角'),
+                     trend=[signal], editorial={'eventId': 'event-' + '1' * 24, 'priority': 2})
+        duplicate = dict(first, id='second-report', title='高叶和梁家辉分别获得金鸡奖女主角和男主角奖',
+                         editorial={'eventId': 'event-' + '2' * 24, 'priority': 2})
+        self.assertEqual(len(news.brief_candidates([first, duplicate])), 1)
+        next_board = dict(duplicate, trend=[dict(signal, topicId='2' * 16)])
+        self.assertEqual(len(news.brief_candidates([first, next_board])), 2)
+        # A yesterday report with a live signal must remain in the small packet
+        # even if five higher-priority stories push it out of its category.
+        old = dict(first, id='yesterday-hot', publishedAt=trends.stamp(self.now - timedelta(hours=16)))
+        filler = [dict(old, id='filler-' + str(i), title='不同公共事件' + str(i), trend=[],
+                       editorial={'eventId': 'event-' + str(i) * 24, 'priority': 3}) for i in range(6)]
+        data = {'updatedAt': trends.stamp(self.now), 'articles': filler + [old]}
+        with tempfile.TemporaryDirectory() as folder:
+            build_news.build_news_pages(data, Path(folder))
+            latest = json.loads((Path(folder) / 'data/latest.json').read_text())
+        self.assertIn('yesterday-hot', {a['id'] for a in latest['briefArticles']})
+        self.assertLessEqual(len(latest['briefArticles']), 120)
+
+    def test_roundup_does_not_compete_with_individual_hot_events(self):
+        digest = self.article('【早报】美股全线下挫；美联储加息押注升温；公司上市有新进展')
+        digest['editorial'] = {'priority': 2}
+        self.assertEqual(news.brief_rank(digest), 0)
+        self.assertEqual(news.brief_rank(self.article('【8点见】电影节公布获奖名单')), 1)
+        for title in ('机器人行情助攻，11月第一只翻倍股来了', '某公司创始人质押直接持股'):
+            self.assertEqual(trends.category(title), 'finance')
+
     def test_queries_bounded_cached_and_failures_keep_previous(self):
         calls = []
         domains = {'baidu': 'baidu.com', 'weibo': 'weibo.com', 'thepaper': 'thepaper.cn', 'cls-hot': 'cls.cn'}
@@ -153,10 +213,12 @@ class TrendTests(unittest.TestCase):
                 return json.dumps(payload).encode()
             return b'<rss><channel/></rss>'
         first, incoming, status = trends.collect(None, [], self.now, get)
-        self.assertEqual(len(calls), 10)
+        self.assertEqual(sum(url.startswith('https://newsnow.') for url in calls), 4)
+        self.assertEqual(sum(url.startswith('https://news.google.') for url in calls), 12)
+        self.assertLessEqual(len(calls), 4 + 2 * 12, 'at most one direct read and one search per topic')
         self.assertEqual(incoming, [])
         self.assertEqual(status['status'], 'ok')
-        self.assertEqual(len(first['searches']), 6)
+        self.assertEqual(len(first['searches']), 12)
         queried = set(calls[4:])  # Parallel result order is immaterial below.
         calls.clear()
         second, _, _ = trends.collect(first, [], self.now + timedelta(minutes=5), get)

@@ -540,7 +540,7 @@
     const source = sourceFor(article);
     const read = window.NewsPersonal?.isRead(article.id);
     const aggregated = /^https?:\/\/news\.google\.com\//.test(article.url);
-    let suffix = aggregated ? article.title.lastIndexOf(" - ") : -1;
+    let suffix = aggregated || article.sourceId === "hot-discovery" ? article.title.lastIndexOf(" - ") : -1;
     if (suffix > 0) {
       const publisher = article.title.slice(suffix + 3).trim();
       let prefix = article.title.slice(0, suffix);
@@ -580,6 +580,7 @@
     const rank = (article) => {
       const meta = window.NewsEditorial?.metadata(article);
       if (article.briefPriority === 3) return 3;
+      if (article.briefPriority === 0) return 0;
       if (meta?.isBackground === true) return -1;
       return Number.isInteger(meta?.priority) && meta.priority >= 0 && meta.priority <= 3 ? meta.priority : 1;
     };
@@ -607,17 +608,26 @@
     const counts = {};
     for (const article of selected)
       counts[article.sourceId] = (counts[article.sourceId] || 0) + 1;
-    // Reserve at most two additional places for strongly ranked topics, with
-    // different categories. Major public announcements always remain first.
-    const hotCategories = new Set();
-    for (const article of [...articles].sort((a, b) => rank(b) - rank(a) || trendScore(b) - trendScore(a))) {
-      if (hotCategories.size >= 2) break;
-      if (selectedIds.has(article.id) || rank(article) < 1 || trendScore(article) < 24 ||
-          hotCategories.has(article.category) || (counts[article.sourceId] || 0) >= 2) continue;
+    // Up to five distinct hot events, at most two per category. These are
+    // already grouped above; multiple reports never consume separate places.
+    let hotCount = selected.filter(a => trendScore(a) >= 16).length;
+    const hotCategories = {};
+    for (const article of selected.filter(a => trendScore(a) >= 16))
+      hotCategories[article.category] = (hotCategories[article.category] || 0) + 1;
+    const publisher = article => article.sourceId === "hot-discovery" ? sourceFor(article).name : article.sourceId;
+    const hotSources = {};
+    for (const article of selected)
+      hotSources[publisher(article)] = (hotSources[publisher(article)] || 0) + 1;
+    for (const article of [...articles].sort((a, b) => trendScore(b) - trendScore(a) || rank(b) - rank(a))) {
+      if (hotCount >= 5) break;
+      if (selectedIds.has(article.id) || rank(article) < 1 || trendScore(article) < 16 ||
+          (hotCategories[article.category] || 0) >= 2 || (hotSources[publisher(article)] || 0) >= 3) continue;
       selected.push(article);
       selectedIds.add(article.id);
       represented.add(article.category);
-      hotCategories.add(article.category);
+      hotCount++;
+      hotCategories[article.category] = (hotCategories[article.category] || 0) + 1;
+      hotSources[publisher(article)] = (hotSources[publisher(article)] || 0) + 1;
       counts[article.sourceId] = (counts[article.sourceId] || 0) + 1;
     }
     const queues = [
@@ -707,7 +717,9 @@
     if (state.source !== "all")
       articles = articles.filter((a) => a.sourceId === state.source);
     if (state.date)
-      articles = articles.filter((a) => dayOf(a.publishedAt) === state.date);
+      articles = articles.filter((a) => dayOf(a.publishedAt) === state.date ||
+        (state.view === "brief" && state.date === dayOf(Date.now()) && trendScore(a) > 0 &&
+          Date.now() - Date.parse(a.publishedAt) >= 0 && Date.now() - Date.parse(a.publishedAt) <= 48 * 3600000));
     if (state.query) {
       const words = state.query
         .toLocaleLowerCase()
@@ -1175,10 +1187,14 @@
         `${articles.length} 条出游消息${referenceCount ? ` · ${referenceCount} 个地点参考` : ""}`;
     $("#articles").setAttribute("aria-busy", "false");
     if (articles.length) {
+      const detailKey = node => `${node.closest('[data-article-id]')?.dataset.articleId}:${node.className}`;
+      const opened = new Set([...$("#articles").querySelectorAll('details[open]')].map(detailKey));
       $("#articles").innerHTML = articles
         .slice(0, state.limit)
         .map(articleCard)
         .join("");
+      for (const detail of $("#articles").querySelectorAll('details'))
+        if (opened.has(detailKey(detail))) detail.open = true;
     } else {
       const emptySaved = state.view === "saved" && !state.saved.size;
       const emptyBrief = state.view === "brief" && state.date && !partial;
@@ -2037,7 +2053,7 @@
     if (Array.isArray(data.briefArticles))
       data.briefArticles = data.briefArticles
         .filter(validArticle)
-        .slice(0, 100);
+        .slice(0, 120);
     if (Array.isArray(data.briefDays))
       data.briefDays = data.briefDays
         .filter(

@@ -131,6 +131,8 @@ def build_news_pages(data, output):
     def annotate(article):
         if news.public_notice(article):
             article = {**article, 'briefPriority': 3}
+        elif news.brief_roundup(article):
+            article = {**article, 'briefPriority': 0}
         event = news.holiday_event(article)
         return {**article, 'briefEvent': event} if event else article
     data = {**data, **{key: [annotate(a) for a in data[key]] for key in
@@ -226,6 +228,17 @@ def build_news_pages(data, output):
                     if published == day:
                         pool.append(article)
                 brief_articles.extend(news.brief_candidates(pool))
+        # A live hot topic can have been published yesterday. Keep a bounded
+        # set of those reports in the first packet, even outside the latest 150
+        # or a category's five daily candidates. Original dates stay intact.
+        recent_hot = [a for a in candidates if news_trends.score(a) > 0
+                      and news.brief_rank(a) >= 1
+                      and 0 <= (news.parse_date(data['updatedAt']) - news.parse_date(a['publishedAt'])).total_seconds() <= 48 * 3600]
+        known = {a['id'] for a in brief_articles}
+        for article in news.brief_candidates(recent_hot, limit=20):
+            if article['id'] not in known:
+                brief_articles.append(article)
+                known.add(article['id'])
     gaming = [article for article in articles if article.get('category') == 'gaming'][:60]
     latest = {**data, 'articles': articles[:size], 'modelReleases': releases, 'gamingArticles': gaming,
               'housingArticles': housing,

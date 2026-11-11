@@ -37,7 +37,7 @@ AI_PATTERN = re.compile(
     r'RAG|MCP|agents?)(?![a-z0-9])|人工智能|大模型|语言模型|生成式|机器学习|'
     r'智能体|通义|千问|智谱|豆包|具身智能', re.I)
 FINANCE_TOPIC = re.compile(
-    r'财经|经济|金融|股价|股票|股市|投资标的|标普|纳斯达克|证券|盈利|业绩|财报|营收|净利润|'
+    r'财经|经济|金融|股价|股票|股市|翻倍股|持股|质押|投资标的|标普|纳斯达克|证券|盈利|业绩|财报|营收|净利润|'
     r'银行|央行|货币|财政|利率|降息|加息|债券|国债|期货|基金|私募|公募|人民币|外汇|黄金|金价|油价|'
     r'通胀|物价|融资|上市公司|挂牌上市|进出口|出口额|进口额|贸易额|关税|资产管理|资产证券|不良资产|国联民生|'
     r'(?<![a-z0-9])(?:GDP|CPI|PPI|LPR|IPO|ETF|A股|港股|美股|earnings|revenue|'
@@ -288,9 +288,17 @@ def public_notice(article):
                 and re.search(r'高考报名|医保|养老金|最低工资|台风|暴雨|暴雪', title))
 
 
+def brief_roundup(article):
+    title = article.get('title', '')
+    return bool(re.match(r'^[【\[]?(?:早报|晨报|午报|晚报|今日要闻|每日要闻)[】\]：:]', title)
+                and len(re.findall(r'[；;]', title)) >= 2)
+
+
 def brief_rank(article, records=None):
     if public_notice(article):
         return 3
+    if brief_roundup(article):
+        return 0
     meta = (records.get(article['id'], {}) if records is not None else article.get('editorial', {}))
     if meta.get('isBackground') is True:
         return -1
@@ -306,9 +314,10 @@ def brief_candidates(articles, records=None, limit=5):
     for article in ranked:
         meta = records.get(article['id'], {}) if records is not None else article.get('editorial', {})
         key = holiday_event(article) or meta.get('eventId') or re.sub(r'\W', '', article['title'].rsplit(' - ', 1)[0]).casefold()
-        if key in seen:
+        keys = {key} | news_trends.topic_keys(article)
+        if keys & seen:
             continue
-        seen.add(key)
+        seen.update(keys)
         source = article.get('sourceId', '')
         if len(selected) < limit and (brief_rank(article, records) >= 3 or counts.get(source, 0) < 2):
             selected.append(article)

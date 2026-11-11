@@ -17,6 +17,7 @@ from xml.sax.saxutils import escape
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'scripts'))
 import collect_news as news
+import news_trends
 from site_config import site_origin, site_url
 
 
@@ -119,6 +120,12 @@ def build_guide_reader(output):
 def build_news_pages(data, output):
     """Keep the full export for collectors; readers fetch a small initial page."""
     size = 150
+    if data.get('trendState') and data.get('updatedAt'):
+        observed = news.parse_date(data['updatedAt'])
+        data = dict(data)
+        for key in ('articles', 'modelReleases', 'housingArticles'):
+            if key in data:
+                data[key], data['trends'] = news_trends.annotate(data[key], data['trendState'], observed)
     # Publish only the small deterministic fallback score; the AI's validated
     # priority is already in editorial. Normal category lists stay chronological.
     def annotate(article):
@@ -231,6 +238,7 @@ def build_news_pages(data, output):
     # Observation history is only for the collector. Open the small public
     # summary on demand so source statistics do not slow down the news list.
     latest.pop('sourceQualityState', None)
+    latest.pop('trendState', None)
     quality = latest.pop('sourceQuality', None)
     if quality:
         body = json.dumps(quality, ensure_ascii=False, separators=(',', ':')).encode()

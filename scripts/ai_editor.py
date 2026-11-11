@@ -259,6 +259,7 @@ def validate_groups(result, candidates, previous, now):
 
 
 def edit_news(client, data, state, now):
+    import news_trends
     pool = news_candidates(data, now)
     old = state.get('newsRecords', {})
     records = {a['id']: old[a['id']] for a in pool if a['id'] in old and old[a['id']].get('hash') == article_hash(a)}
@@ -271,7 +272,7 @@ def edit_news(client, data, state, now):
         return attempt.get('count', 0) < 2 and (not checked or now - checked >= timedelta(hours=6))
     state['newsDeferred'] = sum(a['id'] not in records and not retry_allowed(a) for a in pool)
     new = sorted((a for a in pool if a['id'] not in records and retry_allowed(a)),
-                 key=lambda a: news.brief_rank(a, records), reverse=True)
+                 key=lambda a: (news.brief_rank(a, records), news_trends.score(a)), reverse=True)
     # Round-robin categories so busy feeds cannot monopolise the API budget.
     selected, queues = [], {}
     for article in new:

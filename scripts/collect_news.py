@@ -300,7 +300,8 @@ def brief_rank(article, records=None):
 
 def brief_candidates(articles, records=None, limit=5):
     """Preserve important events before applying source diversity or recency."""
-    ranked = sorted(articles, key=lambda a: (brief_rank(a, records), a['publishedAt']), reverse=True)
+    import news_trends
+    ranked = sorted(articles, key=lambda a: (brief_rank(a, records), news_trends.score(a), a['publishedAt']), reverse=True)
     selected, others, counts, seen = [], [], {}, set()
     for article in ranked:
         meta = records.get(article['id'], {}) if records is not None else article.get('editorial', {})
@@ -663,7 +664,11 @@ def merge_articles(previous, incoming, now, allowed_sources):
         # Reapply current source rules to the archive as well as new stories.
         source = allowed_sources[clean['sourceId']] if isinstance(allowed_sources, dict) else {
             'id': clean['sourceId'], 'category': clean['category']}
-        clean['category'] = article_category(clean['title'], source)
+        if source.get('format') == 'hot-discovery':
+            import news_trends
+            clean['category'] = news_trends.category(clean['title'])
+        else:
+            clean['category'] = article_category(clean['title'], source)
         if not clean['category']:
             continue
         if clean['title']:
@@ -883,12 +888,14 @@ def main():
     parser.add_argument('--previous-file', type=Path)
     args = parser.parse_args()
     sources = json.loads((ROOT / 'news/sources.json').read_text())
-    previous, previous_models, previous_housing, quality_states = [], [], [], []
+    previous, previous_models, previous_housing, quality_states, trend_states = [], [], [], [], []
     if args.output.exists():
         old = json.loads(args.output.read_text())
         previous = old.get('articles', [])
         previous_models = old.get('modelReleases', [])
         previous_housing = old.get('housingArticles', [])
+        if old.get('trendState', {}).get('schema') == 1:
+            trend_states.append(old['trendState'])
         if old.get('sourceQualityState') is not None:
             quality_states.append(validate_quality_state(old['sourceQualityState']))
     if args.previous_url or args.previous_file:
@@ -897,6 +904,8 @@ def main():
             previous += old.get('articles', [])
             previous_models += old.get('modelReleases', [])
             previous_housing += old.get('housingArticles', [])
+            if old.get('trendState', {}).get('schema') == 1:
+                trend_states.append(old['trendState'])
             if old.get('sourceQualityState') is not None:
                 quality_states.append(validate_quality_state(old['sourceQualityState']))
         except urllib.error.HTTPError as exc:
@@ -911,12 +920,19 @@ def main():
         for articles, status in pool.map(lambda source: collect(source, now), sources):
             incoming.extend(articles)
             statuses.append(status)
-    allowed_sources = {s['id']: s for s in sources}
-    articles = merge_articles(previous, incoming, now, allowed_sources)
-    models = recent_model_releases(previous + previous_models, incoming, now, allowed_sources)
-    housing = recent_housing_articles(articles + previous_housing, incoming, now, allowed_sources)
     if not incoming:
         raise SystemExit('All feeds unavailable. Keep the last successful deployment; do not publish an empty site.')
+    import news_trends
+    old_trends = max(trend_states, key=lambda state: state.get('updatedAt', '')) if trend_states else None
+    trend_state, discovered, trend_status = news_trends.collect(old_trends, incoming + previous, now)
+    incoming.extend(discovered)
+    sources.append(news_trends.SOURCE)
+    statuses.append(trend_status)
+    allowed_sources = {s['id']: s for s in sources}
+    articles = merge_articles(previous, incoming, now, allowed_sources)
+    articles, trends = news_trends.annotate(articles, trend_state, now)
+    models = recent_model_releases(previous + previous_models, incoming, now, allowed_sources)
+    housing = recent_housing_articles(articles + previous_housing, incoming, now, allowed_sources)
     resolved = resolve_original_links(articles + models + housing, previous + previous_models + previous_housing)
     print(f'Publisher links available for {resolved} retained story records; unresolved stories keep their feed links.')
     old_quality = max(quality_states, key=lambda state: state['updatedAt']) if quality_states else None
@@ -927,6 +943,7 @@ def main():
               ('id', 'checkedAt', 'status', 'fetchedCount', 'newCount', 'durationMs')}))
     result = {'version': 1, 'updatedAt': iso(now), 'newsCheckedAt': iso(now), 'retentionDays': 30, 'sources': statuses,
               'articles': articles, 'modelReleases': models, 'housingArticles': housing,
+              'trendState': trend_state, 'trends': trends,
               'sourceQualityState': quality_state, 'sourceQuality': quality}
     args.output.parent.mkdir(parents=True, exist_ok=True)
     args.output.write_text(json.dumps(result, ensure_ascii=False, separators=(',', ':')) + '\n')

@@ -1,0 +1,9 @@
+{
+  "platforms": [
+    {"id": "baidu", "name": "百度热搜", "domain": "baidu.com"},
+    {"id": "weibo", "name": "微博热搜", "domain": "weibo.com"},
+    {"id": "thepaper", "name": "澎湃热榜", "domain": "thepaper.cn"},
+    {"id": "cls-hot", "name": "财联社热门", "domain": "cls.cn"}
+  ],
+  "maxSearches": 6
+}

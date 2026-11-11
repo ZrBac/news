@@ -473,6 +473,8 @@
   function sourceFor(article) {
     if (article.sourceId === "web-discovery" && article.sourceName)
       return { name: article.sourceName };
+    if (article.sourceId === "hot-discovery" && article.title.includes(" - "))
+      return { name: article.title.slice(article.title.lastIndexOf(" - ") + 3).trim() + " · 热榜补充" };
     return (
       state.data?.sources.find((s) => s.id === article.sourceId) || {
         name: article.sourceName || article.sourceId,
@@ -505,6 +507,31 @@
     }
     updateSavedCount();
     render();
+  }
+  function trendSignals(article) {
+    const signals = [article, ...(article.reports || [])].flatMap(a => Array.isArray(a.trend) ? a.trend : []);
+    return signals.filter(s => s && typeof s.name === "string" && Number.isInteger(s.rank) && s.rank >= 1 && s.rank <= 30 &&
+      Number.isFinite(Date.parse(s.asOf)) && Date.now() - Date.parse(s.asOf) >= -300000 &&
+      Date.now() - Date.parse(s.asOf) <= 86400000);
+  }
+  function freshTrend(signal) {
+    const age = Date.now() - Date.parse(signal.asOf);
+    return signal.stale !== true && age >= -300000 && age <= 4 * 3600000;
+  }
+  function trendScore(article) {
+    const signals = trendSignals(article).filter(freshTrend);
+    return signals.length ? Math.max(...signals.map(s => 31 - s.rank)) +
+      5 * (new Set(signals.map(s => s.platform)).size - 1) : 0;
+  }
+  function trendBadge(article) {
+    if (state.view !== "brief") return "";
+    const signals = trendSignals(article);
+    if (!signals.length) return "";
+    const current = signals.filter(freshTrend);
+    const rising = current.some(s => Number.isInteger(s.previousRank) && s.previousRank - s.rank >= 3);
+    const label = !current.length ? "上次上榜" : rising ? "较上次升温" : current.some(s => s.new === true) ? "新上榜" : "热榜关注";
+    const evidence = [...new Set(signals.map(s => `${s.name}第 ${s.rank} · ${formatTime(s.asOf)}${freshTrend(s) ? "" : "（上次记录）"}`))].join("；");
+    return `<span class="trend-label${current.length ? "" : " stale"}" title="${escape(evidence)}" aria-label="${escape(label + '：' + evidence)}">${label}</span>`;
   }
   function articleCard(article, index) {
     const saved = state.saved.has(article.id);
@@ -545,7 +572,7 @@
       <h3><a href="${escape(articleUrl(article))}" aria-label="${escape(article.title)}" target="_blank" rel="noopener noreferrer">${headline}</a></h3>
       ${article.category === "local" ? outingSummary(article) : ""}
       ${summary ? `<p class="editorial-summary"${detail ? ' data-summary-source="article"' : ""}>${escape(summary)}</p>` : article.excerpt ? `<p${repeatsTitle ? ' class="repeated-excerpt"' : ""}>${escape(article.excerpt)}</p>` : ""}
-      <div class="article-meta"><span>${escape(source.name)}</span><time datetime="${escape(article.publishedAt)}" title="${escape(publishedTitle)}">${escape(publishedLabel)}</time><span class="category-label ${escape(article.category)}">${categoryNames[article.category]}</span>${read ? '<span class="read-label">已读</span>' : ""}</div>
+      <div class="article-meta"><span>${escape(source.name)}</span><time datetime="${escape(article.publishedAt)}" title="${escape(publishedTitle)}">${escape(publishedLabel)}</time><span class="category-label ${escape(article.category)}">${categoryNames[article.category]}</span>${trendBadge(article)}${read ? '<span class="read-label">已读</span>' : ""}</div>
       ${article.reports?.length ? `<details class="article-reports"><summary>其他 ${article.reports.length} 篇报道</summary>${article.reports.map((a) => `<a href="${escape(articleUrl(a))}" target="_blank" rel="noopener noreferrer">${escape(sourceFor(a).name)} · ${escape(a.title)}</a>`).join("")}</details>` : ""}
       </div>${outingRecord ? `<button class="text-button outing-save" data-outing-story="${escape(article.id)}" aria-pressed="${!!wanted}">${wanted?"已想去":"想去"}</button>` : `<button class="save-button${saved ? " saved" : ""}" data-save="${escape(article.id)}" aria-label="${saved ? "取消收藏" : "收藏"}：${escape(article.title)}" aria-pressed="${saved}" title="${saved ? "取消收藏" : "收藏文章"}">${icon("bookmark")}</button>`}</article>`;
   }
@@ -558,7 +585,7 @@
     };
     // Group after ranking so a lower-priority follow-up cannot hide the main
     // announcement when it becomes the newest report of the same event.
-    articles = [...articles].sort((a, b) => rank(b) - rank(a) ||
+    articles = [...articles].sort((a, b) => rank(b) - rank(a) || trendScore(b) - trendScore(a) ||
       Date.parse(b.publishedAt) - Date.parse(a.publishedAt));
     if (window.NewsEditorial)
       articles = window.NewsEditorial.group(articles, (a) => a.title.replace(/ - [^-]+$/, "").replace(/[\s\p{P}]/gu, "").toLowerCase());
@@ -580,6 +607,19 @@
     const counts = {};
     for (const article of selected)
       counts[article.sourceId] = (counts[article.sourceId] || 0) + 1;
+    // Reserve at most two additional places for strongly ranked topics, with
+    // different categories. Major public announcements always remain first.
+    const hotCategories = new Set();
+    for (const article of [...articles].sort((a, b) => rank(b) - rank(a) || trendScore(b) - trendScore(a))) {
+      if (hotCategories.size >= 2) break;
+      if (selectedIds.has(article.id) || rank(article) < 1 || trendScore(article) < 24 ||
+          hotCategories.has(article.category) || (counts[article.sourceId] || 0) >= 2) continue;
+      selected.push(article);
+      selectedIds.add(article.id);
+      represented.add(article.category);
+      hotCategories.add(article.category);
+      counts[article.sourceId] = (counts[article.sourceId] || 0) + 1;
+    }
     const queues = [
       "general",
       "finance",
@@ -605,8 +645,8 @@
         ) % queues.length;
       queues.push(...queues.splice(0, offset));
     }
-    // Rotate the remaining categories and sources; these are editorial choices,
-    // not measured popularity or click counts.
+    // Heat breaks ties within a category; category rotation and public notices
+    // still determine the mix. This is not a reproduction of any platform rank.
     while (selected.length < 10 && queues.some((q) => q.length)) {
       for (const q of queues) {
         if (!q.length || selected.length >= 10) continue;
@@ -1095,6 +1135,11 @@
       note.textContent = state.data?.editorial?.news?.processed
         ? "部分要点由 AI 整理，原文可核对。"
         : "按分类和来源选取，可切换日期回看。";
+    if (state.view === "brief" && Array.isArray(state.data?.trends?.platforms)) {
+      const boards = state.data.trends.platforms;
+      const available = boards.filter(b => b.status === "ok" && freshTrend({asOf: b.observedAt})).length;
+      note.textContent += ` 热榜补充 ${available}/${boards.length} 个已更新${available < boards.length ? "，未更新的保留上次记录" : ""}。`;
+    }
     $("#date-trigger").classList.toggle("active", !!state.date);
     $("#date-trigger span:last-child").textContent = state.date
       ? state.date.slice(5).replace("-", "/")

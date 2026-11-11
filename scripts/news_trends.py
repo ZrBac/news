@@ -131,8 +131,11 @@ def observe(previous, platform, payload, now):
         if old_date and date(observed) == old_date:
             current['status'] = 'ok'
             return current
-        baseline = (old_date and previous.get('status') == 'ok'
-                    and not collection_gap(old_date, date(observed)))
+        # Providers may cache a board from just before our scheduled slot.
+        # Detect missed collections using our check time, not that cache time.
+        last_check = date(previous.get('checkedAt')) or old_date
+        baseline = (old_date and previous.get('status') == 'ok' and last_check
+                    and not collection_gap(last_check, now))
         old_items = {row['id']: row for row in previous.get('items', [])}
         history = {key: row for key, row in previous.get('history', {}).items()
                    if date(row.get('lastSeen')) and date(row['lastSeen']) >= now - timedelta(days=7)}

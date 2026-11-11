@@ -74,6 +74,13 @@ class TrendTests(unittest.TestCase):
         third = trends.observe(second, self.platform, self.payload(now=morning + timedelta(hours=2)), morning + timedelta(hours=2))
         self.assertLessEqual(len(third['history']), 300)
 
+    def test_provider_cache_before_collection_slot_is_not_a_missed_collection(self):
+        cached = self.now - timedelta(minutes=20)
+        first = trends.observe(None, self.platform, self.payload(now=cached), self.now)
+        later = self.now + timedelta(hours=2)
+        second = trends.observe(first, self.platform, self.payload(list(reversed(self.titles)), later - timedelta(minutes=10)), later)
+        self.assertEqual(second['items'][0]['previousRank'], 5)
+
     def test_untrusted_urls_and_malformed_payloads(self):
         for link in ('https://baidu.com.evil.example/a', 'https://baidu.com@evil.example/a',
                      'http://baidu.com/a', 'javascript:alert(1)', 'https://baidu.com:3000/a'):

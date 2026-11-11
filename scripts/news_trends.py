@@ -1,13 +1,16 @@
 """Observe public hot lists and find dated publisher reports, without model calls."""
 import concurrent.futures
 import copy
+import gzip
 import hashlib
+import io
 import json
 import re
 import time
 import unicodedata
 import urllib.parse
 import urllib.request
+import urllib.error
 import xml.etree.ElementTree as ET
 from datetime import datetime, timedelta, timezone
 from functools import lru_cache
@@ -48,13 +51,40 @@ def allowed_url(value, domains):
 
 
 def fetch(url):
-    request = urllib.request.Request(url, headers={'User-Agent': 'Mozilla/5.0',
-                                                  'Accept': 'application/json, application/rss+xml, */*'})
+    request = urllib.request.Request(url, headers={
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36',
+        'Accept': 'application/json, application/rss+xml, */*',
+        'Accept-Language': 'zh-CN,zh;q=0.9,en;q=0.8', 'Cache-Control': 'no-cache'})
     with urllib.request.urlopen(request, timeout=12) as response:
         body = response.read(2_000_001)
+        encoding = response.headers.get('Content-Encoding', '').lower().strip()
     if len(body) > 2_000_000:
         raise ValueError('Hot-list response too large')
+    if encoding in ('gzip', 'x-gzip') or body.startswith(b'\x1f\x8b'):
+        with gzip.GzipFile(fileobj=io.BytesIO(body)) as compressed:
+            body = compressed.read(2_000_001)
+        if len(body) > 2_000_000:
+            raise ValueError('Decompressed hot-list response too large')
     return body
+
+
+def load_board(platform, now, get=fetch):
+    url = 'https://newsnow.busiyi.world/api/s?id=' + platform['id'] + '&latest'
+    for attempt in range(2):
+        try:
+            payload = json.loads(get(url))
+            parse_board(payload, platform, now)
+            return payload
+        except Exception as exc:
+            # Only diagnostics, never a response body or credentials. Keep the
+            # failure visible when deployment-network behavior differs locally.
+            detail = str(exc) if isinstance(exc, (ValueError, urllib.error.HTTPError)) else type(exc).__name__
+            print(f'Hot source {platform["id"]}: {type(exc).__name__}: {detail[:160]}', flush=True)
+            if isinstance(exc, urllib.error.HTTPError) and exc.code not in (429, 500, 502, 503, 504):
+                break
+            if attempt == 0:
+                time.sleep(1)
+    return None
 
 
 @lru_cache(maxsize=12000)
@@ -204,10 +234,7 @@ def collect(previous, articles, now, get=fetch):
     old_boards = previous.get('platforms', {})
     started = time.monotonic()
     def board(platform):
-        try:
-            payload = json.loads(get('https://newsnow.busiyi.world/api/s?id=' + platform['id'] + '&latest'))
-        except Exception:
-            payload = None
+        payload = load_board(platform, now, get)
         return platform['id'], observe(old_boards.get(platform['id']), platform, payload, now)
     with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
         boards = dict(pool.map(board, config['platforms']))
@@ -301,3 +328,16 @@ def score(article):
     if not signals:
         return 0
     return max(31 - s['rank'] for s in signals) + 5 * (len(signals) - 1)
+
+
+if __name__ == '__main__':
+    # A small independent CI probe makes source/network failures observable
+    # without running article discovery or invoking an AI service.
+    now = datetime.now(UTC)
+    platforms = json.loads((ROOT / 'news/trends.json').read_text())['platforms']
+    def probe(platform):
+        payload = load_board(platform, now)
+        print(json.dumps({'platform': platform['id'], 'available': payload is not None,
+                          'observedAt': parse_board(payload, platform, now)[0] if payload else None}))
+    with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:
+        list(pool.map(probe, platforms))

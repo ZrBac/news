@@ -24,6 +24,19 @@ permissions:
   contents: read
 
 jobs:
+  hot-source-check:
+    if: github.event_name == 'push'
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+      - name: Observe public hot-source availability without AI calls
+        run: python scripts/news_trends.py
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 45

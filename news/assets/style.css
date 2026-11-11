@@ -565,6 +565,7 @@ span[data-icon] {
   line-height: 1.8;
   margin: 12px 0 0;
 }
+.view-note.brief-note { min-height: calc(3.6em + 20px); }
 #weekend-tools {
   margin: 10px 0 4px;
 }
@@ -1311,6 +1312,7 @@ dialog::backdrop {
     font-size: 11px;
     line-height: 1.7;
   }
+  #view-note.brief-note { min-height: 3.4em; }
   .article-publisher-suffix,
   .article .repeated-excerpt {
     display: none;

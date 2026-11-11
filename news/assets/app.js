@@ -1092,6 +1092,7 @@
     });
     revealCategory();
     const note = $("#view-note");
+    note.classList.toggle("brief-note", state.view === "brief");
     note.hidden = ![
       "saved",
       "brief",
@@ -1138,7 +1139,7 @@
     if (state.view === "brief" && Array.isArray(state.data?.trends?.platforms)) {
       const boards = state.data.trends.platforms;
       const available = boards.filter(b => b.status === "ok" && freshTrend({asOf: b.observedAt})).length;
-      note.textContent += ` 热榜补充 ${available}/${boards.length} 个已更新${available < boards.length ? "，未更新的保留上次记录" : ""}。`;
+      note.textContent += ` 热榜 ${available}/${boards.length} 已更新${available < boards.length ? "，其余保留上次记录" : ""}。`;
     }
     $("#date-trigger").classList.toggle("active", !!state.date);
     $("#date-trigger span:last-child").textContent = state.date

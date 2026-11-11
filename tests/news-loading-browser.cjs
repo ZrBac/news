@@ -18,6 +18,9 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const original = await (
       await page.request.get(base + "/data/latest.json")
     ).json();
+    // Reserve the same space even when the longer hot-source outage note is
+    // first received. The loading skeleton has no source status yet.
+    original.trends = {schema: 1, platforms: ["baidu", "weibo", "thepaper", "cls-hot"].map(id => ({id, status: "unavailable"}))};
     await context.addInitScript(stamp => {
       Date.now = () => Date.parse(stamp) + 60000;
     }, original.updatedAt);

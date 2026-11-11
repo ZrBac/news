@@ -1,8 +1,10 @@
 import copy
+import gzip
 import json
 import sys
 import tempfile
 import unittest
+from unittest.mock import Mock, patch
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
@@ -96,6 +98,21 @@ class TrendTests(unittest.TestCase):
         payload['updatedTime'] = True
         with self.assertRaises(ValueError):
             trends.parse_board(payload, self.platform, self.now)
+
+    def test_compressed_network_response_and_size_limit(self):
+        body = json.dumps(self.payload()).encode()
+        def response(data, encoding):
+            result = Mock(headers={'Content-Encoding': encoding})
+            result.read.return_value = data
+            result.__enter__ = Mock(return_value=result)
+            result.__exit__ = Mock(return_value=False)
+            return result
+        for encoding in ('gzip', ''):
+            with patch.object(trends.urllib.request, 'urlopen', return_value=response(gzip.compress(body), encoding)):
+                self.assertEqual(trends.fetch('https://example.com/data'), body)
+        with patch.object(trends.urllib.request, 'urlopen', return_value=response(gzip.compress(b'x' * 2_000_001), 'gzip')):
+            with self.assertRaises(ValueError):
+                trends.fetch('https://example.com/data')
 
     def test_matching_does_not_confuse_other_years_or_generic_keywords(self):
         topic = {'title': self.titles[4], 'url': 'https://www.baidu.com/s?q=holiday'}

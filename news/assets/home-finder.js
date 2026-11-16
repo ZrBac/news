@@ -181,11 +181,18 @@
     );
     const budget = all.filter((c) => category(c, p) === "budget");
     const resale = budget.filter((c) => c.kind === "resale");
-    const communities = new Set(resale.map((c) => c.district + "|" + c.name))
+    const communities = new Set(resale.map((c) => c.district + "|" + (community(c)?.id || c.name)))
       .size;
     $("#candidate-summary").textContent =
       `预算内：${budget.length - resale.length} 个新盘 · ${resale.length} 条二手挂牌（${communities} 个小区）`;
-    const failures = feed.sources.filter((s) => !s.ok).length;
+    const relevantSources = new Set(all.map((c) => c.source));
+    for (const c of watch.communities) {
+      if (focus === "watched" || focus === c.id ||
+          (focus === "priority" && c.tier === "primary") ||
+          (focus === "comparison" && c.tier === "comparison"))
+        relevantSources.add("resale-watch-" + c.id);
+    }
+    const failures = feed.sources.filter((s) => !s.ok && (focus === "all" || relevantSources.has(s.id))).length;
     $("#candidate-message").textContent =
       `${origin}检查于 ${date(feed.updatedAt)}${failures ? ` · ${failures} 个来源有页面未更新，保留上次结果` : ""} · 当前 ${items.length} 条`;
     $("#candidate-list").innerHTML =

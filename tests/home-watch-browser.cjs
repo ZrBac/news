@@ -15,7 +15,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     const packet = {schema:1,updatedAt:now,coverage:"测试范围",sources:[{id:"test",name:"测试来源",url:"https://m.fang.com/",ok:true,checkedAt:now}],items:[
       row("q-other","金地自在城求学里",119.2,310),
       row("q","金地自在城求学里",124.84,330),
-      row("q-second","金地自在城求学里",124.84,320),
+      row("q-second","金地自在城·求学里",124.84,320),
       row("lu","金地自在城鹭影轩",121.1,335),
       row("zi","紫璋台公寓",125.58,320,"4室2厅2卫"),
       row("dong","紫郡东苑",139.9,350),
@@ -25,11 +25,14 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
       row("west","协安紫郡",139.9,350),
     ]};
     packet.items.find(c=>c.id==="west").title="紫郡西苑大三房";
+    packet.sources.push({id:"new-xihu",name:"其他新房来源",url:"https://hz.newhouse.fang.com/",ok:false});
     await page.route("**/data/home-candidates.json", r=>r.fulfill({json:packet}));
     await page.goto(base+"/homes/");
     await page.evaluate(()=>window.homeCandidatesReady);
     assert.equal(await page.inputValue("#candidate-community"),"priority");
     assert.equal(await page.inputValue("#candidate-budget"),"400");
+    assert.match(await page.locator("#candidate-summary").innerText(),/4 个小区/);
+    assert.doesNotMatch(await page.locator("#candidate-message").innerText(),/有页面未更新/);
     assert.deepEqual(await page.locator(".candidate-card").evaluateAll(cards=>cards.map(c=>c.dataset.candidate)),["q","lu","zi","dong","zi-large","q-second","q-other"]);
     assert.match(await page.locator('[data-candidate="q"] .home-price').innerText(), /330/);
     assert.match(await page.locator('[data-candidate="q"]').innerText(), /卫生间数量未披露/);
@@ -47,6 +50,7 @@ const base = process.env.NEWS_BASE_URL || "http://127.0.0.1:8765";
     assert.equal(await page.locator(".candidate-card").count(),1);
     assert.match(await page.locator(".candidate-card h3").innerText(), /鹭影轩/);
     await page.selectOption("#candidate-community","all");
+    assert.match(await page.locator("#candidate-message").innerText(),/1 个来源有页面未更新/);
     assert.equal(await page.locator('[data-candidate="old-small"]').count(),0);
     await page.selectOption("#candidate-community","priority");
     for(const width of [320,390,768,1440]) {

@@ -21,19 +21,19 @@ from site_config import site_url
 
 MAX_PAGE = 2_500_000
 ROOT = Path(__file__).resolve().parents[1]
-REVISION = 'pages-candidates-v1'
+REVISION = 'focused-candidates-v2'
 BEIJING = dt.timezone(dt.timedelta(hours=8))
 MAX_SNAPSHOT = 3_000_000
 
 
 def candidate_fits(item):
-    """Only publish known areas of at least 100 square metres and 3+ rooms."""
+    """Only publish known areas of at least 110 square metres and 3+ rooms."""
     if not isinstance(item, dict):
         return False
     areas, layout = item.get('areas'), item.get('layout')
     if (not isinstance(areas, list) or len(areas) != 2
             or any(type(a) not in (int, float) or not math.isfinite(a) for a in areas)
-            or not 100 <= areas[0] <= areas[1] or not isinstance(layout, str)):
+            or not 110 <= areas[0] <= areas[1] or not isinstance(layout, str)):
         return False
     numerals = dict(zip('零〇一二两三四五六七八九十', (0, 0, 1, 2, 2, 3, 4, 5, 6, 7, 8, 9, 10)))
     layout = re.sub(r'[零〇一二两三四五六七八九十]+', lambda m: str(numerals.get(m[0], 0)), layout)
@@ -287,8 +287,10 @@ def parse_resale_list(source, config):
     """Read the residential list, not nearby recommendations or search snippets."""
     tree = Tree(source).root
     fields = {n.attrs.get('data-id'): n.attrs.get('value', '') for n in tree.all('input')}
-    expected = {'district': config['districtId'], 'comarea': config['regionId'],
-                'price': '300^350', 'purpose': '住宅', 'tags': '3', 'pageType': 'esfindex2022'}
+    focused = config.get('parser') == 'community'
+    expected = ({'keyword': config['keyword'], 'area': ','.join(map(str, config['scanAreas'])), 'purpose': '住宅', 'pageType': 'esfindex2022'}
+                if focused else {'district': config['districtId'], 'comarea': config['regionId'],
+                'price': '300^350', 'purpose': '住宅', 'tags': '3', 'pageType': 'esfindex2022'})
     if '杭州' not in tree.first('title').text() or any(fields.get(k) != v for k, v in expected.items()):
         raise ValueError('Residential list filters or city changed')
     section = next((n for n in tree.all('ul') if n.attrs.get('id') == 'content'), None)
@@ -306,14 +308,27 @@ def parse_resale_list(source, config):
         values = [n.text() for n in detail.first('p').all('span')]
         price = positive(detail.first(cls='price').first('em').text())
         areas = area_range(values[0]) if values else []
-        if not match or len(values) != 4 or not areas or not price or not 300 <= price <= 350:
+        if not match or len(values) != 4 or not areas or not price:
+            continue
+        if not focused and not 300 <= price <= 350:
+            continue
+        title = detail.first('h3').text()
+        if focused and (not config['scanAreas'][0] <= areas[0] <= areas[1] <= config['scanAreas'][1]
+                        or not any(alias in values[3] or alias in title for alias in config['aliases'])
+                        or any(alias in values[3] or alias in title for alias in config.get('excludeAliases', []))):
             continue
         layout = re.fullmatch(r'\d室\d厅(?:\d卫)?', values[1])
         if not layout or not values[3]:
             continue
-        result.append(dict(id='resale-' + match[1], kind='resale', name=values[3], district=config['district'],
-                           region=config['region'], address='', title=detail.first('h3').text(), url=url,
-                           unitPrice=None, total=price, priceBasis='listing', areas=areas, layout=layout[0],
+        layout_text = layout[0]
+        baths = re.search(r'([1-9两双一二])卫', title)
+        if '卫' not in layout_text and baths:
+            layout_text += {'两': '2', '双': '2', '一': '1', '二': '2'}.get(baths[1], baths[1]) + '卫'
+        # Some platforms combine east/west phases under one project name. Only
+        # explicit matches in the card can establish the watched community.
+        result.append(dict(id='resale-' + match[1], kind='resale', name=config['communityName'] if focused else values[3], district=config['district'],
+                           region=config['region'], address='', title=title, url=url,
+                           unitPrice=None, total=price, priceBasis='listing', areas=areas, layout=layout_text,
                            orientation=values[2], status='平台挂牌', source=config['id']))
     return result
 
@@ -356,9 +371,7 @@ def sources():
                    url=f'https://hz.newhouse.fang.com/house/s/{slug}/', maxPages=3)
               for slug, district in [('xihu', '西湖'), ('yuhang', '余杭'), ('shangcheng', '上城')]]
     for key, name, aliases, district, region in [
-        ('xiyatu', '万科融信西雅图', ['西雅图'], '西湖', '三墩'),
         ('xixiyuecheng', '西溪悦城', ['西溪悦城'], '余杭', '西溪'),
-        ('zizaicheng', '金地自在城', ['金地自在城'], '西湖', '三墩'),
     ]:
         result.append(dict(id='resale-' + key, name=name, aliases=aliases, district=district, region=region,
                            kind='resale', url='https://m.fang.com/quanwangso/hz/search.html?q=' + urllib.parse.quote(aliases[0])))
@@ -379,6 +392,23 @@ def sources():
         result.append(dict(id='resale-area-' + key, name=f'房天下 · {region or district} 300–350 万住宅',
                            district=district, region=region, districtId=district_id, regionId=region_id,
                            kind='resale', parser='list', url=f'https://m.fang.com/esf/hz_{path}/m300,350c3/'))
+    # Read each named community's area-filtered residential list, rather than
+    # the five search previews dominated by small flats. No price cap here:
+    # estimates must never replace observed asking prices or hide comparisons.
+    watch = json.loads((ROOT / 'news/home-watchlist.json').read_text())
+    for community in watch['communities']:
+        scan = ([math.floor(min(t['areas'][0] for t in community['targets'])),
+                 math.ceil(max(t['areas'][1] for t in community['targets']))]
+                if community['tier'] == 'primary' else [110, 160])
+        area_filter = ','.join(map(str, scan))
+        result.append(dict(id='resale-watch-' + community['id'],
+                           name='房天下 · ' + community['name'] + f' {scan[0]}–{scan[1]}㎡',
+                           scanAreas=scan,
+                           communityName=community['name'], keyword=community['keyword'],
+                           aliases=community['aliases'], district=community['district'], region=community['region'],
+                           excludeAliases=community.get('excludeAliases', []),
+                           kind='resale', parser='community',
+                           url=f'https://m.fang.com/esf/hz/a{area_filter}/?keyword=' + urllib.parse.quote(community['keyword'])))
     return result
 
 
@@ -386,7 +416,7 @@ def read_source(config, loader):
     """Bound pagination and retain page-level success for partial-failure recovery."""
     url = config['url']
     pages, found = [], {}
-    parser = parse_new if config['kind'] == 'new' else (parse_resale_list if config.get('parser') == 'list' else parse_resale)
+    parser = parse_new if config['kind'] == 'new' else (parse_resale_list if config.get('parser') in ('list', 'community') else parse_resale)
     for page in range(1, config.get('maxPages', 1) + 1):
         try:
             source = loader(url)
@@ -483,9 +513,9 @@ def collect(previous=None, loader=fetch):
         checks.append(check)
     # Keep a bounded history of items that fell off the sampled pages.
     cutoff = (dt.datetime.now(dt.timezone.utc) - dt.timedelta(days=30)).isoformat()
-    items = [x for x in items if not x.get('missing') or x['checkedAt'] >= cutoff]
+    items = [x for x in items if candidate_fits(x) and (not x.get('missing') or x['checkedAt'] >= cutoff)]
     return {'schema': 1, 'updatedAt': checked, 'sources': checks, 'items': items[:500],
-            'coverage': '西湖、余杭、上城新房各最多 3 页；二手房覆盖三墩、蒋村、留下、西溪、未来科技城、闲林、仓前、良渚、勾庄及上城，读取各自 300–350 万住宅列表前 30 条，并保留原有 3 个小区搜索。按房源编号去重，不同编号仍可能为同一套房。不是全量市场。',
+            'coverage': '求学里读取124–131㎡、鹭影轩120–122㎡、紫璋台124–141㎡、紫郡东苑138–141㎡；西溪华府、西庐、河滨之城读取110–160㎡。各读取住宅列表前30条，不限制挂牌总价。另保留西湖、余杭、上城新房各最多3页，原有板块300–350万住宅列表前30条和西溪悦城搜索。仅收录110㎡以上、至少3室的线索。按房源编号去重，不同编号仍可能为同一套房；不是全量市场。',
             'notice': '页面报价不等于成交价或可售承诺；税费、车位和装修另核实。每日上午 9 点、下午 4 点检查。通勤尚未核实。'}
 
 

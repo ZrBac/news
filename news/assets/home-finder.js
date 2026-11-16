@@ -5,6 +5,9 @@
   const FEED = $('meta[name="home-candidates-feed"]').content;
   const DATA_CACHE = "news-home-candidates-data-v1";
   const CACHE = "zrbac-home-candidates-v1";
+  const watch = JSON.parse($("#home-watchlist").textContent);
+  const community = (c) => H.watchCommunity(c, watch.communities);
+  const target = (c) => H.watchTarget(c, community(c));
   const esc = (v) =>
     String(v ?? "").replace(
       /[&<>"']/g,
@@ -26,6 +29,7 @@
           hour: "2-digit",
           minute: "2-digit",
           hour12: false,
+          timeZone: "Asia/Shanghai",
         })
       : "时间未知";
   const url = (value) => {
@@ -43,9 +47,7 @@
     origin = "",
     loading = false;
   const profile = () => ({
-    budgetMin: 300,
-    budgetMax: Number($("#candidate-budget").value) || 350,
-    priority: "new",
+    budgetMax: Number($("#candidate-budget").value) || watch.defaultBudget,
   });
   const unavailable = (c) =>
     c.missing ||
@@ -122,7 +124,8 @@
     const p = profile(),
       scope = $("#candidate-scope").value,
       kind = $("#candidate-kind").value,
-      district = $("#candidate-area").value;
+      district = $("#candidate-area").value,
+      focus = $("#candidate-community").value;
     const regionSelect = $("#candidate-region"),
       selectedRegion = regionSelect.value;
     const regions = [
@@ -144,18 +147,20 @@
       (c) =>
         (!kind || c.kind === kind) &&
         (!district || c.district === district) &&
-        (!region || c.region === region),
+        (!region || c.region === region) &&
+        (focus === "all" || (focus === "priority" ? community(c)?.tier === "primary" :
+          focus === "comparison" ? community(c)?.tier === "comparison" :
+          focus === "watched" ? !!community(c) : community(c)?.id === focus)),
     );
     const items = all.filter(
       (c) => scope === "all" || category(c, p) === scope,
     );
-    const desired = p.priority === "resale" ? "resale" : "new";
-    const rank = (c) =>
-      (c.kind === desired ? 0 : 100) +
-      (amount(c) != null && p.budgetMin != null && amount(c) < p.budgetMin
-        ? 20
-        : 0) +
-      (c.district === "上城" ? 10 : 0);
+    const rank = (c) => {
+      const group = community(c), preferred = target(c);
+      return (unavailable(c) || c.stale ? 1000 : 0) +
+        (preferred ? preferred.order : group?.tier === "primary" ? 20 :
+          group?.tier === "comparison" ? 30 : c.kind === "new" ? 100 : 110);
+    };
     items.sort(
       (a, b) => rank(a) - rank(b) || (amount(b) || 0) - (amount(a) || 0),
     );
@@ -163,14 +168,15 @@
     const counts = new Map(),
       occurrence = new Map();
     for (const c of items) {
-      const key = [c.kind, c.district, c.name].join("|");
+      const key = [c.kind, c.district, community(c)?.id || c.name, target(c)?.order || "other"].join("|");
       occurrence.set(c.id, counts.get(key) || 0);
       counts.set(key, (counts.get(key) || 0) + 1);
     }
     items.sort(
       (a, b) =>
-        rank(a) - rank(b) ||
+        Math.floor(rank(a) / 10) - Math.floor(rank(b) / 10) ||
         occurrence.get(a.id) - occurrence.get(b.id) ||
+        rank(a) - rank(b) ||
         (amount(b) || 0) - (amount(a) || 0),
     );
     const budget = all.filter((c) => category(c, p) === "budget");
@@ -202,6 +208,8 @@
               : "",
             c.missing ? "本次列表未再出现，不能据此判断已售" : "",
             c.stale ? "来源未更新，显示上次结果" : "",
+            !/\d+卫/.test(c.layout) ? "卫生间数量未披露，需确认是否两卫" : "",
+            /(?:^|\D)[01]卫/.test(c.layout) ? "来源标为不足两卫，不符合重点户型要求" : "",
           ]
             .filter(Boolean)
             .join(" · ");
@@ -210,10 +218,12 @@
               ? `按此均价，${p.budgetMax} 万约对应 ${number((p.budgetMax * 10000) / c.unitPrice)}㎡，有无该面积房源待核实。`
               : "";
           const map = `https://uri.amap.com/search?keyword=${encodeURIComponent("杭州 " + c.name)}&city=杭州&view=map`;
-          return `<article class="candidate-card" data-candidate="${esc(c.id)}"><div class="home-card-top"><span class="home-tag">${c.kind === "new" ? "新房" : "二手房"}</span><span class="home-tag ${category(c, p) === "budget" ? "active" : ""}">${esc(scopeLabel)}</span></div><h3>${esc(c.name)}</h3><p class="home-muted">${esc([c.district, c.region, area(c), c.layout.replace(/\s*—.*$/, "")].filter(Boolean).join(" · "))}</p><p class="home-price">${esc(q.main)}</p><p class="home-quote">${esc(q.note)}</p>${c.unitPrice && c.total ? `<p class="home-quote">参考均价 ${esc(c.unitPrice)} 元/㎡</p>` : ""}${affordable ? `<p class="candidate-note">${esc(affordable)}</p>` : ""}<p class="candidate-note">${esc(c.address || "详细位置请查看来源与地图")}<br>通勤待核实 · ${esc(c.status)}</p>${caution ? `<p class="home-caution">${esc(caution)}</p>` : ""}${history(c)}<div class="candidate-bottom"><div><a href="${esc(url(c.url))}" target="_blank" rel="noopener noreferrer">查看房源 ↗</a> <a href="${esc(map)}" target="_blank" rel="noopener noreferrer">地图 ↗</a></div></div><p class="candidate-observed home-muted">该条检查于 ${esc(date(c.checkedAt))}</p></article>`;
+          const group = community(c), preferred = target(c);
+          const matchNote = group ? `<p class="candidate-focus">${group.tier === "comparison" ? "补充比较" : preferred ? "重点面积 / 房间数" : "同小区其他大户型"}${preferred ? ` · ${esc(preferred.label)}` : ""}</p>` : "";
+          return `<article class="candidate-card" data-candidate="${esc(c.id)}"><div class="home-card-top"><span class="home-tag">${c.kind === "new" ? "新房" : "二手房"}</span><span class="home-tag ${category(c, p) === "budget" ? "active" : ""}">${esc(scopeLabel)}</span></div><h3>${esc(c.name)}</h3><p class="home-muted">${esc([c.district, c.region, area(c), c.layout.replace(/\s*—.*$/, "")].filter(Boolean).join(" · "))}</p>${matchNote}<p class="home-price">${esc(q.main)}</p><p class="home-quote">${esc(q.note)}</p>${c.unitPrice && c.total ? `<p class="home-quote">参考均价 ${esc(c.unitPrice)} 元/㎡</p>` : ""}${affordable ? `<p class="candidate-note">${esc(affordable)}</p>` : ""}<p class="candidate-note">${esc(c.address || "详细位置请查看来源与地图")}<br>通勤待核实 · ${esc(c.status)}</p>${caution ? `<p class="home-caution">${esc(caution)}</p>` : ""}${history(c)}<div class="candidate-bottom"><div><a href="${esc(url(c.url))}" target="_blank" rel="noopener noreferrer">查看房源 ↗</a> <a href="${esc(map)}" target="_blank" rel="noopener noreferrer">地图 ↗</a></div></div><p class="candidate-observed home-muted">该条检查于 ${esc(date(c.checkedAt))}</p></article>`;
         })
         .join("") ||
-      `<div class="home-empty"><h3>这批来源暂时没有符合条件的线索</h3><p>可以查看“价格待核实”，或切换区域和房源类型。列表未覆盖全部市场。</p></div>`;
+      `<div class="home-empty"><h3>这批来源暂时没有符合条件的线索</h3><p>可切换“全部观察”查看超出挂牌上限的房源，或调整小区、区域和类型。没有采集到不代表没有在售。</p></div>`;
     $("#candidate-more").hidden = items.length <= limit;
     $("#candidate-more").textContent =
       `再看 ${Math.min(12, Math.max(0, items.length - limit))} 条 · 还有 ${Math.max(0, items.length - limit)} 条`;
@@ -283,6 +293,7 @@
     }
   }
   for (const id of [
+    "candidate-community",
     "candidate-budget",
     "candidate-scope",
     "candidate-kind",
@@ -290,6 +301,13 @@
     "candidate-region",
   ])
     $("#" + id).addEventListener("change", () => {
+      if (id === "candidate-community") {
+        $("#candidate-area").value = "";
+        $("#candidate-region").value = "";
+        $("#candidate-kind").value = "";
+        const chosen = $("#candidate-community").value;
+        $("#candidate-scope").value = chosen === "comparison" || watch.communities.find((c) => c.id === chosen)?.tier === "comparison" ? "all" : "budget";
+      }
       if (id === "candidate-area") $("#candidate-region").value = "";
       limit = 12;
       render();
@@ -299,6 +317,14 @@
     render();
   });
   $("#candidate-refresh").addEventListener("click", load);
+  $("#candidate-community").insertAdjacentHTML("beforeend", watch.communities.map((c) =>
+    `<option value="${esc(c.id)}">${esc(c.name)}</option>`).join(""));
+  $("#candidate-watch-reference").innerHTML =
+    `<p class="home-muted">${esc(watch.updatedAt)} 整理 · ${esc(watch.referenceNotice)}</p>` +
+    watch.communities.map((c) => `<div class="watch-community"><h3>${esc(c.name)} <small>${c.tier === "primary" ? "优先候选" : "补充比较"}</small></h3>` +
+      c.targets.map((t) => `<p>${esc(t.label)}<br><span class="home-muted">${t.referenceTotal ? `找房参考 ${t.referenceTotal[0]}–${t.referenceTotal[1]} 万` : "暂不提供成交估值"}</span></p>`).join("") +
+      `<p class="home-muted">${esc(c.note)}</p>` +
+      (c.samples.length ? `<details><summary>历史成交线索 · 金额待核实</summary><ul>${c.samples.map((s) => `<li>${esc(s.date)} · ${s.area}㎡ · 清单记录 ${s.total} 万</li>`).join("")}</ul><p class="home-muted">以上来自关注清单，尚未核实为平台当前公开成交金额。</p>${c.historyUrl ? `<a href="${esc(url(c.historyUrl))}" target="_blank" rel="noopener noreferrer">查看平台成交记录 ↗</a>` : ""}</details>` : "") + `</div>`).join("");
   window.addEventListener("online", load);
   $("#close-dialog").addEventListener("click", () => $("#info-dialog").close());
   const themeLabel = () => $("#theme-toggle").setAttribute("aria-label",

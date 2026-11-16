@@ -12,7 +12,7 @@
       !Array.isArray(areas) ||
       areas.length !== 2 ||
       !areas.every(Number.isFinite) ||
-      areas[0] < 100 ||
+      areas[0] < 110 ||
       areas[1] < areas[0] ||
       typeof layout !== "string"
     )
@@ -45,5 +45,20 @@
       rooms.length > 0 && rooms.every((n) => Number.isInteger(n) && n >= 3)
     );
   }
-  return { candidateFits };
+  const normalize = (value) => String(value || "").replace(/[\s·（）()【】]/g, "");
+  function watchCommunity(candidate, communities) {
+    if (candidate.kind !== "resale") return null;
+    const name = normalize(candidate.name), title = normalize(candidate.title);
+    return communities.find((c) => !(c.excludeAliases || []).some((alias) =>
+      name.includes(normalize(alias)) || title.includes(normalize(alias))) && c.aliases.some((alias) =>
+      name.includes(normalize(alias)) || title.includes(normalize(alias)))) || null;
+  }
+  function watchTarget(candidate, community) {
+    if (!community || !candidateFits(candidate)) return null;
+    if (/(?:^|\D)[01]卫/.test(candidate.layout)) return null;
+    const rooms = Number(candidate.layout.match(/(\d+)室/)?.[1]);
+    return community.targets.find((t) => candidate.areas[0] >= t.areas[0] &&
+      candidate.areas[1] <= t.areas[1] && t.rooms.includes(rooms)) || null;
+  }
+  return { candidateFits, watchCommunity, watchTarget };
 });

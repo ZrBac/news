@@ -251,6 +251,18 @@
   font-size: 0.8rem;
   line-height: 1.7;
 }
+.home-watch-reference {
+  margin: 18px 0;
+  font-size: 14px;
+  line-height: 1.7;
+}
+.home-watch-reference summary { cursor: pointer; }
+.watch-community { padding: 12px 0; border-bottom: 1px solid var(--line); }
+.watch-community h3 { margin: 6px 0; font-size: 15px; }
+.watch-community h3 small { color: var(--muted); font-size: 12px; font-weight: 400; }
+.watch-community p { margin: 6px 0; }
+.watch-community ul { padding-left: 20px; }
+.candidate-focus { color: var(--accent); font-size: 12px; line-height: 1.6; }
 #candidate-more {
   display: block;
   margin: 20px auto;

@@ -31,6 +31,7 @@
     <link rel="stylesheet" href="/assets/news/compat.css" />
     <link rel="stylesheet" href="/assets/news/homes.css" />
     <script src="/assets/news/compat.js" defer></script>
+    <script id="home-watchlist" type="application/json">__HOME_WATCHLIST__</script>
     <script src="/assets/news/homes-core.js" defer></script>
     <script src="/assets/news/home-finder.js" defer></script>
     <script src="/assets/news/pwa.js" defer></script>
@@ -56,9 +57,9 @@
     <main id="home-book" class="home-page">
       <div class="home-heading">
         <div>
-          <p class="home-eyebrow">新房 · 二手房</p>
+          <p class="home-eyebrow">关注小区 · 挂牌变化</p>
           <h1 id="homes-title" tabindex="-1">杭州房源</h1>
-          <p class="home-muted">按预算和区域找线索，跟踪公开报价的变化。</p>
+          <p class="home-muted">先看求学里、鹭影轩和紫璋台，再比较更宽裕的户型。</p>
         </div>
       </div>
       <section
@@ -73,10 +74,15 @@
           </div>
         </div>
         <p id="candidate-requirements" class="home-muted">
-          100㎡及以上 · 至少 3 室（不含两室）
+          110㎡及以上 · 至少 3 室 · 重点看两卫，未披露时另行核实
         </p>
+        <details class="home-watch-reference">
+          <summary>关注清单与参考价 · 7 个小区</summary>
+          <div id="candidate-watch-reference"></div>
+        </details>
         <div class="home-filters home-candidate-filters">
-          <label><span class="home-muted">预算上限（万元）</span><input id="candidate-budget" type="number" min="1" max="100000" step="10" value="350" inputmode="decimal" /></label>
+          <label><span class="home-muted">小区范围</span><select id="candidate-community"><option value="priority">优先候选</option><option value="comparison">补充比较</option><option value="watched">全部关注小区</option><option value="all">全部房源</option></select></label>
+          <label><span class="home-muted">挂牌上限（万元）</span><input id="candidate-budget" type="number" min="1" max="100000" step="10" value="400" inputmode="decimal" /></label>
           <label
             ><span class="sr-only">候选范围</span
             ><select id="candidate-scope">
@@ -89,7 +95,7 @@
           <label
             ><span class="sr-only">候选类型</span
             ><select id="candidate-kind">
-              <option value="">新房优先，二手房也看</option>
+              <option value="">全部类型</option>
               <option value="new">只看新房</option>
               <option value="resale">只看二手房</option>
             </select></label
@@ -122,7 +128,7 @@
           <p id="candidate-coverage"></p>
           <p>
             面积或户型不明确，以及展示范围内含不足
-            100㎡或两室及以下户型的新盘，暂不收录。
+            110㎡或两室及以下户型的新盘，暂不收录。重点小区优先匹配关注面积及房间数，同小区其他大户型排在后面。列表未披露卫生间数量时，会单独提示核实。
           </p>
           <p>
             总价参考和按均价估算的金额，不代表有对应房号在售。挂牌价格、余房、税费、车位、装修需要分别核实。

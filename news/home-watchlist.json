@@ -1,0 +1,99 @@
+{
+  "updatedAt": "2026-11-16",
+  "defaultBudget": 400,
+  "referenceNotice": "找房参考区间来自本次关注清单，手动整理，不是实时估值、已核实成交价或房东底价。历史成交线索的金额尚未复核，也未确认车位、装修与特殊交易条件。自动更新的是下方平台挂牌及其变化。",
+  "communities": [
+    {
+      "id": "qiuxueli",
+      "name": "金地自在城·求学里",
+      "keyword": "金地自在城求学里",
+      "aliases": ["金地自在城求学里", "求学里"],
+      "district": "西湖",
+      "region": "三墩",
+      "tier": "primary",
+      "note": "先看采光、楼栋位置和房况；重点核实电梯、车库、渗漏、管道及可保留的装修。",
+      "targets": [{"label": "约125–130㎡ · 三房两卫", "areas": [124, 131], "rooms": [3], "referenceTotal": [300, 350], "order": 1}],
+      "historyUrl": "https://hz.5i5j.com/sold/100000000042496/",
+      "samples": [{"date": "2026-08-31", "area": 124.84, "total": 293}, {"date": "2026-03-27", "area": 130.09, "total": 366}]
+    },
+    {
+      "id": "luyingxuan",
+      "name": "金地自在城·鹭影轩",
+      "keyword": "金地自在城鹭影轩",
+      "aliases": ["金地自在城鹭影轩", "鹭影轩"],
+      "district": "西湖",
+      "region": "三墩",
+      "tier": "primary",
+      "note": "与求学里一起比较空间和预算余量；不同楼层、朝向及装修单独核价。",
+      "targets": [{"label": "约121㎡ · 三房两卫", "areas": [120, 122], "rooms": [3], "referenceTotal": [280, 315], "order": 2}],
+      "historyUrl": "https://hz.5i5j.com/sold/100000000042495/",
+      "samples": [{"date": "2026-08-19", "area": 121.1, "total": 290}, {"date": "2026-09-16", "area": 121.1, "total": 289}]
+    },
+    {
+      "id": "zizhangtai",
+      "name": "建发金辉紫璋台",
+      "keyword": "紫璋台",
+      "aliases": ["紫璋台"],
+      "district": "西湖",
+      "region": "三墩",
+      "tier": "primary",
+      "note": "先比较约125㎡四房的实际卧室尺寸，再看约140㎡；通勤、商业和入学资格另行核实。",
+      "targets": [
+        {"label": "约125–126㎡ · 四房两卫", "areas": [124, 127], "rooms": [4], "referenceTotal": [310, 350], "order": 3},
+        {"label": "约140㎡ · 四房两卫", "areas": [139, 141], "rooms": [4], "referenceTotal": [340, 390], "order": 5}
+      ],
+      "historyUrl": "https://hz.5i5j.com/sold/100000000059093/",
+      "samples": [{"date": "2026-08-04", "area": 125.25, "total": 332}, {"date": "2026-08-03", "area": 125.58, "total": 325}, {"date": "2026-09-13", "area": 125.58, "total": 323}, {"date": "2026-06-30", "area": 139.74, "total": 354}]
+    },
+    {
+      "id": "zijundongyuan",
+      "name": "紫郡东苑",
+      "keyword": "紫郡东苑",
+      "aliases": ["紫郡东苑"],
+      "excludeAliases": ["紫郡西苑"],
+      "district": "西湖",
+      "region": "三墩",
+      "tier": "primary",
+      "note": "希望空间更宽裕时加入；三房与四房分别比较，不混入紫郡西苑。参考区间样本较少。",
+      "targets": [{"label": "约139–140㎡ · 三房或四房两卫", "areas": [138.5, 141], "rooms": [3, 4], "referenceTotal": [340, 400], "order": 4}],
+      "historyUrl": "https://hz.5i5j.com/sold/100000000002357/",
+      "samples": [{"date": "2026-06-25", "area": 139.9, "total": 340}, {"date": "2026-07-08", "area": 139.15, "total": 392}]
+    },
+    {
+      "id": "xixihuafu",
+      "name": "中海西溪华府",
+      "keyword": "西溪华府",
+      "aliases": ["西溪华府"],
+      "district": "西湖",
+      "region": "西溪",
+      "tier": "comparison",
+      "note": "保留大三房比较；不使用86–89㎡成交推算大户型总价。",
+      "targets": [{"label": "约116㎡起 · 大三房两卫", "areas": [115, 160], "rooms": [3, 4], "order": 10}],
+      "samples": [{"date": "2026-06-14", "area": 116.53, "total": 495}]
+    },
+    {
+      "id": "xilu",
+      "name": "万科西庐",
+      "keyword": "万科西庐",
+      "aliases": ["万科西庐"],
+      "district": "西湖",
+      "region": "蒋村",
+      "tier": "comparison",
+      "note": "仅作补充比较；缺少近期同类大户型成交，暂不给成交估值。",
+      "targets": [{"label": "110㎡以上 · 三房及以上", "areas": [110, 160], "rooms": [3, 4, 5], "order": 11}],
+      "samples": []
+    },
+    {
+      "id": "hebinzhicheng",
+      "name": "河滨之城",
+      "keyword": "河滨之城",
+      "aliases": ["河滨之城"],
+      "district": "西湖",
+      "region": "蒋村",
+      "tier": "comparison",
+      "note": "仅作补充比较；各组团和大户型分别核价，不套用小户型成交。",
+      "targets": [{"label": "110㎡以上 · 三房及以上", "areas": [110, 160], "rooms": [3, 4, 5], "order": 12}],
+      "samples": []
+    }
+  ]
+}

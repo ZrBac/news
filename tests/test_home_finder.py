@@ -49,7 +49,7 @@ class CandidateTests(unittest.TestCase):
     def test_previous_snapshot_chooses_newest_and_does_not_call_private_server(self):
         seed = Path(__file__).resolve().parents[1] / 'news/home-candidates.json'
         value = json.loads(seed.read_text())
-        value['updatedAt'] = '2026-11-03T01:01:00Z'
+        value['updatedAt'] = (dt.datetime.fromisoformat(value['updatedAt'].replace('Z', '+00:00')) + dt.timedelta(hours=1)).isoformat()
         with tempfile.TemporaryDirectory() as folder:
             saved = Path(folder) / 'saved.json'
             collector.write_atomic(saved, value)
@@ -96,17 +96,17 @@ class CandidateTests(unittest.TestCase):
                 self.assertEqual(collector.candidate_fits(case), case['fits'])
 
     def new_page(self, unit='per平方米', value=28000, tags='普通住宅', status='在售'):
-        data = {'@type': 'ItemList', 'itemListElement': [{'item': {'name': '测试住宅', 'description': '西湖 三墩 三居 100-120㎡',
+        data = {'@type': 'ItemList', 'itemListElement': [{'item': {'name': '测试住宅', 'description': '西湖 三墩 三居 110-120㎡',
                 'url': 'https://hz.newhouse.fang.com/loupan/20101.htm', 'offers': {'price': value, 'unitText': unit}}}]}
         return '<title>杭州西湖楼盘</title><script type="application/ld+json">' + json.dumps(data) + '</script>' + \
-            f'<li id="lp_20101"><div class="fangyuan"><span>{status}</span><a>{tags}</a></div><div class="house_type">100-120㎡</div></li>'
+            f'<li id="lp_20101"><div class="fangyuan"><span>{status}</span><a>{tags}</a></div><div class="house_type">三居 —110-120㎡</div></li>'
 
     def test_unit_prices_are_not_total_prices(self):
         config = collector.sources()[0]
         item = collector.parse_new(self.new_page(), config)[0]
         self.assertEqual(item['unitPrice'], 28000)
         self.assertIsNone(item['total'])
-        self.assertEqual(item['areas'], [100, 120])
+        self.assertEqual(item['areas'], [110, 120])
         total = collector.parse_new(self.new_page('per套', 3200000), config)[0]
         self.assertEqual(total['total'], 320)
         self.assertIsNone(total['unitPrice'])
@@ -123,7 +123,7 @@ class CandidateTests(unittest.TestCase):
         self.assertEqual(collector.parse_new(self.new_page(status='售罄'), config)[0]['status'], '售罄')
 
     def test_resale_search_does_not_adopt_recommendations_or_rent(self):
-        config = collector.sources()[3]
+        config = dict(id='test-search', name='西雅图', aliases=['西雅图'], district='西湖', region='三墩')
         def row(path, title, price):
             return f'<li><a href="{path}"><div class="img"><p></p></div><div class="txt"><h3>{title}</h3><p>121.8㎡ 4室2厅</p><div class="price"><em>{price}</em>万</div></div></a></li>'
         body = '<title>杭州房产搜索</title><section id="wapquanwangso_A03_03">' + \
@@ -134,6 +134,34 @@ class CandidateTests(unittest.TestCase):
         self.assertEqual(len(found), 1)
         self.assertEqual(found[0]['total'], 350)
         self.assertEqual(found[0]['areas'], [121.8, 121.8])
+
+    def test_community_list_checks_filters_and_exact_phase_without_capping_prices(self):
+        config = next(c for c in collector.sources() if c['id'] == 'resale-watch-zijundongyuan')
+        def row(key, title, area=139.9, price=420):
+            return (f'<li class="listhouse"><a class="listtype" href="/esf/hz/3_{key}.html"><div class="txt">'
+                    f'<h3>{title}</h3><p><span>{area}㎡</span><span>3室2厅</span><span>南</span><span>协安紫郡</span></p>'
+                    f'<div class="price"><em>{price}</em>万</div></div></a></li>')
+        html = ('<title>杭州二手房</title><input data-id="keyword" value="紫郡东苑">'
+                '<input data-id="area" value="138,141"><input data-id="purpose" value="住宅">'
+                '<input data-id="pageType" value="esfindex2022"><ul id="content">' +
+                row(1, '紫郡东苑3房2卫') + row(2, '紫郡西苑') + row(3, '紫郡东苑', 108) +
+                row(4, '协安紫郡') + row(5, '紫郡西苑近紫郡东苑') + '</ul>')
+        found = collector.parse_resale_list(html, config)
+        self.assertEqual(len(found), 1)
+        self.assertEqual(found[0]['total'], 420)
+        self.assertEqual(found[0]['name'], '紫郡东苑')
+        self.assertEqual(found[0]['layout'], '3室2厅2卫')
+        self.assertEqual(found[0]['priceBasis'], 'listing')
+        with self.assertRaises(ValueError):
+            collector.parse_resale_list(html.replace('value="138,141"','value=""'), config)
+        with self.assertRaises(ValueError):
+            collector.parse_resale_list(html.replace('value="紫郡东苑"','value="紫郡西苑"'), config)
+
+    def test_watch_sources_replace_old_broad_community_searches(self):
+        sources = collector.sources()
+        self.assertEqual(len([s for s in sources if s.get('parser') == 'community']), 7)
+        self.assertFalse(any(s['id'] in ('resale-xiyatu', 'resale-zizaicheng') for s in sources))
+        self.assertTrue(collector.refresh_due({'scheduleRevision': 'pages-candidates-v1'}, dt.datetime.now(dt.timezone.utc)))
 
     def test_history_only_records_changes_and_preserves_first_observation(self):
         item = {'id': 'one', 'total': 350, 'unitPrice': None, 'status': '平台挂牌'}

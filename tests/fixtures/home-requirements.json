@@ -1,7 +1,7 @@
 [
   {
-    "label": "exactly 100 square metres and three rooms",
-    "areas": [100, 100],
+    "label": "exactly 110 square metres and three rooms",
+    "areas": [110, 110],
     "layout": "3室2厅",
     "fits": true
   },
@@ -13,8 +13,8 @@
   },
   {
     "label": "new project with qualifying range",
-    "areas": [100, 131],
-    "layout": "三居/ 四居 —100~131平米",
+    "areas": [110, 131],
+    "layout": "三居/ 四居 —110~131平米",
     "fits": true
   },
   {
@@ -24,8 +24,8 @@
     "fits": true
   },
   {
-    "label": "just under 100",
-    "areas": [99.99, 99.99],
+    "label": "just under 110",
+    "areas": [109.99, 109.99],
     "layout": "3室2厅",
     "fits": false
   },
@@ -62,25 +62,25 @@
   },
   {
     "label": "range includes two-room flats",
-    "areas": [100, 140],
+    "areas": [110, 140],
     "layout": "二居/三居",
     "fits": false
   },
   {
     "label": "compact mixed room types",
-    "areas": [100, 140],
+    "areas": [110, 140],
     "layout": "三居二居",
     "fits": false
   },
   {
     "label": "numeric range includes two-room flats",
-    "areas": [100, 140],
+    "areas": [110, 140],
     "layout": "2-3室",
     "fits": false
   },
   {
     "label": "Chinese range includes two-room flats",
-    "areas": [100, 140],
+    "areas": [110, 140],
     "layout": "二至四居",
     "fits": false
   },

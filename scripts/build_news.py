@@ -307,6 +307,9 @@ def main():
     pages = {'/': homepage, '/games/': (output / 'games/index.html').read_text(),
              '/guide/': (output / 'guide/index.html').read_text(),
              '/homes/': (output / 'homes/index.html').read_text()}
+    watchlist = json.loads((ROOT / 'news/home-watchlist.json').read_text())
+    pages['/homes/'] = pages['/homes/'].replace('__HOME_WATCHLIST__',
+        json.dumps(watchlist, ensure_ascii=False, separators=(',', ':')).replace('<', '\\u003c'))
     pages.update({path: (output / path.lstrip('/') / 'index.html').read_text() for path in static_paths})
     pages = {path: page.replace('__NEWS_SITE_URL__', origin).replace('__NEWS_SITE_HOST__', urlsplit(origin).hostname)
              for path, page in pages.items()}

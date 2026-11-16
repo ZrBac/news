@@ -61,6 +61,7 @@ const server = http.createServer(async (request, response) => {
       "exchange-browser.cjs",
       "models-browser.cjs",
       "home-finder-browser.cjs",
+      "home-watch-browser.cjs",
       "home-upgrade-browser.cjs",
       "article-links-browser.cjs",
       "news-loading-browser.cjs",
